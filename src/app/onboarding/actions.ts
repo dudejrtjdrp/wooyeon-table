@@ -25,6 +25,7 @@ export async function saveProfile(form: FormData) {
   const job = String(form.get("job") ?? "").trim();
   const mbtiRaw = String(form.get("mbti") ?? "");
   const mbti = (MBTIS as readonly string[]).includes(mbtiRaw) ? mbtiRaw : null;
+  if (!mbti) back("MBTI를 골라 주세요");
   const interests = pick(form, "interests", INTERESTS);
   const myTraits = pick(form, "my_traits", TRAITS);
   const wantedTraits = pick(form, "wanted_traits", TRAITS);

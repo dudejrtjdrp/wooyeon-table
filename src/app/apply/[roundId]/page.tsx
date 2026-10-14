@@ -33,6 +33,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
         <input type="hidden" name="round_id" value={round.id} />
 
         <section className="space-y-3">
+          <p className="flex items-center gap-1.5 text-[17px] font-bold">갈 수 있는 날짜와 동네 <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent">필수</span><span className="text-[13px] font-normal text-muted">여러 개 고를 수 있어요</span></p>
           {[...byDate.entries()].map(([d, slots]) => (
             <div key={d} className="rounded-3xl bg-card p-4">
               <p className="text-[16px] font-bold">
@@ -53,7 +54,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
         </section>
 
         <section>
-          <p className="text-[17px] font-bold">이용권</p>
+          <p className="flex items-center gap-1.5 text-[17px] font-bold">이용권 <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent">필수</span></p>
           <div className="mt-2 space-y-2">
             {Object.entries(PASSES).map(([k, p], i) => (
               <label key={k} className="block cursor-pointer">
@@ -80,7 +81,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
           </ul>
           <label className="mt-4 flex items-center gap-3 border-t border-line pt-4 text-[15px] font-semibold">
             <input type="checkbox" name="agree_refund" className="size-5 accent-[var(--accent)]" />
-            환불 규정을 확인했어요
+            환불 규정을 확인했어요 <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent">필수</span>
           </label>
         </section>
 
