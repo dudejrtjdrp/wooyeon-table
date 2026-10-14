@@ -15,7 +15,15 @@ export function Splash() {
       />
       <div id="splash" aria-hidden="true" className="splash fixed inset-0 z-[100] flex flex-col items-center justify-center bg-accent">
         <svg width={180} height={180} viewBox="0 0 180 180">
-          <circle className="splash-glow" cx={c} cy={c} r={38} fill="var(--candle)" />
+          <defs>
+            <radialGradient id="lamp">
+              <stop offset="0" stopColor="#ffd27a" stopOpacity="1" />
+              <stop offset=".35" stopColor="#ffb938" stopOpacity=".75" />
+              <stop offset="1" stopColor="#ffb938" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <circle className="splash-glow" cx={c} cy={c} r={40} fill="url(#lamp)" />
+          <circle className="splash-glow" cx={c} cy={c} r={7} fill="#fff4d6" />
           <circle className="splash-ring" cx={c} cy={c} r={44} fill="none" stroke="#fff" strokeWidth={7} strokeLinecap="round" pathLength={1} />
           {Array.from({ length: SEATS }, (_, i) => {
             const a = -Math.PI / 2 + (i * 2 * Math.PI) / SEATS;

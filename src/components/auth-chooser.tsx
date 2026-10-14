@@ -9,7 +9,15 @@ function ArrivingTable() {
   const seats = 6;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle className="glow-in" style={{ animationDelay: "1.5s" }} cx={c} cy={c} r={36} fill="var(--candle)" />
+      <defs>
+        <radialGradient id="lamp-hero">
+          <stop offset="0" stopColor="#ffd27a" />
+          <stop offset=".4" stopColor="#ffb938" stopOpacity=".7" />
+          <stop offset="1" stopColor="#ffb938" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle className="glow-in" style={{ animationDelay: "1.5s" }} cx={c} cy={c} r={38} fill="url(#lamp-hero)" />
+      <circle className="glow-in" style={{ animationDelay: "1.5s" }} cx={c} cy={c} r={6} fill="#fff4d6" />
       <circle cx={c} cy={c} r={42} fill="none" stroke="var(--accent)" strokeWidth={7} />
       {Array.from({ length: seats }, (_, i) => {
         const a = -Math.PI / 2 + (i * 2 * Math.PI) / seats;
