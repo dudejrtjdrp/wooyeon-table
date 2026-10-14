@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, LinkButton, Pill } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
+import { tick } from "@/lib/pipeline";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
 
@@ -10,6 +11,8 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const me = await getMe();
   if (!me) return <Landing />;
+  // 마감·리마인드·모임 시작 같은 시간 이벤트를 화면을 열 때도 처리한다 (크론 보조)
+  await tick().catch(() => null);
 
   const { data: apps } = await db()
     .from("applications")
