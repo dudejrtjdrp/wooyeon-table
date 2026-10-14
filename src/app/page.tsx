@@ -1,15 +1,15 @@
-import { ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronRight } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { after } from "next/server";
 import { PushToggle } from "@/components/push-toggle";
 import { InstallCard } from "@/components/pwa";
 import { AuthChooser } from "@/components/auth-chooser";
 import { OfferBanner } from "@/components/offer-banner";
-import { TableMark, Wordmark } from "@/components/brand";
-import { LinkButton, List, Pill, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
+import { Backdrop, IMG, LinkButton, Pill, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { dateKey, fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
+import { dday, ddayLabel, fmtDateTime, fmtSlot } from "@/lib/format";
 import { tick } from "@/lib/pipeline";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
@@ -50,82 +50,96 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
     .eq("status", "open")
     .gt("apply_deadline", t.toISOString())
     .order("apply_deadline")
-    .limit(3);
+    .limit(4);
+  // 일정(날짜·시간)별로 묶어 보여준다
+  const slotRows = new Map<string, { roundId: string; startsAt: string; regions: string[] }>();
+  for (const r of (open ?? []) as { id: string; slots: { region: string; starts_at: string }[] | null }[]) {
+    for (const sl of r.slots ?? []) {
+      const k = `${r.id}|${sl.starts_at}`;
+      const cur = slotRows.get(k) ?? { roundId: r.id, startsAt: sl.starts_at, regions: [] as string[] };
+      if (!cur.regions.includes(sl.region)) cur.regions.push(sl.region);
+      slotRows.set(k, cur);
+    }
+  }
+  const upcoming = [...slotRows.values()].sort((x, y) => x.startsAt.localeCompare(y.startsAt)).slice(0, 4);
+  const confirmedSoon = active?.match_status === "CONFIRMED" && !finished;
 
   return (
-    <TabScreen>
+    <TabScreen backdrop={<Backdrop side height={300} />}>
       <Toast msg={m} />
-      <header className="pt-safe flex h-14 items-center">
-        <Wordmark className="text-[18px]" />
-      </header>
-
-      <h1 className="mt-4 text-[24px] font-bold leading-snug tracking-[-0.02em]">
+      <h1 className="animate-rise mt-6 text-[30px] font-bold leading-[1.3] tracking-[-0.03em] text-ink">
         {me.name}님,
         <br />
-        {active?.match_status === "CONFIRMED" && !finished ? "곧 식탁에서 만나요" : "이번 주 저녁 어때요?"}
+        <span className="text-accent">{confirmedSoon ? "곧 식탁에서 만나요" : "이번 주 저녁 어때요?"}</span>
       </h1>
 
       {me.hasProfile && <OfferBanner userId={me.id} />}
 
       {!me.hasProfile ? (
-        <div className="mt-6 rounded-3xl bg-accent p-6 text-white">
-          <TableMark size={44} tone="white" filled={1} />
-          <p className="mt-4 text-[19px] font-bold">프로필부터 채워 주세요</p>
-          <p className="mt-1.5 text-[15px] leading-relaxed text-white/80">결이 맞는 사람을 찾으려면 몇 가지가 필요해요. 2분이면 끝나요.</p>
-          <Link href="/onboarding" className="mt-5 flex h-12 items-center justify-center rounded-2xl bg-white text-[15px] font-semibold text-accent">
-            프로필 작성하기
-          </Link>
-        </div>
+        <HeroCard
+          pill={["프로필 필요", "candle"]}
+          title="프로필부터 채워 주세요"
+          desc="결이 맞는 사람을 찾으려면 몇 가지가 필요해요. 2분이면 끝나요."
+          cta="프로필 작성하기"
+          href="/onboarding"
+        />
       ) : active && !finished ? (
-        <StatusHero a={active} />
-      ) : null}
+        <StatusHero a={active} t={t} />
+      ) : (
+        <HeroCard
+          pill={["새 식탁", "accent"]}
+          title={upcoming[0] ? "이번 주 식탁이 열렸어요" : "다음 식탁을 준비 중이에요"}
+          desc={upcoming[0] ? `${fmtSlot(upcoming[0].startsAt)}부터 신청할 수 있어요.` : "새 일정이 열리면 바로 알려드릴게요."}
+          cta={upcoming[0] ? "일정 보러 가기" : "지난 식탁 보기"}
+          href={upcoming[0] ? "/rounds" : "/my-tables"}
+        />
+      )}
 
       {me.hasProfile && <InstallCard />}
       {me.hasProfile && <PushToggle variant="card" />}
 
       {active && finished && (
-        <Link href={`/applications/${active.id}`} className="mt-6 flex items-center justify-between rounded-3xl bg-card p-5">
-          <div>
+        <Link href={`/applications/${active.id}`} className="shadow-card mt-4 flex items-center justify-between gap-3 rounded-[22px] bg-card p-5">
+          <div className="min-w-0">
             <p className="text-[13px] text-muted">{active.rounds.title}</p>
-            <p className="mt-1 text-[16px] font-semibold">{headline(active).desc}</p>
+            <p className="mt-1 text-[16px] font-semibold text-ink">{headline(active).desc}</p>
           </div>
           <Pill tone={headline(active).tone}>{headline(active).label}</Pill>
         </Link>
       )}
 
       {next && (
-        <div className="mt-4 rounded-3xl bg-card p-5">
+        <div className="shadow-card mt-4 rounded-[22px] bg-card p-5">
           <p className="text-[13px] font-semibold text-accent">다음 식탁 추천</p>
-          <p className="mt-1.5 text-[17px] font-bold leading-snug">{next.why}</p>
+          <p className="mt-1.5 text-[18px] font-bold leading-snug text-ink">{next.why}</p>
           <p className="mt-1 text-[14px] text-muted">{next.roundTitle}, {fmtDateTime(next.deadline)} 마감</p>
-          <LinkButton href={`/apply/${next.roundId}`} className="mt-4">이 일정 신청하기</LinkButton>
+          <LinkButton href={`/apply/${next.roundId}`} className="mt-4">이 일정 신청하기 <ChevronRight size={19} /></LinkButton>
         </div>
       )}
 
-      {!!open?.length && (
+      {!!upcoming.length && (
         <>
-          <SectionTitle action={<Link href="/rounds" className="text-[14px] font-medium text-muted">전체 보기</Link>}>모집 중인 일정</SectionTitle>
-          <List>
-            {open.map((r) => {
-              const days = [...new Set((r.slots ?? []).map((s) => dateKey(s.starts_at)))].sort();
-              const regions = [...new Set((r.slots ?? []).map((s) => s.region))];
-              return (
-                <Row key={r.id} href="/rounds" right={<ChevronRight size={20} className="text-muted" />}>
-                  <p className="text-[16px] font-semibold">{r.title}</p>
-                  <p className="mt-0.5 truncate text-[13px] text-muted">
-                    {days.map((d) => fmtDate(`${d}T12:00:00+09:00`)).join(", ")} / {regions.join(", ")}
-                  </p>
-                </Row>
-              );
-            })}
-          </List>
+          <SectionTitle action={<Link href="/rounds" className="flex items-center text-[15px] font-medium text-accent">전체 보기<ChevronRight size={18} /></Link>}>모집 중인 일정</SectionTitle>
+          <div className="space-y-2.5">
+            {upcoming.map((u) => (
+              <Link key={`${u.roundId}${u.startsAt}`} href={`/apply/${u.roundId}`} className="shadow-card flex items-center gap-4 rounded-[20px] bg-card p-4 active:scale-[.99]">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><CalendarDays size={22} /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[17px] font-bold tracking-[-0.01em] text-ink">{fmtSlot(u.startsAt)}</span>
+                  <span className="mt-0.5 block truncate text-[14px] text-muted">{u.regions.join(" · ")}</span>
+                </span>
+                <span className="rounded-full bg-accent-soft px-3 py-1 text-[13px] font-semibold text-accent">{ddayLabel(dday(u.startsAt, t))}</span>
+                <ChevronRight size={20} className="shrink-0 text-muted" />
+              </Link>
+            ))}
+          </div>
         </>
       )}
 
       {!list.length && me.hasProfile && (
         <>
           <SectionTitle>이렇게 진행돼요</SectionTitle>
-          <ol className="space-y-4 rounded-3xl bg-card p-5">
+          <ol className="shadow-card space-y-4 rounded-[22px] bg-card p-5">
             {[
               ["갈 수 있는 날짜와 동네를 골라요", "여러 개 고를수록 테이블이 잘 꾸려져요."],
               ["마감 시각에 4~6명 테이블이 자동으로 꾸려져요", "나이대, 관심사, 성향을 함께 봐요."],
@@ -134,7 +148,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
               <li key={a} className="flex gap-3.5">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13px] font-bold text-accent">{i + 1}</span>
                 <div>
-                  <p className="text-[15px] font-semibold">{a}</p>
+                  <p className="text-[15px] font-semibold text-ink">{a}</p>
                   <p className="mt-0.5 text-[13px] text-muted">{b}</p>
                 </div>
               </li>
@@ -146,38 +160,56 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   );
 }
 
+/** 시안 B1의 큰 사진 카드: 왼쪽 글자, 오른쪽 식탁, 아래 블루 버튼 */
+function HeroCard({ pill, title, desc, foot, cta, href }: { pill: [string, "accent" | "leaf" | "candle" | "muted" | "danger" | "ink"]; title: string; desc?: string; foot?: string; cta: string; href: string }) {
+  return (
+    <section className="shadow-card animate-rise relative mt-6 overflow-hidden rounded-[26px] bg-card">
+      <Image src={IMG.homeBg} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "75% 50%" }} />
+      <div className="absolute inset-0 bg-gradient-to-r from-white/85 via-white/55 to-white/0" />
+      <div className="relative px-6 pb-5 pt-6">
+        <Pill tone={pill[1]}>{pill[0]}</Pill>
+        <p className="mt-4 max-w-[64%] text-[26px] font-bold leading-[1.25] tracking-[-0.03em] text-ink">{title}</p>
+        {desc && <p className="mt-3 max-w-[56%] text-[15px] leading-relaxed text-[#4c5368]">{desc}</p>}
+        {foot && (
+          <>
+            <span className="mt-5 block h-px w-6 bg-[#c9cfdb]" />
+            <p className="mt-4 max-w-[60%] text-[14px] text-[#5d6478]">{foot}</p>
+          </>
+        )}
+        <Link href={href} className="shadow-cta mt-24 flex h-[56px] items-center justify-center gap-1 rounded-2xl bg-accent text-[17px] font-semibold text-white active:scale-[.985]">
+          {cta} <ChevronRight size={20} />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 /** 진행 중인 신청을 첫 화면 맨 위에 크게 보여준다 */
-function StatusHero({ a }: { a: ActiveRow }) {
+function StatusHero({ a, t }: { a: ActiveRow; t: Date }) {
   const h = headline(a);
   const confirmed = a.match_status === "CONFIRMED";
   const slot = a.dining_tables?.slots;
-  const href = confirmed && a.table_id ? `/tables/${a.table_id}` : `/applications/${a.id}`;
+  if (confirmed && slot && a.table_id) {
+    return (
+      <HeroCard
+        pill={[`${h.label} · ${ddayLabel(dday(slot.starts_at, t))}`, "leaf"]}
+        title={fmtSlot(slot.starts_at)}
+        desc={`${slot.region}${a.dining_tables?.venues ? ` · ${a.dining_tables.venues.name}` : ""}`}
+        cta="테이블과 단체방 보기"
+        href={`/tables/${a.table_id}`}
+      />
+    );
+  }
+  const cta = a.payment_status === "PENDING" || a.payment_status === "FAILED" ? "결제 이어서 하기" : a.match_status === "ALTERNATIVE_OFFERED" ? "다음 방법 고르기" : "진행 상황 보기";
+  const href = a.payment_status === "PENDING" || a.payment_status === "FAILED" ? `/pay/${a.id}` : a.match_status === "ALTERNATIVE_OFFERED" ? `/applications/${a.id}/resolve` : `/applications/${a.id}`;
   return (
-    <Link href={href} className={`mt-6 block rounded-3xl p-6 ${confirmed ? "bg-ink text-white" : "bg-accent text-white"}`}>
-      <div className="flex items-start justify-between">
-        <TableMark size={48} tone="white" filled={confirmed ? 6 : 2} glow={confirmed} />
-        <span className="rounded-full bg-white/15 px-2.5 py-1 text-[12px] font-semibold">{h.label}</span>
-      </div>
-      {confirmed && slot ? (
-        <>
-          <p className="mt-5 text-[22px] font-bold leading-snug tracking-[-0.02em]">
-            {fmtDate(slot.starts_at)} {fmtTime(slot.starts_at)}
-          </p>
-          <p className="mt-1 text-[15px] text-white/75">{slot.region}{a.dining_tables?.venues ? `, ${a.dining_tables.venues.name}` : ""}</p>
-          <p className="mt-5 flex items-center gap-1 text-[14px] font-semibold text-candle">
-            테이블과 단체방 보기 <ChevronRight size={16} />
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="mt-5 text-[19px] font-bold leading-snug">{h.desc}</p>
-          <p className="mt-1.5 text-[14px] text-white/75">{a.rounds.title}{a.match_status === "WAITING" ? `, ${fmtDateTime(a.rounds.match_at)} 매칭` : ""}</p>
-          <p className="mt-5 flex items-center gap-1 text-[14px] font-semibold">
-            {a.payment_status === "PENDING" ? "결제 이어서 하기" : a.match_status === "ALTERNATIVE_OFFERED" ? "다음 방법 고르기" : "진행 상황 보기"} <ChevronRight size={16} />
-          </p>
-        </>
-      )}
-    </Link>
+    <HeroCard
+      pill={[h.label, h.tone]}
+      title={a.rounds.title}
+      desc={a.match_status === "WAITING" && a.payment_status === "PAID" ? `${fmtSlot(a.rounds.match_at)}에 테이블을 꾸려요` : h.desc}
+      cta={cta}
+      href={href}
+    />
   );
 }
 

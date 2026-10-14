@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { ErrorText, PrimaryButton, Screen } from "@/components/ui";
+import { CalendarDays, Check, Info } from "lucide-react";
+import { Backdrop, ErrorText, IMG, PageTitle, PrimaryButton, Required, Screen, SectionCard } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { usablePass } from "@/lib/billing";
 import { now } from "@/lib/clock";
 import { PASSES, REFUND_POLICY, won } from "@/lib/constants";
-import { dateKey, fmtDate, fmtTime } from "@/lib/format";
+import { dateKey, fmtDay, fmtSlot } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { submitApplication } from "./actions";
 
@@ -28,79 +29,85 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   }
 
   return (
-    <Screen title="신청하기" back="/rounds">
-      <h2 className="mt-2 text-[24px] font-bold tracking-[-0.02em]">{round.title}</h2>
-      <p className="mt-1.5 text-[14px] leading-relaxed text-muted">갈 수 있는 날짜와 동네를 모두 골라 주세요. 많이 고를수록 테이블이 잘 잡혀요.</p>
+    <Screen title="신청하기" back="/rounds" backdrop={<Backdrop src={IMG.sharedDishes} side height={260} position="center" />}>
+      <PageTitle className="mt-4" title={round.title} sub="갈 수 있는 일정을 모두 골라 주세요." />
 
-      <form action={submitApplication} className="mt-6 space-y-8 pb-24">
+      <form action={submitApplication} className="mt-7 space-y-3 pb-24">
         <input type="hidden" name="round_id" value={round.id} />
 
-        <section className="space-y-3">
-          <p className="flex items-center gap-1.5 text-[17px] font-bold">갈 수 있는 날짜와 동네 <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent">필수</span><span className="text-[13px] font-normal text-muted">여러 개 고를 수 있어요</span></p>
-          {[...byDate.entries()].map(([d, slots]) => (
-            <div key={d} className="rounded-3xl bg-card p-4">
-              <p className="text-[16px] font-bold">
-                {fmtDate(slots[0].starts_at)} <span className="ml-1 font-medium text-muted">{fmtTime(slots[0].starts_at)}</span>
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {slots.map((s) => (
-                  <label key={s.id} className="cursor-pointer">
-                    <input type="checkbox" name="slot_ids" value={s.id} className="peer sr-only" />
-                    <span className="block rounded-2xl border border-line py-3.5 text-center text-[15px] transition peer-checked:border-accent peer-checked:bg-accent-soft peer-checked:font-semibold peer-checked:text-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent">
-                      {s.region}
-                    </span>
-                  </label>
-                ))}
+        <SectionCard title="갈 수 있는 날짜와 동네" required>
+          <div className="divide-y divide-line">
+            {[...byDate.entries()].map(([d, slots]) => (
+              <div key={d} className="py-4 first:pt-0 last:pb-0">
+                <p className="flex items-center gap-2.5 text-[17px] font-bold text-ink">
+                  <CalendarDays size={20} className="text-accent" />
+                  {fmtSlot(slots[0].starts_at)}
+                </p>
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {slots.map((s) => (
+                    <label key={s.id} className="cursor-pointer">
+                      <input type="checkbox" name="slot_ids" value={s.id} className="peer sr-only" />
+                      <span className="flex h-12 items-center justify-center gap-1 rounded-full border border-line bg-card text-[15px] text-ink transition duration-150 peer-checked:border-accent peer-checked:bg-accent peer-checked:font-semibold peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40 [&>svg]:hidden peer-checked:[&>svg]:block">
+                        {s.region}
+                        <Check size={16} strokeWidth={2.8} />
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </section>
+            ))}
+          </div>
+        </SectionCard>
 
-        <section>
-          <p className="flex items-center gap-1.5 text-[17px] font-bold">이용권 <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent">필수</span></p>
-          <div className="mt-2 space-y-2">
+        <SectionCard title="이용권" required>
+          <div className="space-y-2.5">
             {owned && (
               <label className="block cursor-pointer">
                 <input type="radio" name="pass" value="owned" defaultChecked className="peer sr-only" />
-                <span className="flex items-center justify-between rounded-2xl border-2 border-transparent bg-card px-4 py-4 transition peer-checked:border-accent">
-                  <span>
-                    <span className="block text-[15px] font-semibold">가지고 있는 이용권 쓰기</span>
-                    <span className="block text-[13px] text-muted">
-                      {PASSES[owned.pass_type as keyof typeof PASSES]?.label ?? "이용권"} 남은 {owned.remaining}회{owned.expires_at ? `, ${fmtDate(owned.expires_at)}까지` : ""}
+                <span className="flex items-center gap-4 rounded-2xl border border-line bg-card px-4 py-4 transition peer-checked:border-accent peer-checked:bg-accent-soft/30 peer-checked:ring-1 peer-checked:ring-accent [&_.dot]:scale-0 peer-checked:[&_.dot]:scale-100 peer-checked:[&_.ring]:border-accent">
+                  <span className="ring flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-line transition"><span className="dot size-3 rounded-full bg-accent transition" /></span>
+                  <span className="flex-1">
+                    <span className="block text-[17px] font-bold text-ink">가지고 있는 이용권 쓰기 0원</span>
+                    <span className="mt-0.5 block text-[14px] text-muted">
+                      {PASSES[owned.pass_type as keyof typeof PASSES]?.label ?? "이용권"} 남은 {owned.remaining}회{owned.expires_at ? `, ${fmtDay(owned.expires_at)}까지` : ""}
                     </span>
                   </span>
-                  <span className="text-[16px] font-bold">0원</span>
                 </span>
               </label>
             )}
             {Object.entries(PASSES).map(([k, p], i) => (
               <label key={k} className="block cursor-pointer">
                 <input type="radio" name="pass" value={k} defaultChecked={!owned && i === 0} className="peer sr-only" />
-                <span className="flex items-center justify-between rounded-2xl border-2 border-transparent bg-card px-4 py-4 transition peer-checked:border-accent">
-                  <span>
-                    <span className="block text-[15px] font-medium">{p.label}</span>
-                    <span className="block text-[13px] text-muted">{p.desc}</span>
+                <span className="flex items-center gap-4 rounded-2xl border border-line bg-card px-4 py-4 transition peer-checked:border-accent peer-checked:bg-accent-soft/30 peer-checked:ring-1 peer-checked:ring-accent [&_.dot]:scale-0 peer-checked:[&_.dot]:scale-100 peer-checked:[&_.ring]:border-accent">
+                  <span className="ring flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-line transition"><span className="dot size-3 rounded-full bg-accent transition" /></span>
+                  <span className="flex-1">
+                    <span className="block text-[17px] font-bold text-ink">{p.label} {won(p.amount)}</span>
+                    <span className="mt-0.5 block text-[14px] text-muted">{p.desc}</span>
                   </span>
-                  <span className="text-[16px] font-bold">{won(p.amount)}</span>
                 </span>
               </label>
             ))}
+            <p className="flex items-center gap-2.5 rounded-2xl bg-field px-4 py-3.5 text-[14px] text-muted">
+              <Info size={18} className="shrink-0 fill-muted text-white" />식사비는 현장에서 각자 계산해요.
+            </p>
           </div>
-          <p className="mt-2 text-[12px] text-muted">식사비는 이용권과 별도로 현장에서 각자 계산해요.</p>
-        </section>
+        </SectionCard>
 
-        <section className="rounded-3xl bg-card p-5">
-          <p className="text-[15px] font-semibold">환불 규정</p>
-          <ul className="mt-2 space-y-1 text-[14px] leading-relaxed text-muted">
-            {REFUND_POLICY.map((r) => (
-              <li key={r} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-muted" />{r}</li>
+        <SectionCard title="환불 규정" right={<span className="text-[13px] text-muted">결제 전에 꼭 확인해 주세요.</span>}>
+          <ol className="space-y-2.5 rounded-2xl bg-field p-4">
+            {REFUND_POLICY.map((r, i) => (
+              <li key={r} className="flex gap-3 text-[14px] leading-relaxed text-[#4c5368]">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-card text-[12px] font-semibold text-muted">{i + 1}</span>
+                {r}
+              </li>
             ))}
-          </ul>
-          <label className="mt-4 flex items-center gap-3 border-t border-line pt-4 text-[15px] font-semibold">
-            <input type="checkbox" name="agree_refund" className="size-5 accent-[var(--accent)]" />
-            환불 규정을 확인했어요 <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent">필수</span>
+          </ol>
+          <label className="mt-4 flex cursor-pointer items-center gap-3 border-t border-line pt-4">
+            <input type="checkbox" name="agree_refund" className="peer sr-only" />
+            <span className="flex size-7 items-center justify-center rounded-lg border-2 border-line text-white transition peer-checked:border-accent peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent/40"><Check size={18} strokeWidth={3} /></span>
+            <span className="text-[16px] font-semibold text-ink">환불 규정을 확인했어요.<Required /></span>
           </label>
-        </section>
+        </SectionCard>
 
         <ErrorText msg={e} />
         <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-gradient-to-t from-paper via-paper to-paper/0 px-5 pt-6">
