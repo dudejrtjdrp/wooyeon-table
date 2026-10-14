@@ -29,7 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </span>
         </Link>
         <AdminNav exCount={count ?? 0} />
-        <div className="mt-auto space-y-3 border-t border-line px-2 pt-4">
+        <div className="mt-auto shrink-0 space-y-2 border-t border-line px-2 pt-3">
           <div className={`rounded-xl px-3 py-2.5 text-[12px] ${virtual ? "bg-warn-soft text-warn" : "text-muted"}`}>
             <p className="font-semibold">{virtual ? "시연용 가상 시각" : "현재 시각"}</p>
             <p className="mt-0.5 tabular-nums">{fmtDateTime(t.toISOString())}</p>

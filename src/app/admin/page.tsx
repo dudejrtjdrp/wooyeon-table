@@ -69,7 +69,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   };
   let stage = 0;
   let stageNote = round ? `마감까지 ${left(round.match_at)}` : "";
-  if (round && new Date(round.match_at) <= t) {
+  if (round && (new Date(round.match_at) <= t || run?.status === "done")) {
     stage = 2;
     stageNote = firstStart && new Date(firstStart) > t ? `다음 모임까지 ${left(firstStart)}` : "";
     if (firstStart && new Date(firstStart) <= t) { stage = 3; stageNote = "모임 진행 중"; }
@@ -103,7 +103,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             {Number(clock?.offset_seconds) ? <span className="ml-2 rounded-full bg-warn-soft px-2 py-0.5 text-[12px] font-semibold text-warn">시연용 가상 시각</span> : null}
           </p>
         </div>
-        <form className="flex items-center gap-2 lg:mr-[300px]">
+        <form className="flex items-center gap-2 lg:mr-[400px]">
           <select name="r" defaultValue={round?.id} className={ctl}>
             {rounds?.map((x) => (
               <option key={x.id} value={x.id}>{x.title}</option>

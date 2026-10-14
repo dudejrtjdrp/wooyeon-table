@@ -43,7 +43,7 @@ export function AdminNav({ exCount, mobile }: { exCount: number; mobile?: boolea
     );
   }
   return (
-    <nav className="mt-7 flex flex-col gap-4 overflow-y-auto">
+    <nav className="mt-6 flex min-h-0 flex-col gap-3 overflow-y-auto">
       {GROUPS.map((g) => (
         <div key={g.name}>
           <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted/80">{g.name}</p>
@@ -53,7 +53,7 @@ export function AdminNav({ exCount, mobile }: { exCount: number; mobile?: boolea
                 key={href}
                 href={href}
                 aria-current={on(href) ? "page" : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition ${on(href) ? "bg-accent-soft font-semibold text-accent" : "text-ink/80 hover:bg-accent-soft/40"}`}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] transition ${on(href) ? "bg-accent-soft font-semibold text-accent" : "text-ink/80 hover:bg-accent-soft/40"}`}
               >
                 <Icon size={19} strokeWidth={on(href) ? 2.2 : 1.8} />
                 <span className="flex-1">{label}</span>
