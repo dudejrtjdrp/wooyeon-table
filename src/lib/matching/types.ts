@@ -1,7 +1,7 @@
 // 매칭 엔진 입력·출력 타입. DB와 분리된 순수 계산 모듈이라 테스트로 바로 검증할 수 있다.
 // 규칙 문서: docs/02-matching-rules.md
 
-export const ALGORITHM_VERSION = "2026.10.14-1";
+export const ALGORITHM_VERSION = "2026.10.15-2";
 
 export type Gender = "M" | "F";
 
@@ -54,7 +54,7 @@ export interface MatchSettings {
 
 export const DEFAULT_SETTINGS: MatchSettings = {
   weights: { age: 25, gender: 22, mbti: 18, interests: 15, wanted: 12, fresh: 8 },
-  minScore: 55,
+  minScore: 50,
   minSize: 4,
   maxSize: 6,
   maxAgeGap: 8,

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { INTERESTS, MBTIS, PRICE_RANGES, TRAITS } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
+import { notify } from "@/lib/notify";
 import { tick } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 
@@ -134,12 +135,16 @@ export async function autoAttend(form: FormData) {
     if (a.attendance_status === "SCHEDULED") {
       await db().from("applications").update({ attendance_status: "ATTENDED" }).eq("id", a.id);
       await logStatus({ entityType: "application", entityId: a.id, field: "attendance_status", from: "SCHEDULED", to: "ATTENDED", actor: "admin:demo", reason: "시연용 자동 체크인" });
+      // 모임이 이미 끝나 노쇼 후보로 올라갔다면 함께 정리한다
+      await db().from("exceptions").update({ status: "resolved", resolution: "시연용 체크인으로 참석 처리", resolved_at: new Date().toISOString() }).eq("dedupe_key", `noshow:${a.id}`);
     }
     await db().from("feedbacks").upsert({
       application_id: a.id, user_id: a.user_id, table_id: a.table_id,
       mood_score: 3 + Math.floor(r() * 3), talk_score: 3 + Math.floor(r() * 3), venue_score: 3 + Math.floor(r() * 3),
       rejoin_intent: 3 + Math.floor(r() * 3), recommend_intent: 3 + Math.floor(r() * 3),
     });
+    // 실제 참가자(김우연 등)는 직접 남기도록 후기 요청 알림만 간다
+    await notify({ userId: a.user_id, template: "feedback", title: "오늘 저녁 어떠셨어요?", body: "1분이면 끝나요. 남겨 주신 후기는 다음 매칭에 반영돼요.", link: `/tables/${a.table_id}/feedback`, dedupeKey: `feedback:${a.id}` });
     const mates = list.filter((m) => m.table_id === a.table_id && m.user_id !== a.user_id);
     if (mates.length && r() < 0.25) {
       await db().from("person_prefs").upsert({ from_user: a.user_id, to_user: mates[0].user_id, table_id: a.table_id, pref: "avoid" });

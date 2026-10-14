@@ -4,7 +4,7 @@ alter table payments add column if not exists pass_type text check (pass_type in
 -- 매칭 설정 (docs/02-matching-rules.md 3장)
 insert into settings (key, value) values
   ('matching.weights', '{"age":25,"gender":22,"mbti":18,"interests":15,"wanted":12,"fresh":8}'),
-  ('matching.min_score', '55')
+  ('matching.min_score', '50')
 on conflict (key) do nothing;
 
 -- 시연 계정 (비밀번호는 README의 심사 안내 참고)

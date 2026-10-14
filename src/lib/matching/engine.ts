@@ -63,6 +63,55 @@ export function runMatching(
   }
   log.push(`대상 ${candidates.length}명, 첫 배치 일정 ${pools.size}곳`);
 
+  // ── 1-1. 균형 맞추기: 4명이 안 되는 일정은 그 일정도 고른 사람을 다른 일정에서 데려온다.
+  //         넘치는 일정(테이블 상한 × 6명 초과)은 다른 일정도 고른 사람을 내보낸다.
+  const size = (id: string) => pools.get(id)?.length ?? 0;
+  const cap = (id: string) => slots.get(id)!.maxTables * settings.maxSize;
+  const move = (c: Candidate, from: string, to: string) => {
+    pools.set(from, pools.get(from)!.filter((x) => x !== c));
+    if (!pools.has(to)) pools.set(to, []);
+    pools.get(to)!.push(c);
+    homeSlot.set(c.applicationId, to);
+  };
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false;
+    // 넘치는 일정에서 덜어내기
+    for (const id of [...pools.keys()]) {
+      while (size(id) > cap(id)) {
+        const flex = pools.get(id)!.find((c) => c.slotIds.some((o) => o !== id && size(o) < cap(o)));
+        if (!flex) break;
+        const to = flex.slotIds.filter((o) => o !== id && size(o) < cap(o)).sort((a, b) => size(b) - size(a))[0];
+        move(flex, id, to);
+        changed = true;
+      }
+    }
+    // 모자란 일정 채우기
+    for (const id of [...slots.keys()]) {
+      const cur = size(id);
+      if (cur === 0 || cur >= settings.minSize) continue;
+      const donors = candidates.filter((c) => {
+        const h = homeSlot.get(c.applicationId);
+        return h && h !== id && c.slotIds.includes(id) && size(h) - 1 >= settings.minSize && size(h) % settings.minSize !== 0;
+      });
+      const need = settings.minSize - cur;
+      if (donors.length >= need) {
+        for (const d of donors.slice(0, need)) move(d, homeSlot.get(d.applicationId)!, id);
+        changed = true;
+      } else {
+        // 채울 수 없으면 이 일정 사람 중 다른 일정도 고른 사람은 그쪽으로 보낸다
+        for (const c of [...pools.get(id)!]) {
+          const to = c.slotIds.filter((o) => o !== id && size(o) >= settings.minSize - 1 && size(o) < cap(o)).sort((a, b) => size(b) - size(a))[0];
+          if (to) {
+            move(c, id, to);
+            changed = true;
+          }
+        }
+      }
+    }
+    if (!changed) break;
+  }
+  for (const [id, pool] of [...pools.entries()]) if (!pool.length) pools.delete(id);
+
   // ── 2. 일정별 묶기·분리 ─────────────────────────────────────────────
   const tables: WorkTable[] = [];
   const leftovers: Candidate[] = [...noSlot];
@@ -89,6 +138,28 @@ export function runMatching(
   // ── 3. 검증·해제: 4명 미만, 필수 조건 위반, 최소 점수 미달 ──────────────
   let dissolved = 0;
   for (const t of tables) {
+    // 점수가 기준에 못 미치면 통째로 해제하기 전에, 점수를 가장 깎는 사람부터 한 명씩 빼 본다
+    let trimmed = 0;
+    while (
+      t.members.length > settings.minSize &&
+      validateTable(t.members, t.slotId, rel, settings).length === 0 &&
+      scoreGroup(t.members, rel, settings).total < settings.minScore
+    ) {
+      let bestIdx = 0;
+      let bestScore = -Infinity;
+      t.members.forEach((_, i) => {
+        const v = scoreGroup(t.members.filter((__, j) => j !== i), rel, settings).total;
+        if (v > bestScore) {
+          bestScore = v;
+          bestIdx = i;
+        }
+      });
+      const [out] = t.members.splice(bestIdx, 1);
+      leftovers.push(out);
+      failReason.set(out.applicationId, "처음 테이블의 조합 점수를 맞추느라 다른 자리를 찾았어요");
+      trimmed++;
+    }
+    if (trimmed) log.push(`${label(slots.get(t.slotId)!)} 테이블에서 ${trimmed}명을 빼서 점수를 맞춤`);
     const violations = validateTable(t.members, t.slotId, rel, settings);
     const score = scoreGroup(t.members, rel, settings).total;
     if (violations.length || score < settings.minScore) {

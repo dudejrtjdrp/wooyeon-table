@@ -163,7 +163,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
 
             <form action={autoAttend} className="rounded-xl bg-card p-4">
               <input type="hidden" name="round_id" value={round.id} />
-              <p className="text-[14px] font-semibold">③ 테스트 참가자 체크인·후기 채우기</p>
+              <p className="text-[14px] font-semibold">③ 테스트 참가자 체크인·후기 채우기 (모임 시작 뒤)</p>
               <p className="mt-1 text-[12px] text-muted">일부는 서로 &lsquo;다시는 싫어요&rsquo;를 골라요. 다음 매칭에서 같은 테이블에 앉지 않는지 볼 수 있어요.</p>
               <button className="mt-3 w-full rounded-lg bg-ink py-2 text-[14px] font-semibold text-white">채우기</button>
             </form>
