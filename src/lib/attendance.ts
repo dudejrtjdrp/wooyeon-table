@@ -25,7 +25,7 @@ export function cancelRule(startsAt: string, at: Date): CancelRule {
 
 type Member = { id: string; user_id: string; birth_year: number; slotIds: string[]; name: string };
 
-async function tableMembers(tableId: string): Promise<Member[]> {
+export async function tableMembers(tableId: string): Promise<Member[]> {
   const { data } = await db()
     .from("applications")
     .select("id,user_id,users(name,profiles(birth_year)),application_slots(slot_id)")
@@ -72,7 +72,8 @@ export async function cancelAttendance(appId: string, userId: string): Promise<{
 
   const roomId = await ensureRoom(tableId);
   await db().from("chat_messages").insert({ room_id: roomId, kind: "system", body: "한 분이 사정이 생겨 함께하지 못하게 됐어요." });
-  await reflowTable(tableId, `user:${userId}`);
+  // 빈자리는 먼저 대기자에게 묻고, 받을 사람이 없을 때만 남은 인원으로 정리한다 (STA-07)
+  await fillOrReflow(tableId, `user:${userId}`);
   return { ok: true, message: body };
 }
 
@@ -128,6 +129,198 @@ export async function reflowTable(tableId: string, actor: string) {
     }
   }
   await db().from("dining_tables").update({ status: "DISSOLVED" }).eq("id", tableId);
+  await db().from("seat_offers").update({ status: "void" }).eq("table_id", tableId).eq("status", "pending");
   await logStatus({ entityType: "dining_table", entityId: tableId, field: "status", to: "DISSOLVED", actor, reason: `인원 부족 해제: ${moved}명 재배치, ${offered}명 대안 안내` });
   return { moved, offered };
+}
+
+// ─────────────────────────────────────────────
+// 대기자 자동 전환 (STA-07)
+// 확정 테이블에 빈자리가 생기면 같은 회차에서 매칭되지 못한 사람 중 그 일정을 골랐고 조건(나이·제외 관계)이 맞는
+// 사람에게 먼저 신청한 순서대로 한 명씩 참가 의사를 묻는다. 응답 기한이 지나거나 거절하면 다음 사람에게 넘어간다.
+// ─────────────────────────────────────────────
+
+const ACTIVE_TABLE = ["CONFIRMED", "VENUE_ASSIGNED", "READY"];
+/** 응답 기한: 지금부터 6시간, 다만 모임 3시간 전을 넘지 않는다 */
+const OFFER_WINDOW = 6 * 3600_000;
+const OFFER_CUTOFF = 3 * 3600_000;
+
+type TableInfo = { id: string; status: string; round_id: string; slot_id: string; slots: { starts_at: string; region: string }; venues: { name: string } | null };
+
+async function tableInfo(tableId: string) {
+  const { data } = await db().from("dining_tables").select("id,status,round_id,slot_id,slots(starts_at,region),venues(name)").eq("id", tableId).maybeSingle();
+  return data as unknown as TableInfo | null;
+}
+
+type Waiter = Member & { submitted_at: string };
+
+/** 이 테이블 빈자리를 받을 수 있는 대기자 (먼저 신청한 순) */
+export async function seatCandidates(tableId: string): Promise<Waiter[]> {
+  const tb = await tableInfo(tableId);
+  if (!tb) return [];
+  const settings = await loadSettings();
+  const group = await tableMembers(tableId);
+  const { data: asked } = await db().from("seat_offers").select("application_id").eq("table_id", tableId);
+  const skip = new Set((asked ?? []).map((o) => o.application_id));
+  const { data } = await db()
+    .from("applications")
+    .select("id,user_id,submitted_at,payment_status,users(name,account_status,profiles(birth_year)),application_slots(slot_id)")
+    .eq("round_id", tb.round_id)
+    .eq("match_status", "ALTERNATIVE_OFFERED")
+    .in("payment_status", ["REFUND_AVAILABLE", "PAID"])
+    .order("submitted_at", { ascending: true });
+  const rows = ((data ?? []) as unknown as { id: string; user_id: string; submitted_at: string; users: { name: string; account_status: string; profiles: { birth_year: number } | { birth_year: number }[] | null }; application_slots: { slot_id: string }[] }[])
+    .filter((a) => !skip.has(a.id) && ["active", "warned"].includes(a.users.account_status) && a.application_slots.some((x) => x.slot_id === tb.slot_id));
+  const waiters = rows.map((a) => {
+    const p = Array.isArray(a.users.profiles) ? a.users.profiles[0] : a.users.profiles;
+    return { id: a.id, user_id: a.user_id, birth_year: p?.birth_year ?? 0, slotIds: a.application_slots.map((x) => x.slot_id), name: a.users.name, submitted_at: a.submitted_at };
+  });
+  if (!waiters.length) return [];
+  const rel = await loadRelations([...group.map((m) => m.user_id), ...waiters.map((w) => w.user_id)]);
+  return waiters.filter((w) => canJoin(group.map(toCand), toCand(w), rel, settings));
+}
+
+/** 빈자리를 다음 대기자에게 제안한다. 제안했으면 true */
+export async function offerSeat(tableId: string, actor: string): Promise<boolean> {
+  const tb = await tableInfo(tableId);
+  if (!tb || !ACTIVE_TABLE.includes(tb.status)) return false;
+  const { data: open } = await db().from("seat_offers").select("id").eq("table_id", tableId).eq("status", "pending");
+  if (open?.length) return true;
+  const settings = await loadSettings();
+  const group = await tableMembers(tableId);
+  if (group.length >= settings.maxSize) return false;
+  const t = await now();
+  const start = new Date(tb.slots.starts_at).getTime();
+  const expires = Math.min(t.getTime() + OFFER_WINDOW, start - OFFER_CUTOFF);
+  if (expires - t.getTime() < 30 * 60_000) return false; // 답할 시간이 30분도 안 남으면 묻지 않는다
+
+  for (const w of await seatCandidates(tableId)) {
+    const { data: offer, error } = await db()
+      .from("seat_offers")
+      .insert({ table_id: tableId, application_id: w.id, user_id: w.user_id, expires_at: new Date(expires).toISOString() })
+      .select("id")
+      .single();
+    if (error || !offer) continue; // 동시에 다른 제안이 들어갔으면 건너뛴다
+    await logStatus({ entityType: "application", entityId: w.id, field: "seat_offer", from: "ALTERNATIVE_OFFERED", to: "OFFERED", actor, reason: `빈자리 제안 (테이블 ${tableId.slice(0, 8)}, ${fmtDate(tb.slots.starts_at)} ${tb.slots.region})` });
+    await logStatus({ entityType: "dining_table", entityId: tableId, field: "seat_offer", to: "OFFERED", actor, reason: `대기자 ${w.name}님에게 빈자리 제안, 기한 ${fmtDate(new Date(expires).toISOString())} ${fmtTime(new Date(expires).toISOString())}` });
+    await notify({
+      userId: w.user_id,
+      template: "seat_offer",
+      title: "기다리던 자리가 났어요",
+      body: `${fmtDate(tb.slots.starts_at)} ${fmtTime(tb.slots.starts_at)} ${tb.slots.region} 테이블에 한 자리가 비었어요. ${fmtTime(new Date(expires).toISOString())}까지 참가 여부를 알려 주세요.`,
+      link: `/offers/${offer.id}`,
+      dedupeKey: `seat_offer:${offer.id}`,
+    });
+    return true;
+  }
+  return false;
+}
+
+/** 빈자리를 대기자로 채우고, 채울 사람이 없을 때만 인원 부족 정리를 한다 */
+export async function fillOrReflow(tableId: string, actor: string) {
+  const offered = await offerSeat(tableId, actor);
+  if (!offered) await reflowTable(tableId, actor);
+}
+
+type OfferRow = { id: string; table_id: string; application_id: string; user_id: string; status: string; expires_at: string };
+
+/** 대기자가 제안에 답한다 */
+export async function respondOffer(offerId: string, userId: string, accept: boolean): Promise<{ ok: boolean; message: string; tableId?: string }> {
+  const { data } = await db().from("seat_offers").select("id,table_id,application_id,user_id,status,expires_at").eq("id", offerId).maybeSingle();
+  const o = data as OfferRow | null;
+  if (!o || o.user_id !== userId) return { ok: false, message: "찾을 수 없는 제안이에요" };
+  if (o.status !== "pending") return { ok: false, message: "이미 답한 제안이에요" };
+  const t = await now();
+  const actor = `user:${userId}`;
+  if (new Date(o.expires_at) <= t) {
+    await closeOffer(o, "expired", "system");
+    return { ok: false, message: "응답 기한이 지나 다음 분께 자리가 넘어갔어요" };
+  }
+  if (!accept) {
+    await closeOffer(o, "declined", actor);
+    return { ok: true, message: "다음 기회에 함께해요. 지금 신청은 그대로 남아 있어요" };
+  }
+
+  // 받기 전에 조건을 다시 본다: 아직 대기 중인지, 테이블이 살아 있는지, 자리가 있는지, 조건이 맞는지
+  const [{ data: app }, tb, settings] = await Promise.all([
+    db().from("applications").select("id,match_status,payment_status").eq("id", o.application_id).single(),
+    tableInfo(o.table_id),
+    loadSettings(),
+  ]);
+  const group = await tableMembers(o.table_id);
+  const rel = await loadRelations([...group.map((m) => m.user_id), userId]);
+  const me = await tableMembersOf(o.application_id);
+  const ok =
+    app?.match_status === "ALTERNATIVE_OFFERED" &&
+    tb && ACTIVE_TABLE.includes(tb.status) &&
+    group.length < settings.maxSize &&
+    me && canJoin(group.map(toCand), toCand(me), rel, settings);
+  if (!ok) {
+    await closeOffer(o, "void", "system");
+    return { ok: false, message: "그사이 자리 사정이 바뀌어 합류할 수 없게 됐어요. 지금 신청은 그대로 남아 있어요" };
+  }
+
+  const { data: took } = await db().from("seat_offers").update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", o.id).eq("status", "pending").select("id");
+  if (!took?.length) return { ok: false, message: "이미 답한 제안이에요" };
+  await db()
+    .from("applications")
+    .update({
+      table_id: o.table_id,
+      match_status: "CONFIRMED",
+      attendance_status: "SCHEDULED",
+      payment_status: app!.payment_status === "REFUND_AVAILABLE" ? "PAID" : app!.payment_status,
+      resolution: null,
+      match_reason: `취소석에 합류했어요. ${fmtDate(tb!.slots.starts_at)} ${tb!.slots.region} 테이블이에요.`,
+    })
+    .eq("id", o.application_id)
+    .eq("match_status", "ALTERNATIVE_OFFERED");
+  await logStatus({ entityType: "application", entityId: o.application_id, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "CONFIRMED", actor, reason: `빈자리 제안 수락 (테이블 ${o.table_id.slice(0, 8)})` });
+  await logStatus({ entityType: "dining_table", entityId: o.table_id, field: "seat_offer", to: "ACCEPTED", actor, reason: `대기자 ${me!.name}님 합류` });
+  // 같은 사람에게 동시에 나간 다른 테이블 제안은 무효로 하고 그 테이블은 다음 사람에게 넘긴다
+  const { data: others } = await db().from("seat_offers").select("id,table_id,application_id,user_id,status,expires_at").eq("application_id", o.application_id).eq("status", "pending");
+  for (const x of (others ?? []) as OfferRow[]) await closeOffer(x, "void", "system");
+  // 결제 독촉·대안 안내처럼 이제 필요 없는 예약 알림 정리
+  await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/applications/${o.application_id}/resolve`);
+  const room = await ensureRoom(o.table_id);
+  await db().from("chat_messages").insert({ room_id: room, kind: "system", body: `빈자리에 새로운 분이 합류했어요. ${me!.name}님 반가워요!` });
+  await notify({
+    userId,
+    template: "confirmed",
+    title: "테이블에 합류했어요",
+    body: `${fmtDate(tb!.slots.starts_at)} ${fmtTime(tb!.slots.starts_at)} ${tb!.slots.region}${tb!.venues ? ` ${tb!.venues.name}` : ""}에서 만나요. 단체방에서 인사를 나눠 보세요.`,
+    link: `/tables/${o.table_id}`,
+    dedupeKey: `seat_accept:${o.id}`,
+  });
+  // 아직 자리가 남으면 다음 대기자에게도 묻는다
+  await offerSeat(o.table_id, "system");
+  return { ok: true, message: "테이블에 합류했어요", tableId: o.table_id };
+}
+
+async function tableMembersOf(appId: string): Promise<Member | null> {
+  const { data } = await db().from("applications").select("id,user_id,users(name,profiles(birth_year)),application_slots(slot_id)").eq("id", appId).maybeSingle();
+  if (!data) return null;
+  const a = data as unknown as { id: string; user_id: string; users: { name: string; profiles: { birth_year: number } | { birth_year: number }[] | null }; application_slots: { slot_id: string }[] };
+  const p = Array.isArray(a.users.profiles) ? a.users.profiles[0] : a.users.profiles;
+  return { id: a.id, user_id: a.user_id, birth_year: p?.birth_year ?? 0, slotIds: a.application_slots.map((x) => x.slot_id), name: a.users.name };
+}
+
+/** 제안을 닫고 (거절·만료·무효) 다음 대기자에게 넘긴다 */
+async function closeOffer(o: OfferRow, status: "declined" | "expired" | "void", actor: string) {
+  const { data: up } = await db().from("seat_offers").update({ status, responded_at: new Date().toISOString() }).eq("id", o.id).eq("status", "pending").select("id");
+  if (!up?.length) return;
+  const word = { declined: "거절", expired: "응답 기한 지남", void: "조건이 바뀌어 무효" }[status];
+  await logStatus({ entityType: "application", entityId: o.application_id, field: "seat_offer", from: "OFFERED", to: status.toUpperCase(), actor, reason: `빈자리 제안 ${word}` });
+  await logStatus({ entityType: "dining_table", entityId: o.table_id, field: "seat_offer", to: status.toUpperCase(), actor, reason: `빈자리 제안 ${word}, 다음 대기자 확인` });
+  if (status === "expired") {
+    await notify({ userId: o.user_id, template: "seat_offer_expired", title: "빈자리 제안 기한이 지났어요", body: "답이 없어 다음 분께 자리를 넘겼어요. 지금 신청은 그대로 남아 있어요.", link: `/applications/${o.application_id}`, dedupeKey: `seat_offer_expired:${o.id}` });
+  }
+  await fillOrReflow(o.table_id, "system");
+}
+
+/** 기한이 지난 제안을 정리한다 (tick에서 부른다) */
+export async function expireOffers(): Promise<number> {
+  const t = await now();
+  const { data } = await db().from("seat_offers").select("id,table_id,application_id,user_id,status,expires_at").eq("status", "pending").lte("expires_at", t.toISOString());
+  for (const o of (data ?? []) as OfferRow[]) await closeOffer(o, "expired", "system");
+  return data?.length ?? 0;
 }

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { logStatus } from "@/lib/events";
+import { notify } from "@/lib/notify";
+import { refundPayment } from "@/lib/payments";
 import { assignVenue, afterConfirm } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 
@@ -39,6 +41,15 @@ export async function resolveException(form: FormData) {
     if (ok) {
       await afterConfirm(ex.ref_id);
       await close(id, me.id, "식당 재배정");
+    }
+  } else if (ex.kind === "refund" && action === "retry_refund") {
+    const { data: app } = await db().from("applications").select("id,user_id,payment_id").eq("id", ex.ref_id).single();
+    if (app) {
+      const r = await refundPayment(app.payment_id, app.id, actor, note || "운영자 환불 재시도");
+      if (r.ok) {
+        await notify({ userId: app.user_id, template: "refunded", title: "환불이 끝났어요", body: r.message, link: `/applications/${app.id}`, dedupeKey: `refunded:${app.id}:retry` });
+        await close(id, me.id, "환불 재시도 성공");
+      }
     }
   } else {
     await close(id, me.id, note || "운영자 처리");

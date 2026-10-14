@@ -1,0 +1,182 @@
+// 운영자 긴급 수정 (MAT-14). 확정 뒤 취소·안전 문제 같은 예외 상황에서만 쓴다.
+// 참가자 이동, 테이블 분리·병합·해제. 사유를 반드시 받고, 모든 변경은 status_events에 운영자 이름으로 남긴다.
+import { fillOrReflow, tableMembers } from "./attendance";
+import { releaseUse } from "./billing";
+import { logStatus } from "./events";
+import { fmtDate, fmtTime } from "./format";
+import { canJoin } from "./matching/constraints";
+import { loadRelations, loadSettings } from "./matching/runner";
+import type { Candidate } from "./matching/types";
+import { notify } from "./notify";
+import { afterConfirm, ensureRoom } from "./pipeline";
+import { db } from "./supabase";
+
+export const ACTIVE = ["CONFIRMED", "VENUE_ASSIGNED", "READY"];
+type Result = { ok: boolean; message: string };
+type Tb = { id: string; status: string; round_id: string; slot_id: string; match_run_id: string | null; slots: { starts_at: string; region: string } };
+
+async function table(id: string) {
+  const { data } = await db().from("dining_tables").select("id,status,round_id,slot_id,match_run_id,slots(starts_at,region)").eq("id", id).maybeSingle();
+  return data as unknown as Tb | null;
+}
+
+const cand = (m: { id: string; user_id: string; birth_year: number; slotIds: string[] }): Candidate => ({
+  applicationId: m.id, userId: m.user_id, birthYear: m.birth_year, gender: "M", mbti: null, interests: [], myTraits: [], wantedTraits: [], slotIds: m.slotIds,
+});
+
+const tag = (reason: string) => `[운영자 긴급 수정] ${reason}`;
+
+async function say(tableId: string, body: string) {
+  const room = await ensureRoom(tableId);
+  await db().from("chat_messages").insert({ room_id: room, kind: "system", body });
+}
+
+/** 옮긴 사람의 예약 안내를 새 테이블 기준으로 다시 건다 */
+async function rescheduleFor(appId: string, userId: string, from: string, to: Tb) {
+  await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/tables/${from}`);
+  await db().from("notifications").delete().eq("dedupe_key", `remind:${appId}`).eq("status", "pending");
+  const at = new Date(new Date(to.slots.starts_at).getTime() - 24 * 3600_000);
+  if (at > new Date()) {
+    await notify({ userId, template: "reminder", title: "내일 식탁에서 만나요", body: `${fmtDate(to.slots.starts_at)} ${fmtTime(to.slots.starts_at)} ${to.slots.region}. 단체방에서 장소와 예약명을 확인해 주세요.`, link: `/tables/${to.id}`, dedupeKey: `remind:${appId}:${to.id}`, scheduledAt: at });
+  }
+}
+
+/** 같은 회차에서 옮길 수 있는 다른 테이블 */
+export async function siblingTables(tableId: string) {
+  const tb = await table(tableId);
+  if (!tb) return [];
+  const { data } = await db().from("dining_tables").select("id,status,slot_id,slots(starts_at,region),venues(name)").eq("round_id", tb.round_id).neq("id", tableId).in("status", ACTIVE);
+  const rows = (data ?? []) as unknown as { id: string; status: string; slot_id: string; slots: { starts_at: string; region: string }; venues: { name: string } | null }[];
+  const out = [];
+  for (const r of rows) out.push({ ...r, count: (await tableMembers(r.id)).length });
+  return out.sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at));
+}
+
+/** 참가자 한 명을 다른 테이블로 옮긴다 */
+export async function moveMember(appId: string, targetId: string, reason: string, adminId: string, allowOtherSlot: boolean): Promise<Result> {
+  const actor = `admin:${adminId}`;
+  const { data: a } = await db().from("applications").select("id,user_id,table_id,match_status,attendance_status").eq("id", appId).single();
+  if (!a?.table_id || a.match_status !== "CONFIRMED" || a.attendance_status !== "SCHEDULED") return { ok: false, message: "확정된 참가자만 옮길 수 있어요" };
+  const [from, to, settings] = await Promise.all([table(a.table_id), table(targetId), loadSettings()]);
+  if (!from || !to || !ACTIVE.includes(to.status)) return { ok: false, message: "옮길 테이블이 열려 있지 않아요" };
+  if (to.round_id !== from.round_id) return { ok: false, message: "같은 회차 안에서만 옮길 수 있어요" };
+  const group = await tableMembers(targetId);
+  if (group.length >= settings.maxSize) return { ok: false, message: `옮길 테이블이 이미 ${settings.maxSize}명이에요` };
+  const me = (await tableMembers(from.id)).find((m) => m.id === appId)!;
+  if (!allowOtherSlot && !me.slotIds.includes(to.slot_id)) return { ok: false, message: "참가자가 고르지 않은 일정이에요. 본인과 통화로 확인했다면 '고르지 않은 일정 허용'을 켜 주세요" };
+  const rel = await loadRelations([...group.map((g) => g.user_id), me.user_id]);
+  if (!canJoin(group.map(cand), cand(me), rel, settings)) return { ok: false, message: "나이 차이 또는 차단·신고 관계 때문에 그 테이블에 앉힐 수 없어요" };
+
+  await db().from("applications").update({ table_id: targetId, match_reason: `운영팀이 ${fmtDate(to.slots.starts_at)} ${to.slots.region} 테이블로 옮겼어요.` }).eq("id", appId);
+  await logStatus({ entityType: "application", entityId: appId, field: "table_id", from: from.id, to: targetId, actor, reason: tag(reason) });
+  await logStatus({ entityType: "dining_table", entityId: from.id, field: "member_out", to: me.name, actor, reason: tag(reason) });
+  await logStatus({ entityType: "dining_table", entityId: targetId, field: "member_in", to: me.name, actor, reason: tag(reason) });
+  await say(from.id, "한 분이 운영팀 안내로 다른 테이블로 옮기게 됐어요.");
+  await say(targetId, `새로운 분이 합류했어요. ${me.name}님 반가워요!`);
+  await rescheduleFor(appId, me.user_id, from.id, to);
+  await notify({ userId: me.user_id, template: "reallocated", title: "테이블이 바뀌었어요", body: `운영팀이 ${fmtDate(to.slots.starts_at)} ${fmtTime(to.slots.starts_at)} ${to.slots.region} 테이블로 옮겨 드렸어요. 새 단체방을 확인해 주세요.`, link: `/tables/${targetId}`, dedupeKey: `admin-move:${appId}:${targetId}` });
+  await fillOrReflow(from.id, actor);
+  return { ok: true, message: `${me.name}님을 옮겼어요` };
+}
+
+/** 참가자를 테이블에서 뺀다. 환불을 고르면 바로 환불하고, 아니면 다른 일정·보관·환불을 직접 고르게 한다 */
+export async function removeMember(appId: string, reason: string, adminId: string, refund: boolean): Promise<Result> {
+  const actor = `admin:${adminId}`;
+  const { data: a } = await db().from("applications").select("id,user_id,table_id,match_status,attendance_status,payment_status,users(name)").eq("id", appId).single();
+  const app = a as unknown as { id: string; user_id: string; table_id: string | null; match_status: string; attendance_status: string | null; payment_status: string; users: { name: string } } | null;
+  if (!app?.table_id || app.match_status !== "CONFIRMED") return { ok: false, message: "확정된 참가자만 뺄 수 있어요" };
+  const tableId = app.table_id;
+  await db().from("applications").update({ table_id: null, attendance_status: null, match_status: "ALTERNATIVE_OFFERED", payment_status: app.payment_status === "PAID" ? "REFUND_AVAILABLE" : app.payment_status, match_reason: "운영팀 확인으로 이번 테이블에서 빠지게 됐어요." }).eq("id", appId);
+  await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: tag(reason) });
+  await logStatus({ entityType: "dining_table", entityId: tableId, field: "member_out", to: app.users.name, actor, reason: tag(reason) });
+  await db().from("notifications").delete().eq("user_id", app.user_id).eq("status", "pending").eq("link", `/tables/${tableId}`);
+  await db().from("seat_offers").update({ status: "void" }).eq("application_id", appId).eq("status", "pending");
+  if (refund) {
+    await db().from("applications").update({ payment_status: "PAID" }).eq("id", appId).eq("payment_status", "REFUND_AVAILABLE");
+    const msg = await releaseUse(appId, actor, tag(reason));
+    await db().from("applications").update({ match_status: "NO_MATCH", resolution: "refund" }).eq("id", appId);
+    await notify({ userId: app.user_id, template: "admin_removed", title: "이번 모임은 함께하지 못하게 됐어요", body: `운영팀 확인으로 테이블에서 빠지게 됐어요. ${msg}`, link: `/applications/${appId}`, dedupeKey: `admin-remove:${appId}:${tableId}` });
+  } else {
+    await notify({ userId: app.user_id, template: "admin_removed", title: "이번 테이블은 함께하지 못하게 됐어요", body: "운영팀 확인으로 테이블에서 빠지게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요.", link: `/applications/${appId}/resolve`, dedupeKey: `admin-remove:${appId}:${tableId}` });
+  }
+  await say(tableId, "한 분이 사정이 생겨 함께하지 못하게 됐어요.");
+  await fillOrReflow(tableId, actor);
+  return { ok: true, message: `${app.users.name}님을 테이블에서 뺐어요` };
+}
+
+/** 테이블을 해제한다. 참가자 전원에게 다른 일정·보관·환불을 안내한다 */
+export async function dissolveTable(tableId: string, reason: string, adminId: string): Promise<Result> {
+  const actor = `admin:${adminId}`;
+  const tb = await table(tableId);
+  if (!tb || !ACTIVE.includes(tb.status)) return { ok: false, message: "이미 끝났거나 해제된 테이블이에요" };
+  const ms = await tableMembers(tableId);
+  await db().from("dining_tables").update({ status: "DISSOLVED" }).eq("id", tableId);
+  await db().from("seat_offers").update({ status: "void" }).eq("table_id", tableId).eq("status", "pending");
+  await logStatus({ entityType: "dining_table", entityId: tableId, field: "status", from: tb.status, to: "DISSOLVED", actor, reason: tag(reason) });
+  for (const m of ms) {
+    await db().from("applications").update({ table_id: null, attendance_status: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "운영팀 사정으로 이번 테이블이 열리지 못하게 됐어요." }).eq("id", m.id).eq("payment_status", "PAID");
+    await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: tag(`테이블 해제: ${reason}`) });
+    await db().from("notifications").delete().eq("user_id", m.user_id).eq("status", "pending").eq("link", `/tables/${tableId}`);
+    await notify({ userId: m.user_id, template: "alternative", title: "모임이 취소됐어요", body: "운영팀 사정으로 이번 테이블이 열리지 못하게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 전액 환불받을 수 있어요.", link: `/applications/${m.id}/resolve`, dedupeKey: `admin-dissolve:${m.id}:${tableId}` });
+  }
+  await say(tableId, "운영팀 사정으로 이번 모임이 취소됐어요. 알림에서 다음 방법을 골라 주세요. 불편을 드려 죄송해요.");
+  return { ok: true, message: `테이블을 해제하고 ${ms.length}명에게 안내했어요` };
+}
+
+/** 이 테이블 사람들을 다른 테이블로 합친다 */
+export async function mergeInto(sourceId: string, targetId: string, reason: string, adminId: string): Promise<Result> {
+  const actor = `admin:${adminId}`;
+  const [src, dst, settings] = await Promise.all([table(sourceId), table(targetId), loadSettings()]);
+  if (!src || !dst || !ACTIVE.includes(src.status) || !ACTIVE.includes(dst.status)) return { ok: false, message: "열려 있는 테이블끼리만 합칠 수 있어요" };
+  if (src.slot_id !== dst.slot_id) return { ok: false, message: "같은 날짜·시간·지역 테이블끼리만 합칠 수 있어요" };
+  const [a, b] = await Promise.all([tableMembers(sourceId), tableMembers(targetId)]);
+  if (a.length + b.length > settings.maxSize) return { ok: false, message: `합치면 ${a.length + b.length}명이라 ${settings.maxSize}명을 넘어요` };
+  const rel = await loadRelations([...a, ...b].map((m) => m.user_id));
+  const group = b.map(cand);
+  for (const m of a) {
+    if (!canJoin(group, cand(m), rel, settings)) return { ok: false, message: `${m.name}님은 나이 차이 또는 차단·신고 관계 때문에 합칠 수 없어요` };
+    group.push(cand(m));
+  }
+  for (const m of a) {
+    await db().from("applications").update({ table_id: targetId, match_reason: "운영팀이 같은 시간 테이블과 합쳤어요." }).eq("id", m.id);
+    await logStatus({ entityType: "application", entityId: m.id, field: "table_id", from: sourceId, to: targetId, actor, reason: tag(`병합: ${reason}`) });
+    await rescheduleFor(m.id, m.user_id, sourceId, dst);
+    await notify({ userId: m.user_id, template: "reallocated", title: "테이블이 합쳐졌어요", body: `같은 시간 다른 테이블과 합쳐 ${a.length + b.length}명이 함께해요. 새 단체방을 확인해 주세요.`, link: `/tables/${targetId}`, dedupeKey: `admin-merge:${m.id}:${targetId}` });
+  }
+  await db().from("dining_tables").update({ status: "DISSOLVED" }).eq("id", sourceId);
+  await db().from("seat_offers").update({ status: "void" }).eq("table_id", sourceId).eq("status", "pending");
+  await logStatus({ entityType: "dining_table", entityId: sourceId, field: "status", from: src.status, to: "DISSOLVED", actor, reason: tag(`${targetId.slice(0, 8)} 테이블로 병합: ${reason}`) });
+  await logStatus({ entityType: "dining_table", entityId: targetId, field: "merged_from", to: sourceId, actor, reason: tag(`${a.length}명 합류: ${reason}`) });
+  await say(sourceId, "이 테이블은 같은 시간 다른 테이블과 합쳐졌어요. 새 단체방으로 옮겨 주세요.");
+  await say(targetId, `같은 시간 테이블과 합쳐 ${a.map((m) => m.name).join(", ")}님이 합류했어요. 반가워요!`);
+  for (const m of b) await notify({ userId: m.user_id, template: "reallocated", title: "새로운 분들이 합류했어요", body: `같은 시간 테이블과 합쳐 ${a.length}명이 더 함께해요.`, link: `/tables/${targetId}`, dedupeKey: `admin-merge-in:${m.id}:${sourceId}` });
+  return { ok: true, message: `${a.length}명을 합쳤어요` };
+}
+
+/** 고른 사람들을 같은 일정의 새 테이블로 나눈다. 나눈 뒤 두 테이블 모두 최소 인원 이상이어야 한다 */
+export async function splitTable(tableId: string, appIds: string[], reason: string, adminId: string): Promise<Result> {
+  const actor = `admin:${adminId}`;
+  const [tb, settings] = await Promise.all([table(tableId), loadSettings()]);
+  if (!tb || !ACTIVE.includes(tb.status)) return { ok: false, message: "열려 있는 테이블만 나눌 수 있어요" };
+  const ms = await tableMembers(tableId);
+  const out = ms.filter((m) => appIds.includes(m.id));
+  const stay = ms.length - out.length;
+  if (out.length < settings.minSize || stay < settings.minSize) return { ok: false, message: `나눈 뒤 두 테이블 모두 ${settings.minSize}명 이상이어야 해요 (지금 ${stay}명 / ${out.length}명)` };
+  const { data: nt } = await db()
+    .from("dining_tables")
+    .insert({ round_id: tb.round_id, slot_id: tb.slot_id, match_run_id: tb.match_run_id, status: "CONFIRMED", confirmed_at: new Date().toISOString(), explanation: { reasons: ["운영팀이 조정한 테이블"], origin: "admin_split" } })
+    .select("id")
+    .single();
+  const newTb = (await table(nt!.id))!;
+  await logStatus({ entityType: "dining_table", entityId: nt!.id, field: "status", to: "CONFIRMED", actor, reason: tag(`${tableId.slice(0, 8)} 테이블에서 분리: ${reason}`) });
+  for (const m of out) {
+    await db().from("applications").update({ table_id: nt!.id, match_reason: "운영팀이 테이블을 둘로 나눴어요." }).eq("id", m.id);
+    await logStatus({ entityType: "application", entityId: m.id, field: "table_id", from: tableId, to: nt!.id, actor, reason: tag(`분리: ${reason}`) });
+    await rescheduleFor(m.id, m.user_id, tableId, newTb);
+    await notify({ userId: m.user_id, template: "reallocated", title: "테이블이 나뉘었어요", body: "같은 시간 새 테이블로 옮겼어요. 식당과 단체방을 확인해 주세요.", link: `/tables/${nt!.id}`, dedupeKey: `admin-split:${m.id}:${nt!.id}` });
+  }
+  await logStatus({ entityType: "dining_table", entityId: tableId, field: "split_to", to: nt!.id, actor, reason: tag(`${out.length}명 분리: ${reason}`) });
+  await say(tableId, `운영팀 조정으로 ${out.length}분이 같은 시간 다른 테이블로 옮겼어요.`);
+  await afterConfirm(nt!.id); // 식당 배정, 단체방, 첫 공지, 리마인드
+  return { ok: true, message: `${out.length}명을 새 테이블로 나눴어요` };
+}

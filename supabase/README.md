@@ -20,3 +20,4 @@ $q$; end $mig$;
 | 0004_phone_verification.sql | 2026-10-15 |
 | 0005_push.sql | 2026-10-15 |
 | 0006_withdraw_consent.sql | 2026-10-15 |
+| 0007_waitlist_ops_content_toss.sql | 2026-10-15 |

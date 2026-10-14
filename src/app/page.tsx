@@ -3,6 +3,7 @@ import Link from "next/link";
 import { after } from "next/server";
 import { PushToggle } from "@/components/push-toggle";
 import { AuthChooser } from "@/components/auth-chooser";
+import { OfferBanner } from "@/components/offer-banner";
 import { TableMark, Wordmark } from "@/components/brand";
 import { LinkButton, List, Pill, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { getMe } from "@/lib/auth";
@@ -62,6 +63,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
         <br />
         {active?.match_status === "CONFIRMED" && !finished ? "곧 식탁에서 만나요" : "이번 주 저녁 어때요?"}
       </h1>
+
+      {me.hasProfile && <OfferBanner userId={me.id} />}
 
       {!me.hasProfile ? (
         <div className="mt-6 rounded-3xl bg-accent p-6 text-white">

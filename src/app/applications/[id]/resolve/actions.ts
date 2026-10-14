@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
+import { refundPayment } from "@/lib/payments";
 import { won } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
@@ -98,20 +99,15 @@ export async function refund(form: FormData) {
   const me = await requireProfile();
   const appId = String(form.get("app_id"));
   const app = await loadOwn(appId, me.id);
-  const { data: up } = await db()
-    .from("payments")
-    .update({ status: "REFUND_PROCESSING" })
-    .eq("id", app.payment_id)
-    .in("status", ["PAID", "REFUND_AVAILABLE"])
-    .select("id");
-  if (up?.length) {
-    await db().from("applications").update({ payment_status: "REFUND_REQUESTED", match_status: "NO_MATCH", resolution: "refund" }).eq("id", appId);
-    await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "REFUND_AVAILABLE", to: "REFUND_REQUESTED", actor: `user:${me.id}`, reason: "참가자가 환불 선택" });
-    // 모의 PG: 바로 승인된다고 보고 완료 처리
-    await db().from("payments").update({ status: "REFUNDED", refunded_at: new Date().toISOString() }).eq("id", app.payment_id);
-    await db().from("applications").update({ payment_status: "REFUNDED" }).eq("id", appId);
-    await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "REFUND_PROCESSING", to: "REFUNDED", actor: "system", reason: "원결제수단 자동 환불(모의)" });
+  if (!["PAID", "REFUND_AVAILABLE", "REFUND_FAILED"].includes(app.payments.status)) redirect(`/applications/${appId}`);
+  await db().from("applications").update({ payment_status: "REFUND_REQUESTED", match_status: "NO_MATCH", resolution: "refund" }).eq("id", appId);
+  await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "REFUND_AVAILABLE", to: "REFUND_REQUESTED", actor: `user:${me.id}`, reason: "참가자가 환불 선택" });
+  const r = await refundPayment(app.payment_id, appId, "system", "매칭 실패 후 환불 선택");
+  if (r.ok) {
+    if (app.payments.pass_id) await db().from("passes").update({ remaining: 0 }).eq("id", app.payments.pass_id);
     await notify({ userId: me.id, template: "refunded", title: "환불이 끝났어요", body: `${won(app.payments.amount)}을 결제하신 수단으로 돌려드렸어요. 카드사에 따라 며칠 걸릴 수 있어요.`, link: `/applications/${appId}`, dedupeKey: `refunded:${appId}` });
+  } else {
+    await notify({ userId: me.id, template: "refund_failed", title: "환불을 다시 처리하고 있어요", body: r.message, link: `/applications/${appId}`, dedupeKey: `refund_failed:${appId}` });
   }
   redirect(`/applications/${appId}`);
 }

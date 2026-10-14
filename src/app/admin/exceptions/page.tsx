@@ -67,6 +67,11 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                       <button name="action" value="restricted" className="h-9 rounded-xl bg-danger px-3.5 text-[13px] font-semibold text-white">참가 제한</button>
                       <button name="action" value="banned" className="h-9 rounded-xl bg-ink px-3.5 text-[13px] font-semibold text-white">영구 제한</button>
                     </>
+                  ) : e.kind === "refund" ? (
+                    <>
+                      <button name="action" value="retry_refund" className="h-9 rounded-xl bg-ink px-3.5 text-[13px] font-semibold text-white">환불 다시 요청</button>
+                      <button name="action" value="done" className="h-9 rounded-xl border border-line px-3.5 text-[13px] font-semibold">직접 처리함</button>
+                    </>
                   ) : e.kind === "venue_shortage" ? (
                     <>
                       <button name="action" value="retry" className="h-9 rounded-xl bg-ink px-3.5 text-[13px] font-semibold text-white">식당 다시 배정</button>

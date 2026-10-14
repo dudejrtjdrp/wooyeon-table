@@ -12,6 +12,7 @@
   "dependencies": {
     "@portone/browser-sdk": "^0.1.13",
     "@supabase/supabase-js": "^2.117.3",
+    "@tosspayments/tosspayments-sdk": "^2.9.0",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.12",
     "lucide-react": "^0.468.0",

@@ -4,6 +4,7 @@ import { logStatus } from "./events";
 import { fmtDate, fmtTime } from "./format";
 import { notify } from "./notify";
 import { pushNotifications } from "./push";
+import { loadContentRules, rank, tableTypes } from "./contents";
 import { loadTemplates, render } from "./templates";
 import { db } from "./supabase";
 
@@ -29,14 +30,14 @@ async function loadTable(tableId: string) {
 async function members(tableId: string) {
   const { data } = await db()
     .from("applications")
-    .select("id,user_id,attendance_status,users(name,profiles(job,interests,mbti))")
+    .select("id,user_id,attendance_status,users(name,profiles(job,interests,mbti,birth_year))")
     .eq("table_id", tableId)
     .eq("match_status", "CONFIRMED");
   return (data ?? []) as unknown as {
     id: string;
     user_id: string;
     attendance_status: string | null;
-    users: { name: string; profiles: { job: string | null; interests: string[]; mbti: string | null } | null };
+    users: { name: string; profiles: { job: string | null; interests: string[]; mbti: string | null; birth_year: number } | null };
   }[];
 }
 
@@ -157,14 +158,25 @@ export async function pickContents(tableId: string) {
   for (const m of ms) for (const i of m.users.profiles?.interests ?? []) count.set(i, (count.get(i) ?? 0) + 1);
   const common = [...count.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
 
-  const { data: all } = await db().from("conversation_contents").select("id,kind,tags,body").eq("active", true);
-  const topics = (all ?? []).filter((c) => c.kind === "topic");
-  const tagged = common.flatMap((tag) => topics.filter((t) => (t.tags ?? []).includes(tag)));
-  const general = topics.filter((t) => !(t.tags ?? []).length);
-  const chosen = [...new Map([...tagged, ...general].map((t) => [t.id, t])).values()].slice(0, 3);
-  const ice = (all ?? []).filter((c) => c.kind === "icebreaker");
-  const icebreaker = ice.length ? ice[tableId.charCodeAt(0) % ice.length] : null;
-  return { topics: chosen, icebreaker, common: common.slice(0, 3) };
+  // 테이블 유형 (CON-04): 첫 참가 위주인지, 인원, 나이대
+  const { data: past } = ms.length
+    ? await db().from("applications").select("user_id").in("user_id", ms.map((m) => m.user_id)).eq("attendance_status", "ATTENDED").neq("table_id", tableId)
+    : { data: [] };
+  const pastCount = new Map<string, number>();
+  for (const p of past ?? []) pastCount.set(p.user_id, (pastCount.get(p.user_id) ?? 0) + 1);
+  const t = await loadTable(tableId);
+  const types = tableTypes(
+    ms.map((m) => ({ birthYear: m.users.profiles?.birth_year ?? 1995, pastAttended: pastCount.get(m.user_id) ?? 0 })),
+    new Date(t.slots.starts_at).getFullYear(),
+  );
+
+  const [{ data: all }, rules] = await Promise.all([
+    db().from("conversation_contents").select("id,kind,tags,table_types,priority,body").eq("active", true),
+    loadContentRules(),
+  ]);
+  const topics = rank(all ?? [], "topic", common, types, rules, tableId).slice(0, rules.topicCount);
+  const icebreakers = rank(all ?? [], "icebreaker", common, types, rules, tableId).slice(0, rules.icebreakerCount);
+  return { topics, icebreaker: icebreakers[0] ?? null, icebreakers, common: common.slice(0, 3), types };
 }
 
 /**
@@ -222,6 +234,11 @@ export async function tick() {
   await pushNotifications(sentNow).catch(() => null);
   if (pending?.length) done.push(`예약 알림 ${pending.length}건 발송`);
 
+  // 2-1. 빈자리 제안 응답 기한이 지난 건은 다음 대기자에게 넘긴다 (STA-07)
+  const { expireOffers } = await import("./attendance");
+  const expired = await expireOffers();
+  if (expired) done.push(`빈자리 제안 ${expired}건 기한 만료, 다음 대기자 확인`);
+
   // 3. 테이블 일정에 따른 단체방 게시와 상태 전환
   const tpl = await loadTemplates();
   const { data: tables } = await db()
@@ -250,10 +267,10 @@ export async function tick() {
         [
           "모두 모이셨나요? 오늘의 대화 주제예요.",
           ...c.topics.map((x, i) => `${i + 1}. ${x.body}`),
-          c.icebreaker ? `\n아이스브레이킹: ${c.icebreaker.body}` : "",
+          c.icebreakers.length ? `\n아이스브레이킹\n${c.icebreakers.map((x) => `· ${x.body}`).join("\n")}` : "",
         ].join("\n"),
         `content:${tb.id}`,
-        { type: "content", common: c.common },
+        { type: "content", common: c.common, types: c.types },
       );
       const { data: up } = await db().from("dining_tables").update({ status: "IN_PROGRESS" }).eq("id", tb.id).in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY"]).select("id");
       if (up?.length) await logStatus({ entityType: "dining_table", entityId: tb.id, field: "status", from: tb.status, to: "IN_PROGRESS", actor: "system", reason: "모임 시작 시각" });

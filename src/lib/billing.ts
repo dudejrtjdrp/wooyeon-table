@@ -1,6 +1,6 @@
 // 이용권과 환불. 1회권은 돈으로 돌려주고, 정기권(또는 보유 이용권으로 신청한 건)은 쓴 횟수를 돌려준다.
-import { won } from "./constants";
 import { logStatus } from "./events";
+import { refundPayment } from "./payments";
 import { db } from "./supabase";
 
 type PayRow = { id: string; status: string; amount: number; pass_type: string | null; pass_id: string | null };
@@ -24,19 +24,10 @@ export async function releaseUse(appId: string, actor: string, reason: string): 
     await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "PAID", to: "REFUNDED", actor, reason: `${reason}: 이용권 1회 반환` });
     return "쓴 이용권 1회를 돌려드렸어요. 다음 일정에 그대로 쓸 수 있어요.";
   }
-  // 1회권: 원결제수단으로 전액 환불 (모의 PG라 바로 완료)
-  const { data: up } = await db()
-    .from("payments")
-    .update({ status: "REFUNDED", refunded_at: new Date().toISOString() })
-    .eq("id", p.id)
-    .eq("status", "PAID")
-    .select("id");
-  if (up?.length) {
-    if (p.pass_id) await db().from("passes").update({ remaining: 0 }).eq("id", p.pass_id);
-    await db().from("applications").update({ payment_status: "REFUNDED" }).eq("id", appId);
-    await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "PAID", to: "REFUNDED", actor: "system", reason: `${reason}: 원결제수단 전액 환불 ${won(p.amount)}(모의)` });
-  }
-  return `결제하신 수단으로 ${won(p.amount)}을 전액 돌려드렸어요.`;
+  // 1회권: 원결제수단으로 전액 환불 (토스 결제면 토스 취소 API)
+  const r = await refundPayment(p.id, appId, actor, reason);
+  if (r.ok && p.pass_id) await db().from("passes").update({ remaining: 0 }).eq("id", p.pass_id);
+  return r.message;
 }
 
 /** 지금 쓸 수 있는 보유 이용권 (남은 횟수가 있고 기한이 안 지난 것, 기한이 빠른 순) */

@@ -4,20 +4,34 @@ import { Badge, PageHeader, Panel } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
 import { ATTEND, label } from "@/lib/labels";
+import { ACTIVE, siblingTables } from "@/lib/admin-ops";
+import { seatCandidates } from "@/lib/attendance";
+import { TYPE_LABEL } from "@/lib/contents";
+import { pickContents } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
+import { OpsPanel } from "./ops-panel";
+
+const OFFER: Record<string, [string, "muted" | "accent" | "leaf" | "danger"]> = {
+  pending: ["답 기다림", "accent"],
+  accepted: ["합류", "leaf"],
+  declined: ["거절", "muted"],
+  expired: ["기한 지남", "muted"],
+  void: ["무효", "muted"],
+};
 
 export const dynamic = "force-dynamic";
 
-export default async function TableDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function TableDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ m?: string; e?: string }> }) {
   await requireAdmin();
   const { id } = await params;
+  const { m: okMsg, e: errMsg } = await searchParams;
   const { data } = await db()
     .from("dining_tables")
-    .select("id,status,score,score_detail,explanation,reservation_name,confirmed_at,slots(starts_at,ends_at,region),venues(name,address,price_range),rounds(title)")
+    .select("id,status,slot_id,score,score_detail,explanation,reservation_name,confirmed_at,slots(starts_at,ends_at,region),venues(name,address,price_range),rounds(title)")
     .eq("id", id)
     .maybeSingle();
   const t = data as unknown as {
-    id: string; status: string; score: number; explanation: { reasons?: string[]; origin?: string }; reservation_name: string | null; confirmed_at: string | null;
+    id: string; status: string; slot_id: string; score: number; explanation: { reasons?: string[]; origin?: string }; reservation_name: string | null; confirmed_at: string | null;
     slots: { starts_at: string; ends_at: string; region: string }; venues: { name: string; address: string; price_range: string | null } | null; rounds: { title: string };
   } | null;
   if (!t) notFound();
@@ -32,6 +46,14 @@ export default async function TableDetail({ params }: { params: Promise<{ id: st
     ? await db().from("notifications").select("id,title,status,scheduled_at,sent_at,read_at,attempts,user_id").in("user_id", members.map((m) => m.user_id)).eq("link", `/tables/${id}`).order("scheduled_at")
     : { data: [] };
   const nameOf = new Map(members.map((m) => [m.user_id, m.users.name]));
+  const active = ACTIVE.includes(t.status);
+  const [siblings, { data: offers }, contents, waiters] = await Promise.all([
+    active ? siblingTables(id) : Promise.resolve([]),
+    db().from("seat_offers").select("id,status,expires_at,responded_at,created_at,users(name)").eq("table_id", id).order("created_at"),
+    pickContents(id),
+    active ? seatCandidates(id) : Promise.resolve([]),
+  ]);
+  const seated = members.filter((m) => m.attendance_status === "SCHEDULED" || m.attendance_status === "ATTENDED");
 
   return (
     <div>
@@ -39,6 +61,8 @@ export default async function TableDetail({ params }: { params: Promise<{ id: st
       <div className="mt-2">
         <PageHeader title={`${fmtDate(t.slots.starts_at)} ${fmtTime(t.slots.starts_at)} ${t.slots.region}`} desc={`${t.rounds.title}, 확정 ${t.confirmed_at ? fmtDateTime(t.confirmed_at) : "-"}, 점수 ${Math.round(Number(t.score))}`} />
       </div>
+      {okMsg && <p className="mt-4 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-medium text-leaf">{okMsg}</p>}
+      {errMsg && <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-[14px] font-medium text-danger">{errMsg}</p>}
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <Panel title={`참가자 ${members.length}명`}>
@@ -52,6 +76,14 @@ export default async function TableDetail({ params }: { params: Promise<{ id: st
               ))}
             </ul>
             {t.explanation?.reasons?.length ? <p className="mt-3 text-[13px] text-muted">참가자에게 보여 준 이유: {t.explanation.reasons.join(", ")}</p> : null}
+          </Panel>
+          <Panel title="대화 콘텐츠 (모임 시작 때 자동 게시)">
+            <p className="text-[13px] text-muted">테이블 유형: {contents.types.map((x) => TYPE_LABEL[x] ?? x).join(", ") || "-"}{contents.common.length ? ` · 공통 관심사 ${contents.common.join(", ")}` : ""}</p>
+            <ol className="mt-2 space-y-1.5 text-[14px]">
+              {contents.topics.map((c, i) => <li key={c.id}>{i + 1}. {c.body}</li>)}
+              {contents.icebreaker && <li className="text-muted">아이스브레이킹 · {contents.icebreaker.body}</li>}
+            </ol>
+            <Link href="/admin/contents" className="mt-3 inline-block text-[13px] font-semibold text-accent hover:underline">콘텐츠와 노출 규칙 관리 →</Link>
           </Panel>
           <Panel title="단체방">
             {!room ? <p className="text-[14px] text-danger">단체방이 없어요.</p> : (
@@ -67,6 +99,26 @@ export default async function TableDetail({ params }: { params: Promise<{ id: st
           </Panel>
         </div>
         <div className="space-y-4">
+          <Panel title="운영자 긴급 수정" className="scroll-mt-6">
+            <div id="ops" />
+            <OpsPanel tableId={id} slotId={t.slot_id} active={active} members={seated.map((m) => ({ id: m.id, name: m.users.name }))} siblings={siblings} />
+          </Panel>
+          <Panel title="빈자리 제안 (대기자 자동 전환)">
+            <ul className="divide-y divide-line text-[13px]">
+              {(offers ?? []).map((o) => {
+                const x = o as unknown as { id: string; status: string; expires_at: string; users: { name: string } };
+                return (
+                  <li key={x.id} className="flex items-center justify-between py-2">
+                    <span>{x.users.name}</span>
+                    <Badge v={OFFER[x.status] ?? [x.status, "muted"]} />
+                    <span className="text-muted">{x.status === "pending" ? `~${fmtDateTime(x.expires_at)}` : ""}</span>
+                  </li>
+                );
+              })}
+              {!offers?.length && <li className="py-2 text-muted">빈자리가 생긴 적이 없어요.</li>}
+            </ul>
+            {active && <p className="mt-2 text-[12px] text-muted">다음 순서 대기자 {waiters.length}명{waiters.length ? `: ${waiters.slice(0, 3).map((w) => w.name).join(", ")}` : ""}</p>}
+          </Panel>
           <Panel title="식당">
             {t.venues ? (
               <dl className="space-y-1.5 text-[14px]">

@@ -10,6 +10,7 @@ import { db } from "@/lib/supabase";
 import { cancelRule } from "@/lib/attendance";
 import { REFUND_POLICY } from "@/lib/constants";
 import { Toast } from "@/components/ui";
+import { OfferBanner } from "@/components/offer-banner";
 import { cancelApplication, cancelAttendanceAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,8 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         <p className="mt-1 text-[20px] font-bold leading-snug tracking-[-0.02em]">{h.desc}</p>
         {app.match_reason && <p className="mt-2 text-[14px] leading-relaxed text-muted">{app.match_reason}</p>}
       </section>
+
+      {app.match_status === "ALTERNATIVE_OFFERED" && <OfferBanner userId={me.id} applicationId={app.id} />}
 
       {app.payment_status === "PENDING" || app.payment_status === "FAILED" ? (
         <div className="mt-3"><LinkButton href={`/pay/${app.id}`}>결제 이어서 하기</LinkButton></div>

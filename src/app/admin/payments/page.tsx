@@ -5,6 +5,7 @@ import { PASSES, won } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
 import { PAYMENT, label } from "@/lib/labels";
 import { db } from "@/lib/supabase";
+import { tossLive } from "@/lib/toss";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,13 @@ export default async function Payments({ searchParams }: { searchParams: Promise
   const { s } = await searchParams;
   let q = db()
     .from("payments")
-    .select("id,amount,status,provider,pass_type,paid_at,refunded_at,created_at,users(name),passes(remaining,total_count,expires_at),applications(id,rounds(title))")
+    .select("id,amount,status,provider,method,receipt_url,refund_error,pg_order_id,pass_type,paid_at,refunded_at,created_at,users(name),passes(remaining,total_count,expires_at),applications(id,rounds(title))")
     .order("created_at", { ascending: false })
     .limit(200);
   if (s) q = q.eq("status", s);
   const { data } = await q;
   const rows = (data ?? []) as unknown as {
-    id: string; amount: number; status: string; provider: string; pass_type: string | null; paid_at: string | null; refunded_at: string | null; created_at: string;
+    id: string; amount: number; status: string; provider: string; method: string | null; receipt_url: string | null; refund_error: string | null; pg_order_id: string | null; pass_type: string | null; paid_at: string | null; refunded_at: string | null; created_at: string;
     users: { name: string }; passes: { remaining: number; total_count: number; expires_at: string | null } | null; applications: { id: string; rounds: { title: string } }[];
   }[];
   const { data: all } = await db().from("payments").select("amount,status,provider");
@@ -30,7 +31,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
 
   return (
     <div>
-      <PageHeader title="결제·환불" desc="결제, 자동 환불, 환불 실패, 이용권 사용 내역이에요. 지금은 모의 결제예요." />
+      <PageHeader title="결제·환불" desc={`결제, 자동 환불, 환불 실패, 이용권 사용 내역이에요. 결제는 토스페이먼츠${tossLive() ? "" : " 테스트 모드"}로 승인·취소돼요.`} />
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="결제 완료 금액" value={won(paidSum)} />
         <Stat label="자동 환불" value={`${refunded.length}건`} sub={won(refunded.reduce((n, p) => n + p.amount, 0))} />
@@ -45,8 +46,8 @@ export default async function Payments({ searchParams }: { searchParams: Promise
         <button className={btnLight}>보기</button>
       </form>
       <div className="mt-3 overflow-x-auto rounded-2xl bg-card">
-        <table className="w-full min-w-[900px] text-[14px]">
-          <thead className="border-b border-line"><tr>{["시각", "참가자", "회차", "이용권", "금액", "상태", "이용권 남은 횟수", "환불 시각"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+        <table className="w-full min-w-[1040px] text-[14px]">
+          <thead className="border-b border-line"><tr>{["시각", "참가자", "회차", "이용권", "결제 수단", "금액", "상태", "이용권 남은 횟수", "환불 시각"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">
             {rows.map((p) => (
               <tr key={p.id}>
@@ -54,6 +55,12 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                 <td className={td}>{p.applications[0] ? <Link href={`/admin/applicants/${p.applications[0].id}`} className="font-semibold text-accent hover:underline">{p.users.name}</Link> : p.users.name}</td>
                 <td className={td}>{p.applications.map((a) => a.rounds.title).join(", ") || "-"}</td>
                 <td className={td}>{p.provider === "pass" ? "보유 이용권 사용" : PASSES[p.pass_type as keyof typeof PASSES]?.label ?? "-"}</td>
+                <td className={td}>
+                  {p.provider === "toss" ? (
+                    <span>토스 · {p.method ?? "카드"}{p.receipt_url ? <> · <a href={p.receipt_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">영수증</a></> : null}</span>
+                  ) : p.provider === "pass" ? "-" : <span className="text-muted">모의 결제</span>}
+                  {p.refund_error && <p className="mt-0.5 text-[12px] text-danger">{p.refund_error}</p>}
+                </td>
                 <td className={`${td} tabular-nums`}>{won(p.amount)}</td>
                 <td className={td}><Badge v={label(PAYMENT, p.status)} /></td>
                 <td className={td}>{p.passes ? `${p.passes.remaining}/${p.passes.total_count}회${p.passes.expires_at ? `, ~${fmtDateTime(p.passes.expires_at).split(" ").slice(0, 2).join(" ")}` : ""}` : "-"}</td>

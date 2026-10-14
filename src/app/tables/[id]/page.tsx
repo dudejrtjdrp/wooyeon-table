@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Clock, MapPin, Navigation, Receipt } from "lucide-react";
 import { TableMark } from "@/components/brand";
-import { ErrorText, LinkButton, Pill, PrimaryButton, Screen } from "@/components/ui";
+import { ErrorText, LinkButton, Pill, PrimaryButton, Screen, Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDate, fmtTime } from "@/lib/format";
@@ -13,10 +13,10 @@ import { Refresher } from "./refresher";
 
 export const dynamic = "force-dynamic";
 
-export default async function TablePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string }> }) {
+export default async function TablePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string; m?: string }> }) {
   const me = await requireMe();
   const { id } = await params;
-  const { e } = await searchParams;
+  const { e, m: toast } = await searchParams;
 
   const { data: raw } = await db()
     .from("dining_tables")
@@ -58,6 +58,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   return (
     <Screen title={`${fmtDate(t.slots.starts_at)} ${t.slots.region}`} back="/my-tables">
       <Refresher tableId={id} />
+      <Toast msg={toast} />
       <section className="mt-2 rounded-3xl bg-ink p-5 text-white">
         <div className="flex items-start justify-between">
           <TableMark size={44} tone="white" seats={Math.max(mems.length, 4)} filled={mems.filter((m) => m.attendance_status === "ATTENDED").length || mems.length} glow={t.status !== "DONE"} />

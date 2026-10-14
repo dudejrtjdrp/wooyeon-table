@@ -2,10 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
-import { PASSES, type PassType } from "@/lib/constants";
+import { type PassType } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
-import { fmtDateTime } from "@/lib/format";
-import { notify } from "@/lib/notify";
+import { markPaid } from "@/lib/payments";
 import { db } from "@/lib/supabase";
 
 async function load(appId: string, userId: string) {
@@ -22,46 +21,12 @@ async function load(appId: string, userId: string) {
   };
 }
 
-/** 모의 결제. 같은 결제를 두 번 눌러도 한 번만 승인된다 */
+/** 모의 결제(시연용 즉시 승인). 같은 결제를 두 번 눌러도 한 번만 승인된다 */
 export async function pay(form: FormData) {
   const me = await requireProfile();
   const appId = String(form.get("app_id"));
-  const app = await load(appId, me.id);
-
-  // 대기·실패 상태일 때만 승인으로 바꾼다 (조건부 업데이트 = 중복 승인 방지)
-  const { data: updated } = await db()
-    .from("payments")
-    .update({ status: "PAID", paid_at: new Date().toISOString() })
-    .eq("id", app.payment_id)
-    .in("status", ["PENDING", "FAILED"])
-    .select("id");
-  if (updated?.length) {
-    const passDef = PASSES[app.payments.pass_type] ?? PASSES.single;
-    const { data: pass } = await db()
-      .from("passes")
-      .insert({
-        user_id: me.id,
-        pass_type: app.payments.pass_type,
-        total_count: passDef.count,
-        remaining: passDef.count - 1, // 이번 신청에 1회 사용
-        expires_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 60).toISOString(),
-      })
-      .select("id")
-      .single();
-    await db().from("payments").update({ pass_id: pass!.id }).eq("id", app.payment_id);
-    await db().from("applications").update({ payment_status: "PAID" }).eq("id", appId);
-    // 결제했으니 예약해 둔 결제 독촉 알림은 보내지 않는다
-    await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
-    await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: app.payment_status, to: "PAID", actor: `user:${me.id}`, reason: "모의 결제 승인" });
-    await notify({
-      userId: me.id,
-      template: "paid",
-      title: "결제가 끝났어요",
-      body: `${fmtDateTime(app.rounds.match_at)}에 자동으로 테이블을 꾸려서 알려드릴게요.`,
-      link: `/applications/${appId}`,
-      dedupeKey: `paid:${appId}`,
-    });
-  }
+  await load(appId, me.id);
+  await markPaid(appId, me.id, { provider: "mock", method: String(form.get("method") ?? "card"), reason: "모의 결제 승인" });
   redirect(`/applications/${appId}`);
 }
 
