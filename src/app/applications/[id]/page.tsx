@@ -83,7 +83,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
             </li>
           ))}
         </ol>
-        {!matched && paid && new Date(app.rounds.match_at) > t && (
+        {!matched && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
           <p className="text-[13px] text-muted">매칭 결과는 {fmtDateTime(app.rounds.match_at)}쯤 알림으로 보내드려요.</p>
         )}
       </section>
