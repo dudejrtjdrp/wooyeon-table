@@ -25,11 +25,11 @@ export default async function Settings() {
 
   return (
     <div className="max-w-xl">
-      <h1 className="text-[24px] font-bold">매칭 기준</h1>
+      <h1 className="text-[26px] font-bold tracking-[-0.02em]">매칭 기준</h1>
       <p className="mt-1 text-[14px] text-muted">
         필수 조건(일정, 4~6명, 나이 차 8살, 차단·신고·비선호)은 바꿀 수 없어요. 아래 가중치는 선호 점수에만 쓰여요. 다음 매칭부터 적용돼요.
       </p>
-      <form action={save} className="mt-6 space-y-3 rounded-2xl border border-line bg-card p-5">
+      <form action={save} className="mt-6 space-y-3 rounded-2xl bg-card p-5">
         {Object.keys(DEFAULT_SETTINGS.weights).map((k) => (
           <label key={k} className="flex items-center justify-between text-[14px]">
             {LABEL[k]}
@@ -40,7 +40,7 @@ export default async function Settings() {
           자동 확정 최소 점수 (0~100)
           <input name="min_score" type="number" defaultValue={min} min={0} max={100} className="w-24 rounded-lg border border-line px-3 py-1.5 text-right" />
         </label>
-        <button className="w-full rounded-lg bg-ink py-2.5 text-[14px] text-white">저장</button>
+        <button className="h-11 w-full rounded-xl bg-accent text-[14px] font-semibold text-white">저장</button>
       </form>
     </div>
   );

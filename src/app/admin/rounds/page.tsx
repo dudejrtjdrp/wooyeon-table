@@ -16,15 +16,15 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
 
   return (
     <div>
-      <h1 className="text-[24px] font-bold">회차·식당</h1>
-      {e && <p className="mt-3 rounded-lg bg-accent/10 px-4 py-2 text-[14px] text-accent">{e}</p>}
+      <h1 className="text-[26px] font-bold tracking-[-0.02em]">회차·식당</h1>
+      {e && <p className="mt-3 rounded-xl bg-danger/10 px-4 py-2 text-[14px] text-danger">{e}</p>}
 
       <section className="mt-6 space-y-3">
         {rounds?.map((r) => {
           const dates = [...new Set(r.slots.map((s) => s.starts_at))].sort();
           const regions = [...new Set(r.slots.map((s) => s.region))];
           return (
-            <div key={r.id} className="rounded-2xl border border-line bg-card p-5">
+            <div key={r.id} className="rounded-2xl bg-card p-5">
               <div className="flex items-center justify-between">
                 <p className="text-[16px] font-semibold">{r.title}</p>
                 <span className="text-[13px] text-muted">{r.status}</span>
@@ -37,7 +37,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
         })}
       </section>
 
-      <form action={createRound} className="mt-8 rounded-2xl border border-line bg-card p-5">
+      <form action={createRound} className="mt-8 rounded-2xl bg-card p-5">
         <h2 className="text-[16px] font-semibold">새 회차 만들기</h2>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <input name="title" placeholder="예: 11월 둘째 주 저녁" className={input} />
@@ -49,14 +49,14 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
           </div>
           <label className="text-[13px] text-muted">일정당 최대 테이블 <input name="max_tables" type="number" defaultValue={4} min={1} className={`${input} ml-2 w-20`} /></label>
         </div>
-        <button className="mt-4 rounded-lg bg-ink px-4 py-2 text-[14px] text-white">만들기</button>
+        <button className="mt-4 h-10 rounded-xl bg-accent px-4 text-[14px] font-semibold text-white">만들기</button>
       </form>
 
       <section className="mt-10">
         <h2 className="text-[17px] font-semibold">제휴 식당</h2>
-        <div className="mt-3 overflow-x-auto rounded-2xl border border-line bg-card">
+        <div className="mt-3 overflow-x-auto rounded-2xl bg-card">
           <table className="w-full text-[13px]">
-            <thead className="bg-line/40 text-left text-muted"><tr>{["지역", "식당", "주소", "가격대"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+            <thead className="border-b border-line text-left text-[12px] text-muted"><tr>{["지역", "식당", "주소", "가격대"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-line">
               {venues?.map((v) => (
                 <tr key={v.id}><td className="px-3 py-2">{v.region}</td><td className="px-3 py-2">{v.name}</td><td className="px-3 py-2 text-muted">{v.address}</td><td className="px-3 py-2">{v.price_range}</td></tr>
@@ -69,7 +69,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
           <input name="name" placeholder="식당 이름" className={input} />
           <input name="address" placeholder="주소" className={`${input} min-w-60 flex-1`} />
           <input name="price" placeholder="가격대" className={`${input} w-28`} />
-          <button className="rounded-lg bg-ink px-4 py-2 text-[14px] text-white">식당 추가</button>
+          <button className="h-10 rounded-xl bg-accent px-4 text-[14px] font-semibold text-white">식당 추가</button>
         </form>
         <p className="mt-2 text-[12px] text-muted">추가한 식당은 모집 중인 같은 지역 일정마다 2테이블씩 받을 수 있게 잡혀요.</p>
       </section>

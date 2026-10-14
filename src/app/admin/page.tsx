@@ -23,9 +23,9 @@ const KIND_LABEL: Record<string, string> = {
 
 function Stat({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: "accent" }) {
   return (
-    <div className="rounded-2xl border border-line bg-card p-4">
+    <div className="rounded-2xl bg-card p-4">
       <p className="text-[13px] text-muted">{label}</p>
-      <p className={`mt-1 text-[26px] font-bold ${tone === "accent" ? "text-accent" : ""}`}>{value}</p>
+      <p className={`mt-1 text-[28px] font-bold tabular-nums tracking-[-0.02em] ${tone === "accent" ? "text-danger" : ""}`}>{value}</p>
       {sub && <p className="text-[12px] text-muted">{sub}</p>}
     </div>
   );
@@ -73,16 +73,16 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <h1 className="mt-1 text-[24px] font-bold">오늘 처리할 일</h1>
         </div>
         <form className="flex items-center gap-2">
-          <select name="r" defaultValue={round?.id} className="rounded-lg border border-line bg-card px-3 py-2 text-[14px]">
+          <select name="r" defaultValue={round?.id} className="h-10 rounded-xl border border-line bg-card px-3 text-[14px]">
             {rounds?.map((x) => (
               <option key={x.id} value={x.id}>{x.title}</option>
             ))}
           </select>
-          <button className="rounded-lg border border-line bg-card px-3 py-2 text-[14px]">보기</button>
+          <button className="h-10 rounded-xl border border-line bg-card px-3 text-[14px]">보기</button>
         </form>
       </div>
 
-      {m && <p className="mt-4 rounded-lg bg-leaf/10 px-4 py-3 text-[14px] text-leaf">{m}</p>}
+      {m && <p className="mt-4 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-medium text-leaf">{m}</p>}
 
       {round && (
         <>
@@ -113,34 +113,34 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         {ex?.length ? (
           <ul className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
             {[...exCount.entries()].map(([k, v]) => (
-              <li key={k} className="rounded-xl border border-accent/30 bg-accent/5 px-4 py-3">
-                <p className="text-[13px] text-accent">{KIND_LABEL[k] ?? k}</p>
+              <li key={k} className="rounded-2xl bg-danger/8 px-4 py-3">
+                <p className="text-[13px] font-semibold text-danger">{KIND_LABEL[k] ?? k}</p>
                 <p className="text-[20px] font-bold">{v}건</p>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-3 rounded-xl border border-line bg-card px-4 py-6 text-center text-[14px] text-muted">지금은 운영자가 볼 일이 없어요. 모두 자동으로 처리됐어요.</p>
+          <p className="mt-3 rounded-2xl bg-card px-4 py-6 text-center text-[14px] text-muted">지금은 운영자가 볼 일이 없어요. 모두 자동으로 처리됐어요.</p>
         )}
       </section>
 
       {round && (
-        <section className="mt-10 rounded-2xl border-2 border-dashed border-line p-5">
+        <section className="mt-10 rounded-2xl border-2 border-dashed border-candle/60 bg-candle/5 p-5">
           <h2 className="text-[17px] font-semibold">시연 패널</h2>
           <p className="mt-1 text-[13px] text-muted">마감 시각을 기다리지 않고 한 회차의 흐름을 처음부터 끝까지 돌려볼 수 있어요. 실제 운영에서는 숨기는 화면이에요.</p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <form action={seedParticipants} className="rounded-xl bg-card p-4">
+            <form action={seedParticipants} className="rounded-2xl bg-card p-4">
               <input type="hidden" name="round_id" value={round.id} />
               <p className="text-[14px] font-semibold">① 테스트 참가자 만들기</p>
               <p className="mt-1 text-[12px] text-muted">결제까지 끝난 상태로 신청시켜요. 일부는 일부러 홍대에 몰거나 나이 차를 크게 넣어 재배치·실패 상황이 생겨요.</p>
               <div className="mt-3 flex gap-2">
-                <input name="count" type="number" defaultValue={36} min={4} max={60} className="w-20 rounded-lg border border-line px-3 py-2 text-[14px]" />
-                <button className="flex-1 rounded-lg bg-ink py-2 text-[14px] font-semibold text-white">만들기</button>
+                <input name="count" type="number" defaultValue={36} min={4} max={60} className="h-10 w-20 rounded-xl border border-line px-3 text-[14px]" />
+                <button className="h-10 flex-1 rounded-xl bg-accent text-[14px] font-semibold text-white">만들기</button>
               </div>
             </form>
 
-            <div className="rounded-xl bg-card p-4">
+            <div className="rounded-2xl bg-card p-4">
               <p className="text-[14px] font-semibold">② 시각 옮기기</p>
               <p className="mt-1 text-[12px] text-muted">옮기면 그 시각에 해야 할 일(매칭, 리마인드, 대화 주제 게시, 모임 종료)을 바로 처리해요.</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -153,7 +153,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                   <form key={to} action={moveClock}>
                     <input type="hidden" name="round_id" value={round.id} />
                     <input type="hidden" name="to" value={to} />
-                    <button className="w-full rounded-lg border border-line py-2 text-[13px]">{label}</button>
+                    <button className="h-10 w-full rounded-xl border border-line bg-card text-[13px] font-medium hover:border-accent">{label}</button>
                   </form>
                 ))}
               </div>
@@ -163,20 +163,20 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               </form>
             </div>
 
-            <form action={autoAttend} className="rounded-xl bg-card p-4">
+            <form action={autoAttend} className="rounded-2xl bg-card p-4">
               <input type="hidden" name="round_id" value={round.id} />
               <p className="text-[14px] font-semibold">③ 테스트 참가자 체크인·후기 채우기 (모임 시작 뒤)</p>
               <p className="mt-1 text-[12px] text-muted">일부는 서로 &lsquo;다시는 싫어요&rsquo;를 골라요. 다음 매칭에서 같은 테이블에 앉지 않는지 볼 수 있어요.</p>
-              <button className="mt-3 w-full rounded-lg bg-ink py-2 text-[14px] font-semibold text-white">채우기</button>
+              <button className="mt-3 h-10 w-full rounded-xl bg-accent text-[14px] font-semibold text-white">채우기</button>
             </form>
 
             {nextRound && (
-              <form action={reapply} className="rounded-xl bg-card p-4">
+              <form action={reapply} className="rounded-2xl bg-card p-4">
                 <input type="hidden" name="round_id" value={round.id} />
                 <input type="hidden" name="next_round_id" value={nextRound.id} />
                 <p className="text-[14px] font-semibold">④ 다음 차수에 다시 신청시키기</p>
                 <p className="mt-1 text-[12px] text-muted">{nextRound.title}에 참석자들을 다시 넣어요. 그 차수를 매칭하면 이전 만남과 비선호가 반영돼요.</p>
-                <button className="mt-3 w-full rounded-lg bg-ink py-2 text-[14px] font-semibold text-white">다시 신청시키기</button>
+                <button className="mt-3 h-10 w-full rounded-xl bg-accent text-[14px] font-semibold text-white">다시 신청시키기</button>
               </form>
             )}
           </div>

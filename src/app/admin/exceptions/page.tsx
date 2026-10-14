@@ -27,21 +27,21 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
     <div>
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-[24px] font-bold">예외 처리함</h1>
+          <h1 className="text-[26px] font-bold tracking-[-0.02em]">예외 처리함</h1>
           <p className="mt-1 text-[14px] text-muted">자동으로 해결되지 않은 것만 여기에 와요. 정상 흐름은 운영자가 볼 필요가 없어요.</p>
         </div>
         <Link href={all ? "/admin/exceptions" : "/admin/exceptions?all=1"} className="text-[14px] underline underline-offset-4">{all ? "열린 것만" : "처리한 것까지 보기"}</Link>
       </div>
 
-      {!data?.length && <p className="mt-8 rounded-xl border border-line bg-card p-8 text-center text-muted">처리할 예외가 없어요.</p>}
+      {!data?.length && <p className="mt-8 rounded-2xl bg-card p-8 text-center text-muted">처리할 예외가 없어요.</p>}
 
       <ul className="mt-6 space-y-3">
         {data?.map((e) => {
           const rep = e.kind === "safety" ? repMap.get(e.ref_id) : undefined;
           return (
-            <li key={e.id} className="rounded-2xl border border-line bg-card p-5">
+            <li key={e.id} className="rounded-2xl bg-card p-5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-[12px] font-medium text-accent">{LABEL[e.kind] ?? e.kind}</span>
+                <span className="rounded-full bg-danger/10 px-2.5 py-0.5 text-[12px] font-semibold text-danger">{LABEL[e.kind] ?? e.kind}</span>
                 <span className="text-[12px] text-muted">{fmtDateTime(e.created_at)}</span>
                 {e.status === "resolved" && <span className="text-[12px] text-leaf">처리됨 · {e.resolution}</span>}
               </div>
@@ -57,23 +57,23 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                   <input name="note" placeholder="처리 메모 (기록에 남아요)" className="min-w-48 flex-1 rounded-lg border border-line px-3 py-2 text-[14px]" />
                   {e.kind === "no_show" ? (
                     <>
-                      <button name="action" value="noshow" className="rounded-lg bg-ink px-3 py-2 text-[13px] text-white">노쇼 확정</button>
-                      <button name="action" value="attended" className="rounded-lg border border-line px-3 py-2 text-[13px]">참석으로 정정</button>
+                      <button name="action" value="noshow" className="h-9 rounded-xl bg-ink px-3.5 text-[13px] font-semibold text-white">노쇼 확정</button>
+                      <button name="action" value="attended" className="h-9 rounded-xl border border-line px-3.5 text-[13px] font-semibold">참석으로 정정</button>
                     </>
                   ) : e.kind === "safety" ? (
                     <>
-                      <button name="action" value="none" className="rounded-lg border border-line px-3 py-2 text-[13px]">조치 없음</button>
-                      <button name="action" value="warning" className="rounded-lg border border-line px-3 py-2 text-[13px]">경고</button>
-                      <button name="action" value="restricted" className="rounded-lg bg-accent px-3 py-2 text-[13px] text-white">참가 제한</button>
-                      <button name="action" value="banned" className="rounded-lg bg-ink px-3 py-2 text-[13px] text-white">영구 제한</button>
+                      <button name="action" value="none" className="h-9 rounded-xl border border-line px-3.5 text-[13px] font-semibold">조치 없음</button>
+                      <button name="action" value="warning" className="h-9 rounded-xl border border-line px-3.5 text-[13px] font-semibold">경고</button>
+                      <button name="action" value="restricted" className="h-9 rounded-xl bg-danger px-3.5 text-[13px] font-semibold text-white">참가 제한</button>
+                      <button name="action" value="banned" className="h-9 rounded-xl bg-ink px-3.5 text-[13px] font-semibold text-white">영구 제한</button>
                     </>
                   ) : e.kind === "venue_shortage" ? (
                     <>
-                      <button name="action" value="retry" className="rounded-lg bg-ink px-3 py-2 text-[13px] text-white">식당 다시 배정</button>
-                      <button name="action" value="done" className="rounded-lg border border-line px-3 py-2 text-[13px]">직접 처리함</button>
+                      <button name="action" value="retry" className="h-9 rounded-xl bg-ink px-3.5 text-[13px] font-semibold text-white">식당 다시 배정</button>
+                      <button name="action" value="done" className="h-9 rounded-xl border border-line px-3.5 text-[13px] font-semibold">직접 처리함</button>
                     </>
                   ) : (
-                    <button name="action" value="done" className="rounded-lg bg-ink px-3 py-2 text-[13px] text-white">처리 완료</button>
+                    <button name="action" value="done" className="h-9 rounded-xl bg-ink px-3.5 text-[13px] font-semibold text-white">처리 완료</button>
                   )}
                 </form>
               )}
