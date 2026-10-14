@@ -100,7 +100,7 @@ export async function afterConfirm(tableId: string) {
   let venueLine = "식당은 정해지는 대로 이 방에 알려드릴게요.";
   if (t.venue_id) {
     const { data: v } = await db().from("venues").select("name,address").eq("id", t.venue_id).single();
-    venueLine = `장소: ${v?.name} (${v?.address})\n예약명: ${t.reservation_name}`;
+    venueLine = `장소: ${v?.name}\n주소: ${v?.address}\n예약명: ${t.reservation_name}`;
   }
   const intro = ms
     .map((m) => `· ${m.users.name}${m.users.profiles?.job ? ` (${m.users.profiles.job})` : ""}`)

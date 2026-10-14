@@ -16,7 +16,7 @@ export default async function Rounds() {
     .eq("status", "open")
     .gt("apply_deadline", t.toISOString())
     .order("apply_deadline");
-  const { data: mine } = await db().from("applications").select("round_id,id").eq("user_id", me.id);
+  const { data: mine } = await db().from("applications").select("round_id,id").eq("user_id", me.id).neq("application_status", "CANCELED");
   const applied = new Map((mine ?? []).map((a) => [a.round_id, a.id]));
 
   return (

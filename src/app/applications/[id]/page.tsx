@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card, LinkButton, Pill, Screen } from "@/components/ui";
+import { Card, ErrorText, LinkButton, Pill, Screen } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
+import { cancelApplication } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 type Slot = { id: string; region: string; starts_at: string };
 
-export default async function ApplicationDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function ApplicationDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string }> }) {
   const me = await requireProfile();
   const { id } = await params;
+  const { e } = await searchParams;
   const { data } = await db()
     .from("applications")
     .select(
@@ -97,6 +99,16 @@ export default async function ApplicationDetail({ params }: { params: Promise<{ 
           ))}
         </ul>
       </section>
+
+      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
+        <form action={cancelApplication} className="mt-8 rounded-xl border border-line bg-card p-4">
+          <input type="hidden" name="app_id" value={app.id} />
+          <p className="text-[14px] font-medium">신청 취소</p>
+          <p className="mt-1 text-[13px] text-muted">매칭 시각({fmtDateTime(app.rounds.match_at)}) 전까지는 취소할 수 있어요. 결제했다면 전액 돌려드려요.</p>
+          <button className="mt-3 text-[14px] text-accent underline underline-offset-4">이 신청 취소하기</button>
+        </form>
+      )}
+      <ErrorText msg={e} />
 
       <p className="mt-8 text-center text-[13px] text-muted">
         <Link href="/rounds" className="underline underline-offset-4">다른 일정 보기</Link>

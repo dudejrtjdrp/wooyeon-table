@@ -5,6 +5,8 @@ export const metadata: Metadata = {
   title: "우연한 식탁",
   description: "처음 만나는 4~6명이 한 테이블에서 저녁을 먹어요",
   applicationName: "우연한 식탁",
+  appleWebApp: { capable: true, title: "우연한 식탁", statusBarStyle: "default" },
+  icons: { icon: "/icon-192.png", apple: "/icon-192.png" },
 };
 
 export const viewport: Viewport = {

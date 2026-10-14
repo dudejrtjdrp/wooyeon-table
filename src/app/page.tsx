@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, LinkButton, Pill } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
+import { fmtDate, fmtTime } from "@/lib/format";
 import { tick } from "@/lib/pipeline";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
@@ -33,6 +34,8 @@ export default async function Home() {
     rounds: { title: string };
   }[];
   const active = list.find((a) => !["CANCELED"].includes(a.application_status) && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status));
+  const finished = !active || ["ATTENDED", "NO_SHOW"].includes(active.attendance_status ?? "");
+  const next = me.hasProfile && finished ? await nextPick(me.id) : null;
 
   return (
     <div className="mx-auto min-h-dvh max-w-md px-5 pb-10 pt-6">
@@ -66,7 +69,7 @@ export default async function Home() {
             <p className="mt-3 text-[13px] text-muted">자세히 보기 →</p>
           </Card>
         </Link>
-      ) : (
+      ) : next ? null : (
         <Card className="mt-6">
           <p className="text-[16px] font-semibold">이번 주 저녁, 새로운 사람들과 어때요?</p>
           <p className="mt-1 text-[14px] text-muted">날짜와 동네만 고르면 테이블은 저희가 꾸려요.</p>
@@ -74,11 +77,53 @@ export default async function Home() {
         </Card>
       )}
 
-      {active && (
+      {next && (
+        <Card className="mt-4">
+          <p className="text-[13px] text-muted">다음 식탁 추천</p>
+          <p className="mt-1 text-[16px] font-semibold leading-snug">{next.why}</p>
+          <p className="mt-1 text-[14px] text-muted">{next.roundTitle} · 신청 마감 {fmtDate(next.deadline)} {fmtTime(next.deadline)}</p>
+          <div className="mt-4"><LinkButton href={`/apply/${next.roundId}`}>이 일정 신청하기</LinkButton></div>
+        </Card>
+      )}
+
+      {active && !next && (
         <div className="mt-4"><LinkButton href="/rounds" tone="light">다른 일정도 보기</LinkButton></div>
       )}
     </div>
   );
+}
+
+/**
+ * 다음 일정 추천 (RET-02). 아직 신청 안 한 모집 중 차수 가운데,
+ * 지난번에 참석한 동네·요일과 맞는 일정을 먼저 고른다.
+ */
+async function nextPick(userId: string) {
+  const t = (await now()).toISOString();
+  const [{ data: rounds }, { data: mine }, { data: past }] = await Promise.all([
+    db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t).order("apply_deadline").limit(4),
+    db().from("applications").select("round_id").eq("user_id", userId).neq("application_status", "CANCELED"),
+    db().from("applications").select("dining_tables(slots(region,starts_at))").eq("user_id", userId).eq("attendance_status", "ATTENDED").limit(5),
+  ]);
+  const applied = new Set((mine ?? []).map((a) => a.round_id));
+  const open = (rounds ?? []).filter((r) => !applied.has(r.id));
+  if (!open.length) return null;
+  const pastSlots = ((past ?? []) as unknown as { dining_tables: { slots: { region: string; starts_at: string } } | null }[])
+    .map((p) => p.dining_tables?.slots)
+    .filter((x): x is { region: string; starts_at: string } => !!x);
+  const day = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600_000).getUTCDay();
+  const DAYS = "일월화수목금토";
+  for (const r of open) {
+    for (const s of [...(r.slots ?? [])].sort((a, b) => a.starts_at.localeCompare(b.starts_at))) {
+      const same = pastSlots.find((p) => p.region === s.region && day(p.starts_at) === day(s.starts_at));
+      if (same) return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why: `지난번처럼 ${DAYS[day(s.starts_at)]}요일 ${s.region}, 이번에도 어때요?` };
+    }
+    const region = pastSlots[0]?.region;
+    if (region && (r.slots ?? []).some((s) => s.region === region)) {
+      return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why: `${region}에서 새로운 사람들과 한 번 더 앉아 볼까요?` };
+    }
+  }
+  const r = open[0];
+  return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why: pastSlots.length ? "다음 식탁도 저희가 꾸려 드릴게요." : "이번 주 저녁, 새로운 사람들과 어때요?" };
 }
 
 function Landing() {

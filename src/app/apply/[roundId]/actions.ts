@@ -24,8 +24,8 @@ export async function submitApplication(form: FormData) {
   if (!(pass in PASSES)) back("이용권을 골라 주세요");
   if (form.get("agree_refund") !== "on") back("환불 규정을 확인해 주세요");
 
-  const { data: existing } = await db().from("applications").select("id").eq("user_id", me.id).eq("round_id", roundId).maybeSingle();
-  if (existing) redirect(`/applications/${existing.id}`);
+  const { data: existing } = await db().from("applications").select("id,application_status").eq("user_id", me.id).eq("round_id", roundId).maybeSingle();
+  if (existing && existing.application_status !== "CANCELED") redirect(`/applications/${existing.id}`);
 
   // 결제 대기 건을 먼저 만든다. 실제 승인은 결제 화면에서
   const { data: payment } = await db()
@@ -34,23 +34,26 @@ export async function submitApplication(form: FormData) {
     .select("id")
     .single();
 
-  const { data: app, error } = await db()
-    .from("applications")
-    .insert({
-      user_id: me.id,
-      round_id: roundId,
-      payment_id: payment!.id,
-      application_status: "SUBMITTED",
-      payment_status: "PENDING",
-      match_status: "WAITING",
-      submitted_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
+  // 취소했던 차수에 다시 신청하면 같은 줄을 되살린다 (한 사람이 한 차수에 신청 하나)
+  const fresh = {
+    user_id: me.id,
+    round_id: roundId,
+    payment_id: payment!.id,
+    application_status: "SUBMITTED",
+    payment_status: "PENDING",
+    match_status: "WAITING",
+    resolution: null,
+    match_reason: null,
+    submitted_at: new Date().toISOString(),
+  };
+  if (existing) await db().from("application_slots").delete().eq("application_id", existing.id);
+  const { data: app, error } = existing
+    ? await db().from("applications").update(fresh).eq("id", existing.id).select("id").single()
+    : await db().from("applications").insert(fresh).select("id").single();
   if (error || !app) back("신청을 저장하지 못했어요. 다시 시도해 주세요");
 
   await db().from("application_slots").insert(chosen.map((slot_id) => ({ application_id: app!.id, slot_id })));
-  await db().from("payments").update({ idempotency_key: `app:${app!.id}` }).eq("id", payment!.id);
+  await db().from("payments").update({ idempotency_key: `app:${app!.id}:${payment!.id}` }).eq("id", payment!.id);
   await logStatus({ entityType: "application", entityId: app!.id, field: "application_status", from: "DRAFT", to: "SUBMITTED", actor: `user:${me.id}`, reason: `${chosen.length}개 일정 선택` });
   await notify({
     userId: me.id,
@@ -58,7 +61,7 @@ export async function submitApplication(form: FormData) {
     title: "신청이 접수됐어요",
     body: `${round!.title} 신청을 받았어요. 결제를 마치면 매칭 대상이 돼요.`,
     link: `/pay/${app!.id}`,
-    dedupeKey: `applied:${app!.id}`,
+    dedupeKey: `applied:${app!.id}:${payment!.id}`,
   });
   redirect(`/pay/${app!.id}`);
 }

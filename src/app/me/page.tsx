@@ -7,7 +7,8 @@ import { logout } from "../login/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function Me() {
+export default async function Me({ searchParams }: { searchParams: Promise<{ done?: string }> }) {
+  const { done: doneParam } = await searchParams;
   const me = await requireMe();
   const { data } = await db()
     .from("applications")
@@ -22,6 +23,7 @@ export default async function Me() {
 
   return (
     <Screen title="내 정보" back="/">
+      {doneParam === "feedback" && <p className="mb-4 rounded-lg bg-leaf/10 px-4 py-3 text-[14px] text-leaf">후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요.</p>}
       <Card className="mt-2">
         <p className="text-[18px] font-semibold">{me.name}</p>
         <p className="mt-1 text-[14px] text-muted">{me.phone}</p>
