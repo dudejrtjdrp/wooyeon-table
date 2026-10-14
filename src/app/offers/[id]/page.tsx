@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { TableMark } from "@/components/brand";
-import { ErrorText, LinkButton, List, Pill, PrimaryButton, Row, Screen, Toast } from "@/components/ui";
+import { ErrorText, IMG, LinkButton, List, Photo, Pill, PrimaryButton, Row, Screen, Toast } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
@@ -44,9 +43,9 @@ export default async function Offer({ params, searchParams }: { params: Promise<
   return (
     <Screen title="빈자리 제안" back="/notifications">
       <Toast msg={m} />
-      <section className="relative mt-2 overflow-hidden rounded-3xl bg-card p-6">
+      <section className="shadow-card relative mt-2 overflow-hidden rounded-[24px] bg-card p-6">
         <div className="flex items-start justify-between">
-          <TableMark size={52} filled={Math.min(6, count)} glow={pending} />
+          <Photo src={IMG.tableObject} contain className="size-20" sizes="80px" />
           <Pill tone={tone}>{stateLabel}</Pill>
         </div>
         <p className="mt-5 text-[13px] text-muted">기다리던 자리가 났어요</p>

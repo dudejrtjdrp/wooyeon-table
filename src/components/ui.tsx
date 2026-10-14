@@ -7,7 +7,7 @@ import { db } from "@/lib/supabase";
 import { Check } from "lucide-react";
 import { BackButton, TabBar } from "./client";
 
-export { ConfirmSheet, PasswordInput, PrimaryButton, Toast } from "./client";
+export { ConfirmSheet, CountedTextarea, PasswordInput, PrimaryButton, StarRating, Toast } from "./client";
 
 export const IMG = {
   homeBg: "/images/dining/generated/01-home-background.png",

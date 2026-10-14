@@ -88,7 +88,7 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
   if (variant === "card") {
     if (state !== "off") return null; // 설치 전(아이폰)은 설치 카드가 대신 안내한다
     return (
-      <div className="mt-4 flex items-start gap-3 rounded-3xl bg-card p-5">
+      <div className="shadow-card mt-4 flex items-start gap-3 rounded-[22px] bg-card p-5">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><BellRing size={20} /></span>
         <div className="flex-1">
           <p className="text-[15px] font-bold">휴대폰 알림을 켜 두세요</p>
@@ -106,11 +106,11 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
   return (
     <div className="flex items-center justify-between gap-3 px-5 py-4">
       <div className="min-w-0">
-        <p className="flex items-center gap-3 text-[16px]"><BellRing size={20} className="text-muted" />휴대폰 알림</p>
-        {state !== "loading" && <p className="mt-1 pl-8 text-[13px] leading-relaxed text-muted">{desc[state]}</p>}
-        {state === "needs-install" && <Link href="/install" className="mt-1.5 inline-block pl-8 text-[13px] font-semibold text-accent">설치 방법 보기</Link>}
+        <p className="flex items-center gap-3.5 text-[16px] font-medium text-ink"><span className="flex size-10 items-center justify-center rounded-full bg-accent-soft text-accent"><BellRing size={20} /></span>휴대폰 알림</p>
+        {state !== "loading" && state !== "on" && state !== "off" && <p className="mt-1 pl-[54px] text-[13px] leading-relaxed text-muted">{desc[state]}</p>}
+        {state === "needs-install" && <Link href="/install" className="mt-1.5 inline-block pl-[54px] text-[13px] font-semibold text-accent">설치 방법 보기</Link>}
         {state === "on" && (
-          <button onClick={test} className="mt-1.5 pl-8 text-left text-[13px] font-semibold text-accent">{tested ?? "시험 알림 보내기"}</button>
+          <button onClick={test} className="mt-1 pl-[54px] text-left text-[13px] font-semibold text-accent">{tested ?? "시험 알림 보내기"}</button>
         )}
       </div>
       {(state === "on" || state === "off") && (
@@ -120,9 +120,9 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
           aria-label="휴대폰 알림"
           disabled={busy}
           onClick={state === "on" ? turnOff : turnOn}
-          className={`relative h-7 w-12 shrink-0 rounded-full transition ${state === "on" ? "bg-accent" : "bg-line"}`}
+          className={`relative h-8 w-[54px] shrink-0 rounded-full transition ${state === "on" ? "bg-accent" : "bg-line"}`}
         >
-          <span className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${state === "on" ? "left-[22px]" : "left-0.5"}`} />
+          <span className={`absolute top-1 size-6 rounded-full bg-white shadow transition-all ${state === "on" ? "left-[26px]" : "left-1"}`} />
         </button>
       )}
     </div>

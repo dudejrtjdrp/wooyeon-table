@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
+import { SendHorizontal } from "lucide-react";
 import { useRef, useState } from "react";
 
 /** 단체방 입력창. 보내고 나면 비우고, 보내는 동안은 다시 못 누르게 한다 */
@@ -22,25 +22,25 @@ export function Composer({ tableId, action }: { tableId: string; action: (f: For
           setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 200);
         }
       }}
-      className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-line bg-card px-3 pt-2"
+      className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-gradient-to-t from-paper via-paper to-paper/0 px-4 pt-4"
     >
       <input type="hidden" name="table_id" value={tableId} />
-      <div className="flex items-end gap-2 pb-2">
+      <div className="flex items-center gap-2.5 pb-3">
         <input
           name="body"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="메시지 보내기"
+          placeholder="메시지를 입력해 주세요"
           autoComplete="off"
           maxLength={500}
-          className="h-11 flex-1 rounded-full bg-paper px-4 text-[16px] outline-none placeholder:text-muted/70"
+          className="shadow-card h-[54px] flex-1 rounded-full border border-line bg-card px-5 text-[16px] text-ink outline-none placeholder:text-muted/70 focus:border-accent"
         />
         <button
           aria-label="보내기"
           disabled={busy || !text.trim()}
-          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent text-white transition disabled:bg-line disabled:text-muted"
+          className="shadow-cta flex size-[54px] shrink-0 items-center justify-center rounded-full bg-accent text-white transition disabled:bg-accent/40 disabled:shadow-none"
         >
-          <ArrowUp size={22} strokeWidth={2.4} />
+          <SendHorizontal size={24} strokeWidth={2.2} className="fill-white/90" />
         </button>
       </div>
     </form>

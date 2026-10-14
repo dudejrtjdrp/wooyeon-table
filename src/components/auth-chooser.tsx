@@ -32,9 +32,14 @@ export function AuthChooser({ next = "/", error, notice }: { next?: string; erro
   return (
     <main className="pb-safe relative mx-auto flex min-h-dvh max-w-md flex-col overflow-hidden bg-paper">
       {/* 시안 A2: 아이보리 벽에 드리운 나뭇잎 그림자와 위에서 본 식탁 사진 */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[78%]">
-        <Image src={IMG.startTable} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "60% 70%" }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-paper/70 via-paper/0 via-40% to-paper" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[300px]" style={{ maskImage: "linear-gradient(#000 40%, transparent)", WebkitMaskImage: "linear-gradient(#000 40%, transparent)" }}>
+        <Image src={IMG.softBg} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "right top" }} />
+      </div>
+      <div
+        className="pointer-events-none absolute right-[-14%] top-[200px] aspect-[789/659] w-[112%]"
+        style={{ maskImage: "radial-gradient(70% 70% at 55% 50%, #000 55%, transparent 100%)", WebkitMaskImage: "radial-gradient(70% 70% at 55% 50%, #000 55%, transparent 100%)" }}
+      >
+        <Image src={IMG.startTable} alt="" fill priority sizes="500px" className="object-cover" />
       </div>
       <div className="pt-safe relative z-10 px-6">
         <p className="pt-5 text-[17px] font-semibold text-ink">우연한 식탁</p>

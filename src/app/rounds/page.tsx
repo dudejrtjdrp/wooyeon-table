@@ -44,13 +44,13 @@ export default async function Rounds() {
                 </div>
                 <div className={`mt-4 grid gap-2 ${times.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                   {times.map((iso) => (
-                    <Link key={iso} href={appId ? `/applications/${appId}` : `/apply/${r.id}`} className="flex items-center gap-3 rounded-2xl bg-field px-3.5 py-3">
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><CalendarDays size={19} /></span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[16px] font-bold text-ink">{fmtDay(iso)}</span>
-                        <span className="block text-[14px] text-muted">{fmtClock(iso).replace("저녁", "오후")}</span>
+                    <Link key={iso} href={appId ? `/applications/${appId}` : `/apply/${r.id}`} className="flex items-center gap-2.5 rounded-2xl bg-field px-3 py-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><CalendarDays size={17} /></span>
+                      <span className="min-w-0 flex-1 whitespace-nowrap">
+                        <span className="block text-[15px] font-bold tracking-[-0.02em] text-ink">{fmtDay(iso)}</span>
+                        <span className="block text-[13px] text-muted">{fmtClock(iso).replace("저녁", "오후")}</span>
                       </span>
-                      <ChevronRight size={18} className="shrink-0 text-muted" />
+                      <ChevronRight size={16} className="shrink-0 text-muted" />
                     </Link>
                   ))}
                 </div>

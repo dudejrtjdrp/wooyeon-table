@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarDays, ChevronLeft, Eye, EyeOff, Home, User, Users } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, Eye, EyeOff, Home, Star, User, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
@@ -186,6 +186,35 @@ export function PasswordInput({ className = "", ...rest }: React.InputHTMLAttrib
       >
         {show ? <EyeOff size={21} /> : <Eye size={21} />}
       </button>
+    </div>
+  );
+}
+
+/** 별점 (1~5). 값은 숨은 입력으로 보낸다 */
+export function StarRating({ name, label, value }: { name: string; label: string; value?: number | null }) {
+  const [v, setV] = useState<number>(value ?? 0);
+  return (
+    <div className="flex items-center justify-between gap-3 py-3.5">
+      <span className="text-[16px] text-ink">{label}</span>
+      <input type="hidden" name={name} value={v || ""} />
+      <span className="flex gap-1" role="radiogroup" aria-label={label}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" role="radio" aria-checked={v === n} aria-label={`${n}점`} onClick={() => setV(n)} className="p-0.5 transition active:scale-90">
+            <Star size={28} strokeWidth={0} className={n <= v ? "fill-accent" : "fill-line"} />
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+/** 글자 수가 보이는 여러 줄 입력 */
+export function CountedTextarea({ max, className = "", defaultValue, ...rest }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { max: number }) {
+  const [n, setN] = useState(String(defaultValue ?? "").length);
+  return (
+    <div className="relative">
+      <textarea {...rest} defaultValue={defaultValue} maxLength={max} onChange={(e) => setN(e.target.value.length)} className={`${className} pb-8`} />
+      <span className="pointer-events-none absolute bottom-3 right-4 text-[12px] tabular-nums text-muted">{n}/{max}</span>
     </div>
   );
 }

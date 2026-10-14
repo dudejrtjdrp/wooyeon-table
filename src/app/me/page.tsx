@@ -1,8 +1,8 @@
-import { ChevronRight, FileText, Headphones, LogOut, Shield, Ticket, UserRound } from "lucide-react";
+import { ChevronRight, CircleHelp, FileText, ShieldCheck, ReceiptText, UserRound } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PushToggle } from "@/components/push-toggle";
-import { ConfirmSheet, List, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
+import { ConfirmSheet, IMG, List, Photo, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { logout } from "../login/actions";
@@ -14,8 +14,8 @@ const PROVIDER_LABEL: Record<string, string> = { kakao: "카카오", naver: "네
 
 const MenuRow = ({ href, icon, label, right }: { href: string; icon: ReactNode; label: string; right?: ReactNode }) => (
   <Row href={href} right={right ?? <ChevronRight size={20} className="text-muted" />}>
-    <span className="flex items-center gap-3 text-[16px]">
-      <span className="text-muted">{icon}</span>
+    <span className="flex items-center gap-3.5 text-[16px] font-medium text-ink">
+      <span className="flex size-10 items-center justify-center rounded-full bg-accent-soft text-accent">{icon}</span>
       {label}
     </span>
   </Row>
@@ -36,56 +36,54 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
     <TabScreen title="내 정보">
       <Toast msg={done === "feedback" ? "후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요" : m} />
       <Toast msg={e} tone="danger" />
-      <Link href="/onboarding?next=/me" className="mt-2 flex items-center gap-4 rounded-3xl bg-card p-5">
-        {me.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={me.avatar_url} alt="" className="size-14 rounded-full object-cover" />
-        ) : (
-          <span className="flex size-14 items-center justify-center rounded-full bg-accent-soft text-[20px] font-bold text-accent">
-            {me.name.slice(0, 1)}
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-[19px] font-bold">{me.name}</p>
-          <p className="mt-0.5 truncate text-[13px] text-muted">
-            {via.length ? `${via.join(", ")}로 로그인` : me.phone ? me.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3") : me.email ?? ""}
-          </p>
-        </div>
-        <ChevronRight size={20} className="text-muted" />
-      </Link>
-
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <div className="rounded-3xl bg-card p-5">
-          <p className="text-[13px] text-muted">함께한 식탁</p>
-          <p className="mt-1 text-[24px] font-bold">{attended ?? 0}번</p>
-        </div>
-        <Link href="/rounds" className="rounded-3xl bg-card p-5">
-          <p className="text-[13px] text-muted">남은 이용권</p>
-          <p className="mt-1 text-[24px] font-bold">{left}회</p>
+      <section className="shadow-card mt-6 overflow-hidden rounded-[24px] bg-card">
+        <Photo src={IMG.profileRestaurant} className="h-[118px]" position="center 60%" priority />
+        <Link href="/onboarding?next=/me" className="relative -mt-7 flex items-center gap-4 px-5">
+          {me.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={me.avatar_url} alt="" className="size-[72px] rounded-full object-cover ring-4 ring-card" />
+          ) : (
+            <span className="flex size-[72px] items-center justify-center rounded-full bg-[#fbf1df] text-[28px] font-bold text-ink ring-4 ring-card">
+              {me.name.slice(-2, -1) || me.name.slice(0, 1)}
+            </span>
+          )}
+          <div className="mt-6 min-w-0 flex-1">
+            <p className="text-[21px] font-bold tracking-[-0.02em] text-ink">{me.name}</p>
+            <p className="mt-0.5 truncate text-[14px] text-muted">
+              {via.length ? `${via.join(", ")}로 로그인` : me.phone ? me.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3") : me.email ?? ""}
+            </p>
+          </div>
+          <ChevronRight size={22} className="mt-6 text-muted" />
         </Link>
-      </div>
+        <div className="mx-5 mt-5 grid grid-cols-2 border-t border-line py-4">
+          <Link href="/my-tables" className="text-center">
+            <p className="text-[14px] text-muted">함께한 식탁</p>
+            <p className="mt-1 text-[26px] font-bold text-accent">{attended ?? 0}번</p>
+          </Link>
+          <Link href="/rounds" className="border-l border-line text-center">
+            <p className="text-[14px] text-muted">남은 이용권</p>
+            <p className="mt-1 text-[26px] font-bold text-accent">{left}회</p>
+          </Link>
+        </div>
+      </section>
 
       <SectionTitle>계정</SectionTitle>
       <List>
         <PushToggle />
         <MenuRow href="/onboarding?next=/me" icon={<UserRound size={20} />} label="프로필과 매칭 정보" />
-        <MenuRow href="/my-tables" icon={<Ticket size={20} />} label="신청·결제 내역" />
+        <MenuRow href="/my-tables" icon={<ReceiptText size={20} />} label="신청·결제 내역" />
       </List>
 
       <SectionTitle>도움</SectionTitle>
       <List>
-        <MenuRow href="/help" icon={<Headphones size={20} />} label="자주 묻는 질문과 문의" />
+        <MenuRow href="/help" icon={<CircleHelp size={20} />} label="자주 묻는 질문과 문의" />
         <MenuRow href="/terms" icon={<FileText size={20} />} label="이용약관" />
-        <MenuRow href="/privacy" icon={<Shield size={20} />} label="개인정보 처리방침" />
+        <MenuRow href="/privacy" icon={<ShieldCheck size={20} />} label="개인정보 처리방침" />
       </List>
 
-      <div className="mt-3">
+      <div className="mt-8 text-center">
         <ConfirmSheet
-          trigger={
-            <button className="flex w-full items-center gap-3 rounded-3xl bg-card px-5 py-4 text-[16px]">
-              <LogOut size={20} className="text-muted" /> 로그아웃
-            </button>
-          }
+          trigger={<button className="text-[15px] font-semibold text-danger">로그아웃</button>}
           title="로그아웃할까요?"
           body="다시 들어올 때는 같은 방법으로 로그인하면 돼요."
           confirmLabel="로그아웃"
@@ -93,10 +91,11 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
           hidden={{}}
           tone="accent"
         />
+        <p className="mt-1.5 text-[12px] text-muted">앱 버전 1.0.0</p>
       </div>
       <div className="mt-6 text-center">
         <ConfirmSheet
-          trigger={<button className="text-[13px] text-muted underline underline-offset-4">회원 탈퇴</button>}
+          trigger={<button className="text-[12px] text-muted/80 underline underline-offset-4">회원 탈퇴</button>}
           title="정말 탈퇴할까요?"
           body={<>이름, 연락처, 프로필과 매칭 정보는 바로 지워져요. 결제 기록은 법에 따라 5년, 신고 기록은 1년 동안 이름 없이 보관해요. 남은 이용권은 사라져요.</>}
           confirmLabel="탈퇴하기"
@@ -104,7 +103,6 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
           hidden={{}}
         />
       </div>
-      <p className="mt-6 text-center text-[12px] text-muted">우연한 식탁 1.0</p>
     </TabScreen>
   );
 }

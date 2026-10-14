@@ -125,7 +125,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
               <Link key={`${u.roundId}${u.startsAt}`} href={`/apply/${u.roundId}`} className="shadow-card flex items-center gap-4 rounded-[20px] bg-card p-4 active:scale-[.99]">
                 <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><CalendarDays size={22} /></span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[17px] font-bold tracking-[-0.01em] text-ink">{fmtSlot(u.startsAt)}</span>
+                  <span className="block whitespace-nowrap text-[16px] font-bold tracking-[-0.02em] text-ink">{fmtSlot(u.startsAt)}</span>
                   <span className="mt-0.5 block truncate text-[14px] text-muted">{u.regions.join(" · ")}</span>
                 </span>
                 <span className="rounded-full bg-accent-soft px-3 py-1 text-[13px] font-semibold text-accent">{ddayLabel(dday(u.startsAt, t))}</span>
@@ -164,7 +164,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 function HeroCard({ pill, title, desc, foot, cta, href }: { pill: [string, "accent" | "leaf" | "candle" | "muted" | "danger" | "ink"]; title: string; desc?: string; foot?: string; cta: string; href: string }) {
   return (
     <section className="shadow-card animate-rise relative mt-6 overflow-hidden rounded-[26px] bg-card">
-      <Image src={IMG.homeBg} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "75% 50%" }} />
+      <Image src={IMG.homeBg} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "57% 50%" }} />
       <div className="absolute inset-0 bg-gradient-to-r from-white/85 via-white/55 to-white/0" />
       <div className="relative px-6 pb-5 pt-6">
         <Pill tone={pill[1]}>{pill[0]}</Pill>
@@ -176,7 +176,7 @@ function HeroCard({ pill, title, desc, foot, cta, href }: { pill: [string, "acce
             <p className="mt-4 max-w-[60%] text-[14px] text-[#5d6478]">{foot}</p>
           </>
         )}
-        <Link href={href} className="shadow-cta mt-24 flex h-[56px] items-center justify-center gap-1 rounded-2xl bg-accent text-[17px] font-semibold text-white active:scale-[.985]">
+        <Link href={href} className="shadow-cta mt-20 flex h-[56px] items-center justify-center gap-1 rounded-2xl bg-accent text-[17px] font-semibold text-white active:scale-[.985]">
           {cta} <ChevronRight size={20} />
         </Link>
       </div>
