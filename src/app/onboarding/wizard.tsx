@@ -62,6 +62,7 @@ export function OnboardingWizard({
   verified,
   idvOn,
   userKey,
+  phoneVerified,
 }: {
   action: (f: FormData) => void | Promise<void>;
   profile: Profile;
@@ -75,6 +76,7 @@ export function OnboardingWizard({
   verified: { name: string; phone: string | null; birthYear: number; gender: "M" | "F" | null } | null;
   idvOn: boolean;
   userKey: string;
+  phoneVerified: boolean;
 }) {
   const steps = ["기본 정보", "나에 대해", "식사 취향", "동의"];
   const [step, setStep] = useState(0);
@@ -88,7 +90,7 @@ export function OnboardingWizard({
     if (i === 0) {
       if (idvOn && !verified) return "PASS 본인인증을 먼저 해 주세요";
       if (v("name").length < 2) return "이름을 두 글자 이상 적어 주세요";
-      if (!/^01\d{8,9}$/.test(v("phone").replace(/-/g, ""))) return "휴대폰 번호를 확인해 주세요. 모임 안내를 이 번호로 보내요";
+      if (!verified && !phoneVerified) return "휴대폰 번호 인증을 먼저 해 주세요";
       if (!v("birth_year")) return "출생연도를 골라 주세요";
       if (!v("gender")) return "성별을 골라 주세요";
       if (!v("job")) return "하는 일을 적어 주세요";
@@ -164,11 +166,28 @@ export function OnboardingWizard({
               </div>
             ) : (
               <>
-                <div><Label>이름</Label><input name="name" defaultValue={name} autoComplete="name" className={input} /></div>
+                {/* 임시: 사업자 등록 뒤 PASS 본인인증(위 idvOn 분기)으로 대체할 휴대폰 문자 인증 */}
                 <div>
                   <Label hint="모임 안내를 보내요">휴대폰 번호</Label>
-                  <input name="phone" defaultValue={phone ?? ""} inputMode="tel" autoComplete="tel" placeholder="01012345678" className={input} />
+                  {phoneVerified ? (
+                    <div className="flex h-[52px] items-center justify-between rounded-2xl border border-line bg-card px-4">
+                      <span className="flex items-center gap-2 text-[16px]">
+                        <Check size={18} strokeWidth={3} className="text-leaf" />
+                        {(phone ?? "").replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3")}
+                      </span>
+                      <Link href={`/verify/phone?next=${encodeURIComponent(`/onboarding?next=${next}`)}`} className="text-[14px] font-medium text-muted">바꾸기</Link>
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/verify/phone?next=${encodeURIComponent(`/onboarding?next=${next}`)}`}
+                      className="flex h-[52px] items-center justify-center rounded-2xl bg-ink text-[16px] font-semibold text-white"
+                    >
+                      휴대폰 번호 인증하기
+                    </Link>
+                  )}
+                  <input type="hidden" name="phone" value={phone ?? ""} />
                 </div>
+                <div><Label>이름</Label><input name="name" defaultValue={name} autoComplete="name" className={input} /></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>출생연도</Label>

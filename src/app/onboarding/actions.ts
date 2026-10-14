@@ -14,10 +14,11 @@ export async function saveProfile(form: FormData) {
   const back = (m: string) => redirect(`/onboarding?next=${nextQ}&e=${encodeURIComponent(m)}`);
 
   // 본인인증을 마친 사람은 인증된 값만 쓴다 (폼 값으로 나이·성별을 바꾸지 못하게)
-  const { data: u } = await db().from("users").select("name,phone,birth_date,verified_gender,identity_verified_at").eq("id", me.id).single();
+  const { data: u } = await db().from("users").select("name,phone,birth_date,verified_gender,identity_verified_at,phone_verified_at").eq("id", me.id).single();
   const v = u?.identity_verified_at ? u : null;
   const name = v?.name ?? String(form.get("name") ?? "").trim();
-  const phone = (v?.phone ?? String(form.get("phone") ?? "")).trim().replace(/-/g, "");
+  // 번호는 인증을 거친 값만 쓴다 (폼으로 바꿀 수 없다)
+  const phone = String(v?.phone ?? (u?.phone_verified_at ? u.phone : "") ?? "").replace(/-/g, "");
   const birthYear = v?.birth_date ? Number(String(v.birth_date).slice(0, 4)) : Number(form.get("birth_year"));
   const genderRaw = String(form.get("gender") ?? "");
   const gender = v?.verified_gender ?? (genderRaw === "남성" ? "M" : genderRaw === "여성" ? "F" : genderRaw);
@@ -32,7 +33,7 @@ export async function saveProfile(form: FormData) {
   const agreed = form.get("agree_privacy") === "on" && form.get("agree_policy") === "on";
 
   if (name.length < 2) back("이름을 두 글자 이상 적어 주세요");
-  if (!/^01\d{8,9}$/.test(phone)) back("휴대폰 번호를 확인해 주세요");
+  if (!/^01\d{8,9}$/.test(phone)) back("휴대폰 번호 인증을 먼저 해 주세요");
   if (!(birthYear >= 1970 && birthYear <= 2007)) back("출생연도를 골라 주세요");
   if (!["M", "F"].includes(gender)) back("성별을 골라 주세요");
   if (!job) back("하는 일을 적어 주세요");

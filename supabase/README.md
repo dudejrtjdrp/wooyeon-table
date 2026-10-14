@@ -17,3 +17,4 @@ $q$; end $mig$;
 | 0001_init.sql | 2026-10-14 |
 | 0002_seed.sql | 2026-10-15 |
 | 0003_social_login.sql | 2026-10-15 |
+| 0004_phone_verification.sql | 2026-10-15 |

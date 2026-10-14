@@ -1,3 +1,4 @@
+import { Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { INTERESTS, MBTIS, PRICE_RANGES, TRAITS } from "@/lib/constants";
 import { idvEnabled } from "@/lib/identity";
@@ -5,17 +6,19 @@ import { db } from "@/lib/supabase";
 import { saveProfile } from "./actions";
 import { OnboardingWizard } from "./wizard";
 
-export default async function Onboarding({ searchParams }: { searchParams: Promise<{ e?: string; next?: string; by?: string; g?: string }> }) {
+export default async function Onboarding({ searchParams }: { searchParams: Promise<{ e?: string; m?: string; next?: string; by?: string; g?: string }> }) {
   const me = await requireMe();
-  const { e, next, by, g } = await searchParams;
+  const { e, m, next, by, g } = await searchParams;
   const [{ data: p }, { data: u }] = await Promise.all([
     db().from("profiles").select("*").eq("user_id", me.id).maybeSingle(),
-    db().from("users").select("name,phone,birth_date,verified_gender,identity_verified_at").eq("id", me.id).single(),
+    db().from("users").select("name,phone,birth_date,verified_gender,identity_verified_at,phone_verified_at").eq("id", me.id).single(),
   ]);
   const verified = u?.identity_verified_at && u.birth_date
     ? { name: u.name, phone: u.phone, birthYear: Number(String(u.birth_date).slice(0, 4)), gender: u.verified_gender as "M" | "F" | null }
     : null;
   return (
+    <>
+    <Toast msg={m} />
     <OnboardingWizard
       action={saveProfile}
       profile={p}
@@ -29,6 +32,8 @@ export default async function Onboarding({ searchParams }: { searchParams: Promi
       verified={verified}
       idvOn={idvEnabled()}
       userKey={me.id.slice(0, 8)}
+      phoneVerified={Boolean(u?.phone_verified_at)}
     />
+    </>
   );
 }
