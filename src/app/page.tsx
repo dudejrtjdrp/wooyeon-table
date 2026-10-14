@@ -165,7 +165,7 @@ function HeroCard({ pill, title, desc, foot, cta, href }: { pill: [string, "acce
   return (
     <section className="shadow-card animate-rise relative mt-6 overflow-hidden rounded-[26px] bg-card">
       <Image src={IMG.homeBg} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "57% 50%" }} />
-      <div className="absolute inset-0 bg-gradient-to-r from-white/85 via-white/55 to-white/0" />
+      <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/75 via-45% to-white/0" />
       <div className="relative px-6 pb-5 pt-6">
         <Pill tone={pill[1]}>{pill[0]}</Pill>
         <p className="mt-4 max-w-[64%] text-[26px] font-bold leading-[1.25] tracking-[-0.03em] text-ink">{title}</p>

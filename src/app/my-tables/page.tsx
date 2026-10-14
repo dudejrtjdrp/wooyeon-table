@@ -41,7 +41,7 @@ export default async function MyTables() {
     <Link href={href} className="shadow-card flex items-center gap-4 rounded-[20px] bg-card p-4 active:scale-[.99]">
       {icon}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</span>
+        <span className="block truncate text-[16px] font-bold tracking-[-0.02em] text-ink">{title}</span>
         <span className="mt-0.5 block truncate text-[13px] text-muted">{sub}</span>
       </span>
       {pill}

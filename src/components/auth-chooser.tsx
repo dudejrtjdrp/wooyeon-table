@@ -36,7 +36,7 @@ export function AuthChooser({ next = "/", error, notice }: { next?: string; erro
         <Image src={IMG.softBg} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "right top" }} />
       </div>
       <div
-        className="pointer-events-none absolute right-[-14%] top-[200px] aspect-[789/659] w-[112%]"
+        className="pointer-events-none absolute right-[-10%] top-[230px] aspect-[789/659] w-[90%]"
         style={{ maskImage: "radial-gradient(70% 70% at 55% 50%, #000 55%, transparent 100%)", WebkitMaskImage: "radial-gradient(70% 70% at 55% 50%, #000 55%, transparent 100%)" }}
       >
         <Image src={IMG.startTable} alt="" fill priority sizes="500px" className="object-cover" />
