@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { requestCode, submitCode } from "../phone-actions";
 
 const input =
-  "h-[54px] w-full rounded-2xl border border-line bg-card px-4 text-[17px] outline-none transition placeholder:text-muted/60 focus:border-accent focus:ring-4 focus:ring-accent/10 disabled:bg-paper disabled:text-muted";
+  "h-[54px] w-full min-w-0 rounded-2xl border border-[#e8edf5] bg-field px-4 text-[17px] text-ink outline-none transition placeholder:text-muted/60 focus:border-accent focus:bg-card focus:ring-4 focus:ring-accent/10 disabled:text-muted";
 
 const fmt = (p: string) => p.replace(/\D/g, "").replace(/^(\d{3})(\d{1,4})?(\d{1,4})?.*/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
 
@@ -50,68 +50,87 @@ export function PhoneVerifyForm({ initialPhone, next, demo }: { initialPhone: st
     router.replace(`${next}${next.includes("?") ? "&" : "?"}m=${encodeURIComponent("휴대폰 인증을 마쳤어요")}`);
   };
 
+  const field = "shadow-card rounded-[22px] bg-card p-5";
   return (
     <div className="pb-32">
-      <h2 className="mt-4 text-[24px] font-bold leading-snug tracking-[-0.02em]">
+      <h2 className="animate-rise mt-6 text-[28px] font-bold leading-[1.3] tracking-[-0.03em] text-ink">
         모임 안내를 받을
         <br />
-        휴대폰 번호를 인증해 주세요
+        <span className="text-accent">휴대폰 번호를 인증해 주세요</span>
       </h2>
-      <p className="mt-2 text-[14px] leading-relaxed text-muted">매칭 결과와 식당 안내를 이 번호로 보내요. 다른 참가자에게는 보이지 않아요.</p>
+      <p className="mt-3 text-[15px] leading-relaxed text-muted">중요한 모임 소식을 문자로 알려드려요. 다른 참가자에게는 보이지 않아요.</p>
 
       <div className="mt-8 space-y-3">
-        <div className="flex gap-2">
-          <input
-            value={phone}
-            onChange={(e) => setPhone(fmt(e.target.value))}
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="010-0000-0000"
-            aria-label="휴대폰 번호"
-            disabled={busy !== null}
-            className={input}
-          />
-          <button
-            type="button"
-            onClick={send}
-            disabled={busy !== null || phone.replace(/\D/g, "").length < 10 || !canResend}
-            className="h-[54px] shrink-0 rounded-2xl border border-line bg-card px-4 text-[15px] font-semibold transition disabled:text-muted"
-          >
-            {busy === "send" ? "보내는 중" : sent ? (canResend ? "다시 받기" : `${Math.ceil((sent.resendAt - now) / 1000)}초`) : "인증번호 받기"}
-          </button>
-        </div>
+        <section className={field}>
+          <p className="text-[16px] font-bold text-ink">휴대폰 번호<span className="ml-2 inline-flex h-[22px] items-center rounded-full bg-accent-soft px-2 align-middle text-[11px] font-semibold text-accent">필수</span></p>
+          <div className="mt-3 flex gap-2">
+            <input
+              value={phone}
+              onChange={(e) => setPhone(fmt(e.target.value))}
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="010-0000-0000"
+              aria-label="휴대폰 번호"
+              disabled={busy !== null}
+              className={input}
+            />
+            <button
+              type="button"
+              onClick={send}
+              disabled={busy !== null || phone.replace(/\D/g, "").length < 10 || !canResend}
+              className="h-[54px] w-[104px] shrink-0 rounded-2xl border border-line bg-card text-[15px] font-semibold text-accent transition disabled:bg-field disabled:text-muted/70"
+            >
+              {busy === "send" ? "보내는 중" : sent ? (canResend ? "다시 받기" : `${Math.ceil((sent.resendAt - now) / 1000)}초 뒤`) : "인증번호 받기"}
+            </button>
+          </div>
+        </section>
 
         {sent && (
-          <div className="relative">
-            <input
-              ref={codeRef}
-              value={code}
-              onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, "").slice(0, 6);
-                setCode(v);
-                if (v.length === 6) check(v);
-              }}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="인증번호 6자리"
-              aria-label="인증번호"
-              disabled={busy === "check" || left === 0}
-              className={`${input} pr-16 tracking-[0.2em]`}
-            />
-            <span className={`absolute right-4 top-1/2 -translate-y-1/2 text-[14px] font-semibold tabular-nums ${left < 30 ? "text-danger" : "text-accent"}`}>
-              {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
-            </span>
-          </div>
+          <section className={`${field} animate-rise`}>
+            <div className="flex items-center justify-between">
+              <p className="text-[16px] font-bold text-ink">인증번호<span className="ml-2 inline-flex h-[22px] items-center rounded-full bg-accent-soft px-2 align-middle text-[11px] font-semibold text-accent">필수</span></p>
+              <span className={`text-[18px] font-semibold tabular-nums ${left < 60 ? "text-danger" : "text-accent"}`}>
+                {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
+              </span>
+            </div>
+            {/* 칸 여섯 개처럼 보이지만 실제 입력은 하나라서 붙여넣기·자동 채우기가 그대로 된다 */}
+            <label className="relative mt-4 block">
+              <input
+                ref={codeRef}
+                value={code}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  setCode(v);
+                  if (v.length === 6) check(v);
+                }}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                aria-label="인증번호 6자리"
+                disabled={busy === "check" || left === 0}
+                className="absolute inset-0 z-10 w-full opacity-0"
+              />
+              <span className="grid grid-cols-6 gap-2" aria-hidden="true">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <span
+                    key={i}
+                    className={`flex h-[60px] items-center justify-center rounded-2xl bg-field text-[24px] font-semibold text-ink transition ${i === code.length && left > 0 ? "ring-2 ring-accent" : ""}`}
+                  >
+                    {code[i] ?? ""}
+                  </span>
+                ))}
+              </span>
+            </label>
+            <p className="mt-4 text-[14px] text-muted">문자가 오지 않으면 30초 뒤 다시 받아 주세요.</p>
+          </section>
         )}
 
         {sent?.demoCode && (
-          <p className="rounded-2xl bg-candle/15 px-4 py-3 text-[14px] text-[#7a4f00]">
+          <p className="rounded-2xl bg-warn-soft px-4 py-3 text-[14px] text-warn">
             문자 발송을 연결하기 전이라 시연 모드로 인증번호를 여기 보여드려요: <b className="tracking-[0.15em]">{sent.demoCode}</b>
           </p>
         )}
-        {sent && !sent.demoCode && <p className="text-[13px] text-muted">문자가 오지 않으면 번호를 확인하고 30초 뒤 다시 받아 주세요.</p>}
         {err && <p role="alert" className="rounded-2xl bg-danger/10 px-4 py-3 text-[14px] font-medium text-danger">{err}</p>}
-        {demo && !sent && <p className="text-[12px] text-muted">지금은 시연 모드예요. 실제 문자는 보내지 않아요.</p>}
+        {demo && !sent && <p className="px-1 text-[13px] text-muted">지금은 시연 모드예요. 실제 문자는 보내지 않아요.</p>}
       </div>
 
       <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-gradient-to-t from-paper via-paper to-paper/0 px-5 pt-6">
@@ -120,7 +139,7 @@ export function PhoneVerifyForm({ initialPhone, next, demo }: { initialPhone: st
             type="button"
             onClick={() => check()}
             disabled={!sent || code.length !== 6 || busy !== null || left === 0}
-            className="flex h-[54px] w-full items-center justify-center rounded-2xl bg-accent text-[16px] font-semibold text-white transition active:scale-[.985] disabled:opacity-40"
+            className="shadow-cta flex h-[56px] w-full items-center justify-center rounded-2xl bg-accent text-[17px] font-semibold text-white transition active:scale-[.985] disabled:opacity-40 disabled:shadow-none"
           >
             {busy === "check" ? "확인하는 중" : "인증하기"}
           </button>

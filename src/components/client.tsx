@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarDays, ChevronLeft, Home, User, UtensilsCrossed } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, Eye, EyeOff, Home, User, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
@@ -17,20 +17,22 @@ export function PrimaryButton({
   pendingText,
   className = "",
   ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "accent" | "ink" | "light" | "danger"; pendingText?: string }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "accent" | "ink" | "light" | "danger" | "outline" | "danger-soft"; pendingText?: string }) {
   const { pending } = useFormStatus();
   const map = {
-    accent: "bg-accent text-white",
+    accent: "bg-accent text-white shadow-cta",
     ink: "bg-ink text-white",
     light: "border border-line bg-card text-ink",
     danger: "bg-danger text-white",
+    outline: "border-[1.5px] border-accent bg-card text-accent",
+    "danger-soft": "border-[1.5px] border-danger/40 bg-danger/5 text-danger",
   };
   return (
     <button
       {...rest}
       disabled={pending || rest.disabled}
       aria-busy={pending}
-      className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-semibold transition active:scale-[.985] disabled:opacity-50 ${map[tone]} ${className}`}
+      className={`flex h-[56px] w-full items-center justify-center gap-2 rounded-2xl text-[17px] font-semibold tracking-[-0.01em] transition duration-150 active:scale-[.985] disabled:opacity-50 disabled:shadow-none ${map[tone]} ${className}`}
     >
       {pending ? (
         <>
@@ -51,9 +53,9 @@ export function BackButton({ href }: { href: string }) {
       type="button"
       aria-label="뒤로"
       onClick={() => (window.history.length > 1 ? router.back() : router.push(href))}
-      className="-ml-2 flex size-10 items-center justify-center rounded-full active:bg-line/60"
+      className="flex size-10 items-center justify-center rounded-full text-ink active:bg-line/60"
     >
-      <ChevronLeft size={26} strokeWidth={2} />
+      <ChevronLeft size={27} strokeWidth={2} />
     </button>
   );
 }
@@ -61,7 +63,7 @@ export function BackButton({ href }: { href: string }) {
 const TABS = [
   { href: "/", label: "홈", icon: Home, match: (p: string) => p === "/" },
   { href: "/rounds", label: "일정", icon: CalendarDays, match: (p: string) => p.startsWith("/rounds") },
-  { href: "/my-tables", label: "내 식탁", icon: UtensilsCrossed, match: (p: string) => p.startsWith("/my-tables") },
+  { href: "/my-tables", label: "내 식탁", icon: Users, match: (p: string) => p.startsWith("/my-tables") },
   { href: "/notifications", label: "알림", icon: Bell, match: (p: string) => p.startsWith("/notifications") },
   { href: "/me", label: "내 정보", icon: User, match: (p: string) => p.startsWith("/me") },
 ];
@@ -69,8 +71,8 @@ const TABS = [
 export function TabBar({ unread = 0 }: { unread?: number }) {
   const path = usePathname();
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card/95 backdrop-blur">
-      <ul className="mx-auto grid h-16 max-w-md grid-cols-5">
+    <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md rounded-t-[22px] bg-card/95 shadow-[0_-6px_24px_-8px_rgb(20_40_90/.12)] backdrop-blur">
+      <ul className="grid h-[68px] grid-cols-5">
         {TABS.map(({ href, label, icon: Icon, match }) => {
           const on = match(path);
           return (
@@ -78,12 +80,12 @@ export function TabBar({ unread = 0 }: { unread?: number }) {
               <Link
                 href={href}
                 aria-current={on ? "page" : undefined}
-                className={`relative flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium ${on ? "text-ink" : "text-muted"}`}
+                className={`relative flex h-full flex-col items-center justify-center gap-1 text-[12px] font-medium transition-colors ${on ? "text-accent" : "text-[#8a90a2]"}`}
               >
-                <Icon size={23} strokeWidth={on ? 2.3 : 1.8} />
+                <Icon size={25} strokeWidth={on ? 2.2 : 1.7} fill={on ? "currentColor" : "none"} fillOpacity={on ? 0.15 : 0} />
                 {label}
                 {href === "/notifications" && unread > 0 && (
-                  <span className="absolute left-1/2 top-2 ml-2 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-white">
+                  <span className="absolute left-1/2 top-2.5 ml-2 min-w-[18px] rounded-full bg-danger px-1 text-center text-[11px] font-bold leading-[18px] text-white ring-2 ring-card">
                     {unread > 9 ? "9+" : unread}
                   </span>
                 )}
@@ -112,7 +114,7 @@ export function Toast({ msg, tone = "ink" }: { msg?: string | null; tone?: "ink"
   return (
     <div
       role="status"
-      className={`animate-toast fixed left-1/2 top-[calc(env(safe-area-inset-top)+12px)] z-50 w-[calc(100%-32px)] max-w-sm -translate-x-1/2 rounded-2xl px-4 py-3 text-center text-[14px] font-medium text-white shadow-lg ${tone === "danger" ? "bg-danger" : "bg-ink"}`}
+      className={`animate-toast fixed left-1/2 top-[calc(env(safe-area-inset-top)+12px)] z-50 w-[calc(100%-32px)] max-w-sm -translate-x-1/2 rounded-2xl px-4 py-3.5 text-center text-[14px] font-medium text-white shadow-lg ${tone === "danger" ? "bg-danger" : "bg-ink/95"}`}
     >
       {msg}
     </div>
@@ -167,5 +169,23 @@ export function ConfirmSheet({
         </div>
       )}
     </>
+  );
+}
+
+/** 비밀번호 입력: 눈 모양 버튼으로 보이기·숨기기 */
+export function PasswordInput({ className = "", ...rest }: React.InputHTMLAttributes<HTMLInputElement>) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input {...rest} type={show ? "text" : "password"} className={`${className} pr-14`} />
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"}
+        className="absolute right-2 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full text-muted"
+      >
+        {show ? <EyeOff size={21} /> : <Eye size={21} />}
+      </button>
+    </div>
   );
 }

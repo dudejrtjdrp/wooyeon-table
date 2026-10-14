@@ -1,35 +1,40 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ErrorText, Field, PrimaryButton, Screen, inputCls } from "@/components/ui";
+import { Backdrop, ErrorText, Field, IMG, PasswordInput, PageTitle, PrimaryButton, Screen, inputCls } from "@/components/ui";
 import { signup } from "../login/actions";
 
+/** A3-signup 휴대폰 번호로 가입하기 */
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
   const { e } = await searchParams;
   return (
-    <Screen back="/login" title="휴대폰 번호로 가입">
-      <h2 className="mt-4 text-[24px] font-bold leading-snug tracking-[-0.02em]">
-        우연한 식탁에
-        <br />
-        오신 걸 환영해요
-      </h2>
-      <p className="mt-2 text-[15px] text-muted">가입은 1분이면 끝나요. 모임 안내도 이 번호로 보내드려요.</p>
-      <form action={signup} className="mt-8 space-y-4">
-        <Field label="이름">
-          <input name="name" autoComplete="name" placeholder="홍길동" className={inputCls} />
-        </Field>
-        <Field label="휴대폰 번호">
-          <input name="phone" inputMode="tel" autoComplete="tel" placeholder="01012345678" className={inputCls} />
-        </Field>
-        <Field label="비밀번호" hint="6자 이상">
-          <input name="password" type="password" autoComplete="new-password" className={inputCls} />
-        </Field>
-        <ErrorText msg={e} />
-        <PrimaryButton type="submit" pendingText="가입하는 중">가입하고 시작하기</PrimaryButton>
+    <Screen back="/login" title="휴대폰 번호로 가입하기" backdrop={<Backdrop height={460} />}>
+      <div className="relative mt-6 min-h-[150px]">
+        <div className="pointer-events-none absolute -right-8 -top-10 size-[210px]">
+          <Image src={IMG.startTable} alt="" fill sizes="210px" priority className="rounded-full object-cover" style={{ maskImage: "radial-gradient(closest-side, #000 68%, transparent)", WebkitMaskImage: "radial-gradient(closest-side, #000 68%, transparent)" }} />
+        </div>
+        <PageTitle title="첫 식탁을" accent="함께 준비해요" sub="기본 정보만 입력하면 시작할 수 있어요." />
+      </div>
+      <form action={signup} className="mt-8">
+        <div className="shadow-card space-y-6 rounded-[22px] bg-card p-5">
+          <Field label="이름" required>
+            <input name="name" autoComplete="name" placeholder="이름" className={inputCls} />
+          </Field>
+          <Field label="휴대폰 번호" required>
+            <input name="phone" inputMode="tel" autoComplete="tel" placeholder="010-1234-5678" className={inputCls} />
+          </Field>
+          <div>
+            <Field label="비밀번호" required>
+              <PasswordInput name="password" autoComplete="new-password" placeholder="비밀번호" className={inputCls} />
+            </Field>
+            <p className="mt-2 text-[13px] text-muted">6자 이상 입력해 주세요.</p>
+          </div>
+        </div>
+        <div className="mt-4"><ErrorText msg={e} /></div>
+        <div className="mt-6"><PrimaryButton type="submit" pendingText="가입하는 중">가입하기</PrimaryButton></div>
       </form>
-      <p className="mt-6 text-center text-[14px] text-muted">
-        이미 계정이 있어요{" "}
-        <Link href="/login/phone" className="font-semibold text-accent">
-          로그인
-        </Link>
+      <p className="mt-7 text-center text-[15px] text-muted">
+        이미 계정이 있나요?{" "}
+        <Link href="/login/phone" className="font-semibold text-accent">로그인</Link>
       </p>
     </Screen>
   );

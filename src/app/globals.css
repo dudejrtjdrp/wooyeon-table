@@ -1,17 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  /* 저녁 식탁: 해 진 뒤의 남색과 식탁 위 조명 빛 */
-  --paper: #f3f4f7;      /* 앱 바탕 */
-  --card: #ffffff;       /* 면 */
-  --ink: #15161c;        /* 본문 */
-  --muted: #6b6f7b;      /* 보조 글자 */
-  --line: #e4e6ec;       /* 구분선 */
-  --accent: #3540c4;     /* 저녁 남색: 주요 행동 */
-  --accent-soft: #eceefe;
+  /* 7안: 아이보리·옅은 블루 바탕, 네이비 제목, 선명한 블루 버튼, 원목 식탁과 따뜻한 조명 사진 */
+  --paper: #f5f8fd;      /* 앱 바탕 */
+  --card: #ffffff;       /* 카드 */
+  --field: #f6f8fc;      /* 입력칸 */
+  --ink: #0f1733;        /* 제목·본문 (네이비) */
+  --muted: #7b8194;      /* 보조 글자 */
+  --line: #e6ebf3;       /* 구분선 */
+  --accent: #2f7fe8;     /* 주요 행동 */
+  --accent-soft: #e8f0fd;
   --accent-ink: #ffffff;
-  --candle: #ffb938;     /* 조명: 확정·강조 순간에만 */
-  --leaf: #12936a;       /* 완료 */
+  --navy: #1a2768;       /* 첫 실행 화면 바탕 */
+  --candle: #ffb938;     /* 조명 */
+  --warn: #c27a10;
+  --warn-soft: #fdf6e9;
+  --leaf: #16a06b;       /* 완료 */
   --danger: #e5484d;     /* 오류·취소 */
 }
 
@@ -26,6 +30,10 @@
   --color-accent-soft: var(--accent-soft);
   --color-candle: var(--candle);
   --color-danger: var(--danger);
+  --color-field: var(--field);
+  --color-navy: var(--navy);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
@@ -37,6 +45,14 @@ body {
 }
 
 html { -webkit-tap-highlight-color: transparent; }
+/* 카드 그림자: 아주 옅게, 바닥에서 살짝 떠 있는 정도 */
+.shadow-card { box-shadow: 0 1px 2px rgb(20 40 90 / .04), 0 10px 28px -6px rgb(20 40 90 / .07); }
+.shadow-cta { box-shadow: 0 10px 22px -8px rgb(47 127 232 / .55); }
+/* 위쪽 은은한 빛 배경 (사진 없는 화면용) */
+.bg-soft-top { background: radial-gradient(120% 60% at 100% 0%, #ffffff 0%, rgb(255 255 255 / 0) 60%), var(--paper); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.animate-rise { animation: rise .28s cubic-bezier(.2,.8,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .animate-rise { animation: none; } }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
 .pt-safe { padding-top: env(safe-area-inset-top); }
@@ -47,7 +63,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .animate-fade { animation: fade-in .2s ease-out; }
 .animate-toast { animation: toast-in .24s ease-out; }
 @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
-.skeleton { background: linear-gradient(90deg, #eceef2 0, #f6f7f9 40px, #eceef2 80px); background-size: 400px 100%; animation: shimmer 1.2s infinite linear; }
+.skeleton { background: linear-gradient(90deg, #e9eef6 0, #f5f8fd 40px, #e9eef6 80px); background-size: 400px 100%; animation: shimmer 1.2s infinite linear; }
 @media (prefers-reduced-motion: reduce) { .animate-sheet, .animate-fade, .animate-toast, .skeleton { animation: none; } }
 @keyframes seat-in { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
 @keyframes glow-in { from { opacity: 0; } to { opacity: .9; } }
@@ -55,18 +71,20 @@ html { -webkit-tap-highlight-color: transparent; }
 .glow-in { opacity: 0; animation: glow-in .8s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) { .seat-in, .glow-in { animation: none; opacity: 1; } }
 
-/* 첫 장면 */
+/* 첫 장면 (A1) */
 html[data-splash="off"] #splash { display: none; }
 .splash { animation: splash-out .32s ease-in 1.6s forwards; }
-.splash-ring { stroke-dasharray: 1; stroke-dashoffset: 1; transform: rotate(-90deg); transform-origin: center; animation: ring-draw .5s cubic-bezier(.6,0,.2,1) .05s forwards; }
-.splash-seat { transform-box: fill-box; transform-origin: center; opacity: 0; animation: seat-in .34s cubic-bezier(.3,1.5,.5,1) forwards; }
-.splash-glow { opacity: 0; transform-box: fill-box; transform-origin: center; animation: glow-pop .45s ease-out 1s forwards; }
+.splash-photo { opacity: 0; transform: scale(.94); animation: photo-in .55s cubic-bezier(.2,.8,.2,1) .05s forwards; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent); mask-image: radial-gradient(closest-side, #000 72%, transparent); }
+.splash-photo img { filter: brightness(.55) saturate(.8); animation: seats-on .5s ease-out .45s forwards; }
+.splash-lamp { opacity: 0; background: radial-gradient(closest-side, rgb(255 214 140 / .85), rgb(255 185 56 / .25) 60%, transparent); mix-blend-mode: screen; animation: glow-pop .45s ease-out 1s forwards; }
 .splash-name { opacity: 0; transform: translateY(8px); animation: name-in .4s ease-out 1.05s forwards; }
-@keyframes ring-draw { to { stroke-dashoffset: 0; } }
-@keyframes glow-pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes photo-in { to { opacity: 1; transform: none; } }
+@keyframes seats-on { to { filter: none; } }
+@keyframes glow-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 @keyframes name-in { to { opacity: 1; transform: none; } }
 @keyframes splash-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
 @media (prefers-reduced-motion: reduce) {
   .splash { animation: splash-out .2s ease-in .5s forwards; }
-  .splash-ring, .splash-seat, .splash-glow, .splash-name { animation: none; opacity: 1; stroke-dashoffset: 0; transform: none; }
+  .splash-photo, .splash-photo img, .splash-lamp, .splash-name { animation: none; opacity: 1; filter: none; transform: none; }
+  .splash-lamp { transform: translate(-50%, -50%); }
 }
