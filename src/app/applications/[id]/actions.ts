@@ -32,11 +32,11 @@ export async function cancelApplication(form: FormData) {
   // 조건부 업데이트: 매칭과 동시에 눌려도 한쪽만 이긴다
   const { data: up } = await db()
     .from("applications")
-    .update({ application_status: "CANCELED", match_status: "NO_MATCH", resolution: "canceled" })
+    .update({ application_status: "CANCELED", match_status: "NO_MATCH" })
     .eq("id", appId)
     .eq("match_status", "WAITING")
     .select("id");
-  if (!up?.length) redirect(`/applications/${appId}`);
+  if (!up?.length) back("이미 처리된 신청이에요. 화면을 새로 고쳐 주세요");
   await logStatus({ entityType: "application", entityId: appId, field: "application_status", from: "SUBMITTED", to: "CANCELED", actor: `user:${me.id}`, reason: "매칭 전 취소" });
 
   let body = "결제 전이라 따로 환불할 금액은 없어요.";
