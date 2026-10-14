@@ -57,7 +57,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
 
   return (
     <Screen title={`${fmtDate(t.slots.starts_at)} ${t.slots.region}`} back="/my-tables">
-      <Refresher />
+      <Refresher tableId={id} />
       <section className="mt-2 rounded-3xl bg-ink p-5 text-white">
         <div className="flex items-start justify-between">
           <TableMark size={44} tone="white" seats={Math.max(mems.length, 4)} filled={mems.filter((m) => m.attendance_status === "ATTENDED").length || mems.length} glow={t.status !== "DONE"} />

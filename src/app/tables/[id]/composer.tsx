@@ -19,6 +19,7 @@ export function Composer({ tableId, action }: { tableId: string; action: (f: For
           await action(f);
         } finally {
           setBusy(false);
+          setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 200);
         }
       }}
       className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-line bg-card px-3 pt-2"
