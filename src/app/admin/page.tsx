@@ -7,6 +7,7 @@ import { db } from "@/lib/supabase";
 import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants } from "./demo-actions";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const KIND_LABEL: Record<string, string> = {
   payment: "결제 오류",

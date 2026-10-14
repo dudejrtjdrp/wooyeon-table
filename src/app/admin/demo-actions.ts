@@ -42,24 +42,29 @@ export async function seedParticipants(form: FormData) {
   const main = slots!.filter((s) => s.region === "성수" || s.region === "강남");
   const thin = slots!.filter((s) => s.region === "홍대").slice(0, 1);
 
-  let created = 0;
-  for (let i = 0; i < n; i++) {
-    const gender = r() < 0.5 ? "M" : "F";
-    const name = `${FAMILY[Math.floor(r() * FAMILY.length)]}${GIVEN[Math.floor(r() * GIVEN.length)]}`;
+  // 한 번에 넣어야 서버 시간 제한 안에 끝난다 (참가자 수와 상관없이 쿼리 6번)
+  const people = Array.from({ length: n }, (_, i) => {
     const outlier = i >= n - 2;
-    const birth = outlier ? 1982 : 1994 + Math.floor(r() * 8);
-    const chosen = i < 3 ? thin : outlier ? pick(slots!, 1) : pick(main.length ? main : slots!, 1 + Math.floor(r() * 2));
+    return {
+      i,
+      gender: r() < 0.5 ? "M" : "F",
+      name: `${FAMILY[Math.floor(r() * FAMILY.length)]}${GIVEN[Math.floor(r() * GIVEN.length)]}`,
+      birth: outlier ? 1982 : 1994 + Math.floor(r() * 8),
+      slots: i < 3 ? thin : outlier ? pick(slots!, 1) : pick(main.length ? main : slots!, 1 + Math.floor(r() * 2)),
+    };
+  });
+  const { data: users } = await db()
+    .from("users")
+    .insert(people.map((p) => ({ login_id: `test-${stamp}-${p.i + 1}`, password_hash: hash, name: p.name, role: "user", is_demo: true })))
+    .select("id,login_id");
+  const idOf = new Map((users ?? []).map((u) => [u.login_id, u.id]));
+  const uid = (i: number) => idOf.get(`test-${stamp}-${i + 1}`)!;
 
-    const { data: u } = await db()
-      .from("users")
-      .insert({ login_id: `test-${stamp}-${i + 1}`, password_hash: hash, name, role: "user", is_demo: true })
-      .select("id")
-      .single();
-    if (!u) continue;
-    await db().from("profiles").insert({
-      user_id: u.id,
-      birth_year: birth,
-      gender,
+  await db().from("profiles").insert(
+    people.map((p) => ({
+      user_id: uid(p.i),
+      birth_year: p.birth,
+      gender: p.gender,
       job: JOBS[Math.floor(r() * JOBS.length)],
       mbti: r() < 0.9 ? MBTIS[Math.floor(r() * MBTIS.length)] : null,
       interests: pick(INTERESTS, 3),
@@ -67,21 +72,25 @@ export async function seedParticipants(form: FormData) {
       wanted_traits: pick(TRAITS, 1),
       price_range: PRICE_RANGES[Math.floor(r() * 3)],
       agreed_at: new Date().toISOString(),
-    });
-    const { data: pass } = await db().from("passes").insert({ user_id: u.id, pass_type: "single", total_count: 1, remaining: 0 }).select("id").single();
-    const { data: pay } = await db()
-      .from("payments")
-      .insert({ user_id: u.id, pass_id: pass!.id, amount: 29000, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() })
-      .select("id")
-      .single();
-    const { data: app } = await db()
-      .from("applications")
-      .insert({ user_id: u.id, round_id: roundId, payment_id: pay!.id, application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: new Date().toISOString() })
-      .select("id")
-      .single();
-    await db().from("application_slots").insert(chosen.map((s) => ({ application_id: app!.id, slot_id: s.id })));
-    created++;
-  }
+    })),
+  );
+  const { data: passes } = await db()
+    .from("passes")
+    .insert(people.map((p) => ({ user_id: uid(p.i), pass_type: "single", total_count: 1, remaining: 0 })))
+    .select("id,user_id");
+  const passOf = new Map((passes ?? []).map((x) => [x.user_id, x.id]));
+  const { data: pays } = await db()
+    .from("payments")
+    .insert(people.map((p) => ({ user_id: uid(p.i), pass_id: passOf.get(uid(p.i)), amount: 29000, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() })))
+    .select("id,user_id");
+  const payOf = new Map((pays ?? []).map((x) => [x.user_id, x.id]));
+  const { data: apps } = await db()
+    .from("applications")
+    .insert(people.map((p) => ({ user_id: uid(p.i), round_id: roundId, payment_id: payOf.get(uid(p.i)), application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: new Date().toISOString() })))
+    .select("id,user_id");
+  const appOf = new Map((apps ?? []).map((x) => [x.user_id, x.id]));
+  await db().from("application_slots").insert(people.flatMap((p) => p.slots.map((s) => ({ application_id: appOf.get(uid(p.i)), slot_id: s.id }))));
+  const created = apps?.length ?? 0;
   back(`테스트 참가자 ${created}명을 결제 완료 상태로 신청시켰어요`);
 }
 

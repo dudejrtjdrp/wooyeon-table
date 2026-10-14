@@ -1,6 +1,5 @@
 import { logStatus } from "../events";
 import { fmtDate, fmtTime } from "../format";
-import { notify } from "../notify";
 import { afterConfirm } from "../pipeline";
 import { db } from "../supabase";
 import { runMatching } from "./engine";
@@ -59,6 +58,8 @@ async function loadRelations(userIds: string[]): Promise<Relations> {
   for (const e of enc.data ?? []) rel.met.add(pairKey(e.user_id, e.met_user_id));
   return rel;
 }
+
+const slotLabel = (s: Slot) => `${fmtDate(s.startsAt)} ${s.region}`;
 
 export interface RunOutcome {
   runId: string;
@@ -143,6 +144,14 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
     const result = runMatching(candidates, slots, rel, settings);
     const byApp = new Map(candidates.map((c) => [c.applicationId, c]));
 
+    // 상태 기록과 알림은 모았다가 한 번에 넣는다 (쿼리 수를 줄여 시간 제한 안에 끝내려고)
+    const events: Record<string, unknown>[] = [];
+    const notes: Record<string, unknown>[] = [];
+    const ev = (entityId: string, field: string, from: string | null, to: string, reason: string) =>
+      events.push({ entity_type: "application", entity_id: entityId, field, from_value: from, to_value: to, actor, reason, match_run_id: run.id });
+    const nt = (userId: string, template: string, title: string, body: string, link: string, dedupeKey: string) =>
+      notes.push({ user_id: userId, template, title, body, link, dedupe_key: dedupeKey, status: "sent", sent_at: new Date().toISOString(), scheduled_at: new Date().toISOString() });
+
     // 4. 확정 테이블 저장
     const confirmedAt = new Date().toISOString();
     const tableIds: string[] = [];
@@ -164,32 +173,34 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
       if (!table) continue;
       tableIds.push(table.id);
       const slot = slotMap.get(t.slotId)!;
-      for (const appId of t.applicationIds) {
-        const o = result.outcomes[appId];
-        const reason = o?.message ?? "테이블이 확정됐어요";
-        if (o && o.reallocCount > 0) {
-          await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "MATCHING", to: "REALLOCATING", actor, reason: "처음 조합이 조건에 맞지 않아 다른 테이블을 찾음", matchRunId: run.id });
-        }
+      const plain = t.applicationIds.filter((id) => !(result.outcomes[id]?.reallocCount > 0));
+      const moved = t.applicationIds.filter((id) => result.outcomes[id]?.reallocCount > 0);
+      const why = t.reasons.join(" · ");
+      if (plain.length) {
         await db()
           .from("applications")
-          .update({
-            match_status: "CONFIRMED",
-            attendance_status: "SCHEDULED",
-            table_id: table.id,
-            realloc_count: o?.reallocCount ?? 0,
-            match_reason: `${reason}. ${t.reasons.join(" · ")}`,
-          })
+          .update({ match_status: "CONFIRMED", attendance_status: "SCHEDULED", table_id: table.id, realloc_count: 0, match_reason: `${slotLabel(slot)} 테이블이 확정됐어요. ${why}` })
+          .in("id", plain);
+      }
+      for (const appId of moved) {
+        const o = result.outcomes[appId];
+        await db()
+          .from("applications")
+          .update({ match_status: "CONFIRMED", attendance_status: "SCHEDULED", table_id: table.id, realloc_count: o.reallocCount, match_reason: `${o.message}. ${why}` })
           .eq("id", appId);
-        await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: o && o.reallocCount > 0 ? "REALLOCATING" : "MATCHING", to: "CONFIRMED", actor, reason, matchRunId: run.id });
-        const c = byApp.get(appId)!;
-        await notify({
-          userId: c.userId,
-          template: "confirmed",
-          title: "테이블이 확정됐어요",
-          body: `${fmtDate(slot.startsAt)} ${fmtTime(slot.startsAt)} ${slot.region}에서 만나요. 식당과 단체방 안내를 확인해 주세요.`,
-          link: `/tables/${table.id}`,
-          dedupeKey: `confirmed:${appId}`,
-        });
+        ev(appId, "match_status", "MATCHING", "REALLOCATING", "처음 조합이 조건에 맞지 않아 다른 테이블을 찾음");
+      }
+      for (const appId of t.applicationIds) {
+        const o = result.outcomes[appId];
+        ev(appId, "match_status", o && o.reallocCount > 0 ? "REALLOCATING" : "MATCHING", "CONFIRMED", o?.message ?? "자동 확정");
+        nt(
+          byApp.get(appId)!.userId,
+          "confirmed",
+          "테이블이 확정됐어요",
+          `${fmtDate(slot.startsAt)} ${fmtTime(slot.startsAt)} ${slot.region}에서 만나요. 식당과 단체방 안내를 확인해 주세요.`,
+          `/tables/${table.id}`,
+          `confirmed:${appId}`,
+        );
       }
     }
 
@@ -201,17 +212,12 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
         .from("applications")
         .update({ match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", realloc_count: o.reallocCount, match_reason: o.message })
         .eq("id", appId);
-      await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "MATCHING", to: "ALTERNATIVE_OFFERED", actor, reason: o.message, matchRunId: run.id });
-      await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "PAID", to: "REFUND_AVAILABLE", actor, reason: "매칭 실패로 환불 선택 가능", matchRunId: run.id });
-      await notify({
-        userId: c.userId,
-        template: "alternative",
-        title: "이번에는 맞는 테이블이 없었어요",
-        body: `${o.message} 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요.`,
-        link: `/applications/${appId}/resolve`,
-        dedupeKey: `alternative:${appId}`,
-      });
+      ev(appId, "match_status", "MATCHING", "ALTERNATIVE_OFFERED", o.message);
+      ev(appId, "payment_status", "PAID", "REFUND_AVAILABLE", "매칭 실패로 환불 선택 가능");
+      nt(c.userId, "alternative", "이번에는 맞는 테이블이 없었어요", `${o.message} 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요.`, `/applications/${appId}/resolve`, `alternative:${appId}`);
     }
+    if (events.length) await db().from("status_events").insert(events);
+    if (notes.length) await db().from("notifications").upsert(notes, { onConflict: "dedupe_key", ignoreDuplicates: true });
 
     const summary = { ...result.summary, exceptions: exceptions.length, log: result.log };
     await db().from("match_runs").update({ status: "done", candidate_count: candidates.length, summary, finished_at: new Date().toISOString() }).eq("id", run.id);
