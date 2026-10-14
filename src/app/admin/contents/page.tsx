@@ -114,7 +114,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                 </form>
               </li>
             ))}
-            {!list.length && <li className="rounded-2xl bg-card p-10 text-center text-muted">등록된 콘텐츠가 없어요.</li>}
+            {!list.length && <li className="shadow-card rounded-[20px] bg-card p-10 text-center text-muted">등록된 콘텐츠가 없어요.</li>}
           </ul>
         </div>
 

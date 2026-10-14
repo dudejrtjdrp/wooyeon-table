@@ -45,7 +45,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
         </select>
         <button className={btnLight}>보기</button>
       </form>
-      <div className="mt-3 overflow-x-auto rounded-2xl bg-card">
+      <div className="mt-3 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[1040px] text-[14px]">
           <thead className="border-b border-line"><tr>{["시각", "참가자", "회차", "이용권", "결제 수단", "금액", "상태", "이용권 남은 횟수", "환불 시각"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">

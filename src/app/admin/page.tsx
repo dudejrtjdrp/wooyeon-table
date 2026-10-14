@@ -187,7 +187,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <p className="mt-1 text-[13px] text-muted">마감 시각을 기다리지 않고 한 회차의 흐름을 처음부터 끝까지 돌려볼 수 있어요. 실제 운영에서는 숨기는 화면이에요.</p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <form action={seedParticipants} className="rounded-2xl bg-card p-4">
+            <form action={seedParticipants} className="shadow-card rounded-[20px] bg-card p-4">
               <input type="hidden" name="round_id" value={round.id} />
               <p className="text-[14px] font-semibold">① 테스트 참가자 만들기</p>
               <p className="mt-1 text-[12px] text-muted">결제까지 끝난 상태로 신청시켜요. 일부는 일부러 홍대에 몰거나 나이 차를 크게 넣어 재배치·실패 상황이 생겨요.</p>
@@ -197,7 +197,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               </div>
             </form>
 
-            <div className="rounded-2xl bg-card p-4">
+            <div className="shadow-card rounded-[20px] bg-card p-4">
               <p className="text-[14px] font-semibold">② 시각 옮기기</p>
               <p className="mt-1 text-[12px] text-muted">옮기면 그 시각에 해야 할 일(매칭, 리마인드, 대화 주제 게시, 모임 종료)을 바로 처리해요.</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -220,7 +220,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               </form>
             </div>
 
-            <form action={autoAttend} className="rounded-2xl bg-card p-4">
+            <form action={autoAttend} className="shadow-card rounded-[20px] bg-card p-4">
               <input type="hidden" name="round_id" value={round.id} />
               <p className="text-[14px] font-semibold">③ 테스트 참가자 체크인·후기 채우기 (모임 시작 뒤)</p>
               <p className="mt-1 text-[12px] text-muted">일부는 서로 &lsquo;다시는 싫어요&rsquo;를 골라요. 다음 매칭에서 같은 테이블에 앉지 않는지 볼 수 있어요.</p>
@@ -228,7 +228,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             </form>
 
             {nextRound && (
-              <form action={reapply} className="rounded-2xl bg-card p-4">
+              <form action={reapply} className="shadow-card rounded-[20px] bg-card p-4">
                 <input type="hidden" name="round_id" value={round.id} />
                 <input type="hidden" name="next_round_id" value={nextRound.id} />
                 <p className="text-[14px] font-semibold">④ 다음 차수에 다시 신청시키기</p>

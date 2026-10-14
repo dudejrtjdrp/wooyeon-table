@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import Link from "next/link";
 import { Badge, PageHeader, btnInk, btnLight, ctl, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
@@ -43,7 +44,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
       <PageHeader
         title="신청자·결제"
         desc="이름을 누르면 그 사람의 상태 이력, 받은 알림, 참가 기록을 한 화면에서 볼 수 있어요."
-        actions={round && <a href={`/api/admin/export?r=${round.id}`} className={btnInk}>CSV 내려받기</a>}
+        actions={round && <a href={`/api/admin/export?r=${round.id}`} className={btnLight}><Download size={18} />CSV 내려받기</a>}
       />
       <form className="mt-6 flex flex-wrap gap-2">
         <select name="r" defaultValue={round?.id} className={ctl}>
@@ -58,7 +59,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
       </form>
 
       <p className="mt-4 text-[13px] text-muted">{rows.length}명</p>
-      <div className="mt-2 overflow-x-auto rounded-2xl bg-card">
+      <div className="mt-2 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[1040px] text-[14px]">
           <thead className="border-b border-line">
             <tr>{["이름", "프로필", "희망 동네", "결제", "매칭", "참석", "이전 참석", "받은 신고", "신청 시각"].map((h) => <th key={h} className={th}>{h}</th>)}</tr>

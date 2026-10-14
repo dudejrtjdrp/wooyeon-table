@@ -69,7 +69,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
           </ul>
         </Panel>
       )}
-      {!rows.length && <p className="mt-6 rounded-2xl bg-card p-10 text-center text-muted">확정된 참가자가 없어요.</p>}
+      {!rows.length && <p className="mt-6 shadow-card rounded-[20px] bg-card p-10 text-center text-muted">확정된 참가자가 없어요.</p>}
     </div>
   );
 }

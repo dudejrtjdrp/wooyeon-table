@@ -54,7 +54,7 @@ export default async function Messages() {
       </div>
 
       <h2 className="mb-3 mt-8 text-[17px] font-bold">발송 이력</h2>
-      <div className="overflow-x-auto rounded-2xl bg-card">
+      <div className="shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[820px] text-[14px]">
           <thead className="border-b border-line"><tr>{["예약·발송 시각", "받는 사람", "종류", "제목", "상태", "재시도"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">

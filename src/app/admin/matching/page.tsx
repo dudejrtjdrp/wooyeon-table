@@ -39,7 +39,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-[26px] font-bold tracking-[-0.02em]">자동 매칭 모니터</h1>
+        <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">자동 매칭 모니터</h1>
         <form className="flex gap-2">
           <select name="r" defaultValue={round.id} className="h-10 rounded-xl border border-line bg-card px-3 text-[14px]">
             {rounds?.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
@@ -49,12 +49,12 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
       </div>
 
       {!run ? (
-        <p className="mt-6 rounded-2xl bg-card p-6 text-center text-muted">
+        <p className="mt-6 shadow-card rounded-[20px] bg-card p-6 text-center text-muted">
           아직 매칭 전이에요. {fmtDateTime(round.match_at)}에 자동으로 실행돼요.
         </p>
       ) : (
         <section className="mt-6 grid gap-4 md:grid-cols-[1fr_320px]">
-          <div className="rounded-2xl bg-card p-5">
+          <div className="shadow-card rounded-[20px] bg-card p-5">
             <p className="text-[13px] text-muted">실행 {fmtDateTime(run.started_at)} · 알고리즘 {run.algorithm_version} · 대상 {run.candidate_count}명</p>
             <div className="mt-3 flex flex-wrap gap-2 text-[13px]">
               {[
@@ -65,7 +65,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
               ))}
             </div>
           </div>
-          <details className="rounded-2xl bg-card p-5 text-[13px]">
+          <details className="shadow-card rounded-[20px] bg-card p-5 text-[13px]">
             <summary className="cursor-pointer font-semibold">처리 기록 보기</summary>
             <ol className="mt-3 space-y-1 text-muted">{(summary.log ?? []).map((l, i) => <li key={i}>{l}</li>)}</ol>
           </details>
@@ -77,7 +77,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
           const d = t.score_detail;
           const members = apps.filter((a) => a.table_id === t.id);
           return (
-            <article key={t.id} className="rounded-2xl bg-card p-5">
+            <article key={t.id} className="shadow-card rounded-[20px] bg-card p-5">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[13px] text-muted">테이블 {i + 1} · {fmtDate(t.slots.starts_at)} {fmtTime(t.slots.starts_at)} {t.slots.region}</p>

@@ -28,7 +28,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
       {e && <p className="mt-4 rounded-xl bg-danger/10 px-4 py-2 text-[14px] text-danger">{e}</p>}
 
       <h2 className="mb-3 mt-8 text-[17px] font-bold">회차</h2>
-      <div className="overflow-x-auto rounded-2xl bg-card">
+      <div className="shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[820px] text-[14px]">
           <thead className="border-b border-line"><tr>{["회차", "상태", "신청 마감", "자동 매칭", "일정 (날짜·동네별 신청 수 / 최대 테이블)"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">
@@ -55,7 +55,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
         <h2 className="text-[17px] font-bold">식당 재고</h2>
         <RoundPicker rounds={picker} current={cur?.id} />
       </div>
-      <div className="overflow-x-auto rounded-2xl bg-card">
+      <div className="shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[760px] text-[14px]">
           <thead className="border-b border-line"><tr>{["일정", "식당", "받을 수 있는 테이블", "배정된 테이블"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">

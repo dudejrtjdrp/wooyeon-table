@@ -28,7 +28,7 @@ export default async function Tables({ searchParams }: { searchParams: Promise<{
   return (
     <div>
       <PageHeader title="테이블·단체방" desc="확정된 테이블마다 참가자, 배정된 식당, 단체방, 안내 발송 상태를 봐요." actions={<RoundPicker rounds={rounds} current={round?.id} />} />
-      <div className="mt-6 overflow-x-auto rounded-2xl bg-card">
+      <div className="mt-6 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[820px] text-[14px]">
           <thead className="border-b border-line"><tr>{["일시", "동네", "식당", "인원", "참석", "점수", "단체방", "상태"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">
