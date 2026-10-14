@@ -1,13 +1,16 @@
 import { notFound } from "next/navigation";
 import { ErrorText, PrimaryButton, Screen } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
+import { usablePass } from "@/lib/billing";
+import { now } from "@/lib/clock";
 import { PASSES, REFUND_POLICY, won } from "@/lib/constants";
 import { dateKey, fmtDate, fmtTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { submitApplication } from "./actions";
 
 export default async function Apply({ params, searchParams }: { params: Promise<{ roundId: string }>; searchParams: Promise<{ e?: string }> }) {
-  await requireProfile();
+  const me = await requireProfile();
+  const owned = await usablePass(me.id, await now());
   const { roundId } = await params;
   const { e } = await searchParams;
   const { data: round } = await db()
@@ -56,9 +59,23 @@ export default async function Apply({ params, searchParams }: { params: Promise<
         <section>
           <p className="flex items-center gap-1.5 text-[17px] font-bold">이용권 <span className="rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-bold text-accent">필수</span></p>
           <div className="mt-2 space-y-2">
+            {owned && (
+              <label className="block cursor-pointer">
+                <input type="radio" name="pass" value="owned" defaultChecked className="peer sr-only" />
+                <span className="flex items-center justify-between rounded-2xl border-2 border-transparent bg-card px-4 py-4 transition peer-checked:border-accent">
+                  <span>
+                    <span className="block text-[15px] font-semibold">가지고 있는 이용권 쓰기</span>
+                    <span className="block text-[13px] text-muted">
+                      {PASSES[owned.pass_type as keyof typeof PASSES]?.label ?? "이용권"} 남은 {owned.remaining}회{owned.expires_at ? `, ${fmtDate(owned.expires_at)}까지` : ""}
+                    </span>
+                  </span>
+                  <span className="text-[16px] font-bold">0원</span>
+                </span>
+              </label>
+            )}
             {Object.entries(PASSES).map(([k, p], i) => (
               <label key={k} className="block cursor-pointer">
-                <input type="radio" name="pass" value={k} defaultChecked={i === 0} className="peer sr-only" />
+                <input type="radio" name="pass" value={k} defaultChecked={!owned && i === 0} className="peer sr-only" />
                 <span className="flex items-center justify-between rounded-2xl border-2 border-transparent bg-card px-4 py-4 transition peer-checked:border-accent">
                   <span>
                     <span className="block text-[15px] font-medium">{p.label}</span>

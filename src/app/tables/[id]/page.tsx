@@ -151,6 +151,12 @@ export default async function TablePage({ params, searchParams }: { params: Prom
       {mine && (
         <p className={`mt-8 text-center text-[13px] text-muted ${chatOpen ? "mb-16" : ""}`}>
           불편한 일이 있었나요? <Link href={`/tables/${id}/feedback#report`} className="font-medium underline underline-offset-4">신고하기</Link>
+          {mine.attendance_status === "SCHEDULED" && t.status !== "DONE" && (
+            <>
+              <span className="mx-2 text-line">|</span>
+              <Link href={`/applications/${mine.id}`} className="font-medium underline underline-offset-4">참석 취소·환불 규정</Link>
+            </>
+          )}
         </p>
       )}
       {chatOpen && <Composer tableId={id} action={sendMessage} />}

@@ -97,7 +97,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             <Stat label="대체 일정·환불 선택 대기" value={waitingChoice.length} tone={waitingChoice.length ? "accent" : undefined} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label="참석" value={attended.length} />
+            <Stat label="참석" value={attended.length} sub={`늦은 취소 ${list.filter((a) => a.attendance_status === "CANCELED_LATE").length} · 노쇼 후보 ${exCount.get("no_show") ?? 0} · 미처리 신고 ${exCount.get("safety") ?? 0}`} />
             <Stat label="운영자 개입 필요" value={ex?.length ?? 0} tone={ex?.length ? "accent" : undefined} sub="자동으로 못 푼 건" />
             <Stat label="매칭 실행" value={run ? (run.status === "done" ? "완료" : run.status) : "대기"} sub={run?.finished_at ? fmtDateTime(run.finished_at) : undefined} />
             <Stat label="자동 확정률" value={confirmed.length ? "100%" : "-"} sub="운영자 승인 없이 확정" />

@@ -4,6 +4,7 @@ import { logStatus } from "./events";
 import { fmtDate, fmtTime } from "./format";
 import { notify } from "./notify";
 import { pushNotifications } from "./push";
+import { loadTemplates, render } from "./templates";
 import { db } from "./supabase";
 
 type TableRow = {
@@ -134,12 +135,14 @@ export async function afterConfirm(tableId: string) {
 
   // 하루 전 리마인드 예약 (INF-07). 시각이 되면 tick이 발송 처리한다
   const remindAt = new Date(new Date(t.slots.starts_at).getTime() - 24 * 60 * 60 * 1000);
+  const tpl = await loadTemplates();
+  const rm = render("reminder", { date: fmtDate(t.slots.starts_at), time: fmtTime(t.slots.starts_at), region: t.slots.region, reservation: t.reservation_name ?? "식당 안내 참고" }, tpl);
   for (const m of ms) {
     await notify({
       userId: m.user_id,
       template: "reminder",
-      title: "내일 저녁 약속 잊지 마세요",
-      body: `${fmtDate(t.slots.starts_at)} ${fmtTime(t.slots.starts_at)} ${t.slots.region}. ${t.reservation_name ? `예약명은 '${t.reservation_name}'이에요. ` : ""}당일 취소는 할 수 없어요.`,
+      title: rm.title,
+      body: rm.body,
       link: `/tables/${tableId}`,
       dedupeKey: `remind:${m.id}`,
       scheduledAt: remindAt,
@@ -184,9 +187,25 @@ export async function tick() {
   }
 
   // 2. 예약된 알림 발송 (INF-07, INF-08)
-  const { data: pending } = await db().from("notifications").select("id,attempts").eq("status", "pending").lte("scheduled_at", iso).limit(200);
+  const { data: pending } = await db().from("notifications").select("id,attempts,dedupe_key").eq("status", "pending").lte("scheduled_at", iso).limit(200);
   const sentNow: string[] = [];
   for (const n of pending ?? []) {
+    // 보낼 때가 됐어도 이유가 사라진 알림은 보내지 않는다 (이미 결제함, 이미 후기 남김)
+    const key = n.dedupe_key ?? "";
+    if (key.startsWith("payment_pending:")) {
+      const { data: a } = await db().from("applications").select("payment_status,application_status").eq("id", key.split(":")[1]).maybeSingle();
+      if (!a || a.application_status === "CANCELED" || !["PENDING", "FAILED"].includes(a.payment_status)) {
+        await db().from("notifications").delete().eq("id", n.id);
+        continue;
+      }
+    }
+    if (key.startsWith("feedback-remind:")) {
+      const { data: f } = await db().from("feedbacks").select("application_id").eq("application_id", key.split(":")[1]).maybeSingle();
+      if (f) {
+        await db().from("notifications").delete().eq("id", n.id);
+        continue;
+      }
+    }
     const { data: up, error } = await db().from("notifications").update({ status: "sent", sent_at: iso }).eq("id", n.id).eq("status", "pending").select("id");
     if (up?.length) sentNow.push(n.id);
     if (error) {
@@ -204,6 +223,7 @@ export async function tick() {
   if (pending?.length) done.push(`예약 알림 ${pending.length}건 발송`);
 
   // 3. 테이블 일정에 따른 단체방 게시와 상태 전환
+  const tpl = await loadTemplates();
   const { data: tables } = await db()
     .from("dining_tables")
     .select("id,status,reservation_name,slots(starts_at,ends_at,region)")
@@ -217,7 +237,7 @@ export async function tick() {
     if (t.getTime() >= start.getTime() - 24 * 60 * 60 * 1000) {
       await systemMessage(
         roomId,
-        `내일 ${fmtTime(tb.slots.starts_at)}, ${tb.slots.region}에서 만나요.${tb.reservation_name ? ` 예약명은 '${tb.reservation_name}'이에요.` : ""}\n당일 취소와 단체방 나가기는 할 수 없어요. 늦을 것 같으면 이 방에 미리 알려 주세요.`,
+        render("reminder_chat", { time: fmtTime(tb.slots.starts_at), region: tb.slots.region, reservation: tb.reservation_name ?? "식당 안내 참고" }, tpl).body,
         `remind:${tb.id}`,
         { type: "reminder" },
       );
@@ -253,18 +273,69 @@ export async function tick() {
               { onConflict: "dedupe_key", ignoreDuplicates: true },
             );
           } else if (m.attendance_status === "ATTENDED") {
+            const fb = render("feedback", {}, tpl);
             await notify({
               userId: m.user_id,
               template: "feedback",
-              title: "오늘 저녁 어떠셨어요?",
-              body: "1분이면 끝나요. 남겨 주신 후기는 다음 매칭에 반영돼요.",
+              title: fb.title,
+              body: fb.body,
               link: `/tables/${tb.id}/feedback`,
               dedupeKey: `feedback:${m.id}`,
+            });
+            // 하루 뒤에도 후기가 없으면 한 번만 더 알린다. 다음 신청을 막지는 않는다
+            await notify({
+              userId: m.user_id,
+              template: "feedback_remind",
+              ...render("feedback_remind", {}, tpl),
+              link: `/tables/${tb.id}/feedback`,
+              dedupeKey: `feedback-remind:${m.id}`,
+              scheduledAt: new Date(t.getTime() + 24 * 3600_000),
             });
           }
         }
       }
     }
   }
+  // 4. 모집 중인 회차를 지난 참가자에게 추천 (새 일정 소식 받기에 동의한 사람만)
+  const recommended = await recommendOpenRounds(t);
+  if (recommended) done.push(`다음 일정 추천 ${recommended}건`);
   return done;
+}
+
+const DAYS = "일월화수목금토";
+const kstDay = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600_000).getUTCDay();
+
+async function recommendOpenRounds(t: Date) {
+  const { data: rounds } = await db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t.toISOString());
+  if (!rounds?.length) return 0;
+  const { data: past } = await db()
+    .from("applications")
+    .select("user_id,dining_tables(slots(region,starts_at)),users(profiles(marketing_opt_in))")
+    .eq("attendance_status", "ATTENDED");
+  const lastByUser = new Map<string, { region: string; starts_at: string }>();
+  for (const p of (past ?? []) as unknown as { user_id: string; dining_tables: { slots: { region: string; starts_at: string } } | null; users: { profiles: { marketing_opt_in: boolean } | { marketing_opt_in: boolean }[] | null } }[]) {
+    const prof = Array.isArray(p.users?.profiles) ? p.users.profiles[0] : p.users?.profiles;
+    const s = p.dining_tables?.slots;
+    if (!s || !prof?.marketing_opt_in) continue;
+    const cur = lastByUser.get(p.user_id);
+    if (!cur || cur.starts_at < s.starts_at) lastByUser.set(p.user_id, s);
+  }
+  let sent = 0;
+  for (const r of rounds) {
+    const { data: applied } = await db().from("applications").select("user_id").eq("round_id", r.id);
+    const has = new Set((applied ?? []).map((a) => a.user_id));
+    for (const [uid, last] of lastByUser) {
+      if (has.has(uid)) continue;
+      const same = (r.slots ?? []).find((s) => s.region === last.region && kstDay(s.starts_at) === kstDay(last.starts_at));
+      const region = (r.slots ?? []).some((s) => s.region === last.region);
+      const body = same
+        ? `지난번처럼 ${DAYS[kstDay(same.starts_at)]}요일 ${same.region} 일정이 열렸어요. ${r.title}, 이번에도 어때요?`
+        : region
+          ? `${last.region}에서 새 식탁이 열렸어요. ${r.title} 일정을 확인해 보세요.`
+          : `${r.title} 모집을 시작했어요. 새로운 사람들과 한 번 더 앉아 볼까요?`;
+      await notify({ userId: uid, template: "next_round", title: "다음 식탁이 열렸어요", body, link: `/apply/${r.id}`, dedupeKey: `next-round:${r.id}:${uid}` });
+      sent++;
+    }
+  }
+  return sent;
 }

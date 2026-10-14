@@ -38,7 +38,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
     .order("created_at", { ascending: false })
     .limit(5);
   const list = (apps ?? []) as unknown as ActiveRow[];
-  const active = list.find((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status));
+  const active = list.find((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED"));
   const finished = !active || ["ATTENDED", "NO_SHOW"].includes(active.attendance_status ?? "");
   const next = me.hasProfile && finished ? await nextPick(me.id) : null;
 

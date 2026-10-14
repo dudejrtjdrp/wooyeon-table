@@ -2,6 +2,7 @@ import { logStatus } from "../events";
 import { fmtDate, fmtTime } from "../format";
 import { afterConfirm } from "../pipeline";
 import { pushNotifications } from "../push";
+import { loadTemplates, render } from "../templates";
 import { db } from "../supabase";
 import { runMatching } from "./engine";
 import {
@@ -30,7 +31,7 @@ type ProfileRow = {
   wanted_traits: string[];
 };
 
-async function loadSettings(): Promise<MatchSettings> {
+export async function loadSettings(): Promise<MatchSettings> {
   const { data } = await db().from("settings").select("key,value").in("key", ["matching.weights", "matching.min_score"]);
   const map = new Map((data ?? []).map((r) => [r.key, r.value]));
   return {
@@ -40,7 +41,7 @@ async function loadSettings(): Promise<MatchSettings> {
   };
 }
 
-async function loadRelations(userIds: string[]): Promise<Relations> {
+export async function loadRelations(userIds: string[]): Promise<Relations> {
   const rel: Relations = { excluded: new Set(), met: new Set(), again: new Set() };
   if (!userIds.length) return rel;
   const [blocks, reports, prefs, enc] = await Promise.all([
@@ -155,6 +156,7 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
     const nt = (userId: string, template: string, title: string, body: string, link: string, dedupeKey: string) =>
       notes.push({ user_id: userId, template, title, body, link, dedupe_key: dedupeKey, status: "sent", sent_at: new Date().toISOString(), scheduled_at: new Date().toISOString() });
 
+    const tpl = await loadTemplates();
     // 4. 확정 테이블 저장
     const confirmedAt = new Date().toISOString();
     const tableIds: string[] = [];
@@ -196,11 +198,12 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
       for (const appId of t.applicationIds) {
         const o = result.outcomes[appId];
         ev(appId, "match_status", o && o.reallocCount > 0 ? "REALLOCATING" : "MATCHING", "CONFIRMED", o?.message ?? "자동 확정");
+        const cm = render("confirmed", { date: fmtDate(slot.startsAt), time: fmtTime(slot.startsAt), region: slot.region }, tpl);
         nt(
           byApp.get(appId)!.userId,
           "confirmed",
-          "테이블이 확정됐어요",
-          `${fmtDate(slot.startsAt)} ${fmtTime(slot.startsAt)} ${slot.region}에서 만나요. 식당과 단체방 안내를 확인해 주세요.`,
+          cm.title,
+          cm.body,
           `/tables/${table.id}`,
           `confirmed:${appId}`,
         );
@@ -208,6 +211,15 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
     }
 
     // 5. 실패자: 대체 일정·이용권 보관·환불 선택으로 넘긴다 (MAT-11, STA-04)
+    // 알림에 바로 옮길 수 있는 다른 모집 일정을 함께 적는다 (14장 매칭 실패 알림)
+    const { data: openRounds } = await db().from("rounds").select("title,slots(starts_at,region)").eq("status", "open").neq("id", roundId).order("match_at").limit(2);
+    const alt = (openRounds ?? [])
+      .map((r) => {
+        const days = [...new Set((r.slots ?? []).map((x: { starts_at: string }) => fmtDate(x.starts_at)))].join("·");
+        const regions = [...new Set((r.slots ?? []).map((x: { region: string }) => x.region))].join("·");
+        return `${r.title}(${days}, ${regions})`;
+      })
+      .join(", ");
     for (const [appId, o] of Object.entries(result.outcomes)) {
       if (o.status !== "ALTERNATIVE_OFFERED") continue;
       const c = byApp.get(appId)!;
@@ -217,7 +229,8 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
         .eq("id", appId);
       ev(appId, "match_status", "MATCHING", "ALTERNATIVE_OFFERED", o.message);
       ev(appId, "payment_status", "PAID", "REFUND_AVAILABLE", "매칭 실패로 환불 선택 가능");
-      nt(c.userId, "alternative", "이번에는 맞는 테이블이 없었어요", `${o.message} 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요.`, `/applications/${appId}/resolve`, `alternative:${appId}`);
+      const am = render("alternative", { reason: o.message, alternatives: alt ? `옮길 수 있는 일정: ${alt}. ` : "" }, tpl);
+      nt(c.userId, "alternative", am.title, am.body, `/applications/${appId}/resolve`, `alternative:${appId}`);
     }
     if (events.length) await db().from("status_events").insert(events);
     if (notes.length) {
@@ -225,7 +238,7 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
       await pushNotifications((sent ?? []).map((n) => n.id)).catch(() => null);
     }
 
-    const summary = { ...result.summary, exceptions: exceptions.length, log: result.log };
+    const summary = { ...result.summary, exceptions: exceptions.length, log: result.log, criteria: settings };
     await db().from("match_runs").update({ status: "done", candidate_count: candidates.length, summary, finished_at: new Date().toISOString() }).eq("id", run.id);
     await db().from("rounds").update({ status: "matched" }).eq("id", roundId);
 

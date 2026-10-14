@@ -14,17 +14,29 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
   const round = rounds?.find((x) => x.id === r) ?? rounds?.[0];
   let q = db()
     .from("applications")
-    .select("id,payment_status,match_status,attendance_status,realloc_count,submitted_at,resolution,application_status,users(name,login_id,account_status,profiles(birth_year,gender,mbti,job)),payments(amount,status),application_slots(slots(region))")
+    .select("id,user_id,payment_status,match_status,attendance_status,realloc_count,submitted_at,resolution,application_status,users(name,login_id,account_status,profiles(birth_year,gender,mbti,job)),payments(amount,status),application_slots(slots(region))")
     .eq("round_id", round?.id ?? "")
     .order("submitted_at", { ascending: false });
   if (s) q = q.eq("match_status", s);
   const { data } = await q;
   let rows = (data ?? []) as unknown as {
-    id: string; payment_status: string; match_status: string; attendance_status: string | null; realloc_count: number; submitted_at: string; resolution: string | null; application_status: string;
+    id: string; user_id: string; payment_status: string; match_status: string; attendance_status: string | null; realloc_count: number; submitted_at: string; resolution: string | null; application_status: string;
     users: { name: string; login_id: string; account_status: string; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null };
     payments: { amount: number; status: string } | null; application_slots: { slots: { region: string } }[];
   }[];
   if (query) rows = rows.filter((a) => a.users.name.includes(query) || a.users.login_id.includes(query));
+  // 이전 참석·신고 이력 (11장 신청자 목록)
+  const uids = rows.map((a) => a.user_id);
+  const [{ data: att }, { data: reps }] = uids.length
+    ? await Promise.all([
+        db().from("applications").select("user_id").in("user_id", uids).eq("attendance_status", "ATTENDED").neq("round_id", round?.id ?? ""),
+        db().from("safety_reports").select("reported_id").in("reported_id", uids),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const attN = new Map<string, number>();
+  for (const x of att ?? []) attN.set(x.user_id, (attN.get(x.user_id) ?? 0) + 1);
+  const repN = new Map<string, number>();
+  for (const x of reps ?? []) repN.set(x.reported_id, (repN.get(x.reported_id) ?? 0) + 1);
 
   return (
     <div>
@@ -47,9 +59,9 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
 
       <p className="mt-4 text-[13px] text-muted">{rows.length}명</p>
       <div className="mt-2 overflow-x-auto rounded-2xl bg-card">
-        <table className="w-full min-w-[880px] text-[14px]">
+        <table className="w-full min-w-[1040px] text-[14px]">
           <thead className="border-b border-line">
-            <tr>{["이름", "프로필", "희망 동네", "결제", "매칭", "참석", "신청 시각"].map((h) => <th key={h} className={th}>{h}</th>)}</tr>
+            <tr>{["이름", "프로필", "희망 동네", "결제", "매칭", "참석", "이전 참석", "받은 신고", "신청 시각"].map((h) => <th key={h} className={th}>{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-line">
             {rows.map((a) => {
@@ -69,6 +81,8 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
                     {a.resolution && <span className="ml-1.5 text-[12px] text-muted">{RESOLUTION[a.resolution] ?? a.resolution}</span>}
                   </td>
                   <td className={td}>{a.attendance_status ? <Badge v={label(ATTEND, a.attendance_status)} /> : <span className="text-muted">-</span>}</td>
+                  <td className={`${td} tabular-nums`}>{attN.get(a.user_id) ? `${attN.get(a.user_id)}번` : <span className="text-muted">처음</span>}</td>
+                  <td className={td}>{repN.get(a.user_id) ? <Badge v={[`${repN.get(a.user_id)}건`, "danger"]} /> : <span className="text-muted">-</span>}</td>
                   <td className={`${td} text-muted`}>{a.submitted_at ? fmtDateTime(a.submitted_at) : "-"}</td>
                 </tr>
               );

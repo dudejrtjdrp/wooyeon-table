@@ -56,7 +56,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export function AuthChooser({ next = "/", error }: { next?: string; error?: string }) {
+export function AuthChooser({ next = "/", error, notice }: { next?: string; error?: string; notice?: string }) {
   const on = enabledProviders();
   const q = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
   const btn = "flex h-[54px] w-full items-center justify-center gap-2.5 rounded-2xl text-[16px] font-semibold transition active:scale-[.985]";
@@ -73,6 +73,7 @@ export function AuthChooser({ next = "/", error }: { next?: string; error?: stri
       </div>
 
       <div className="space-y-3 pb-6 pt-8">
+        {notice && <p className="rounded-2xl bg-leaf/10 px-4 py-3 text-center text-[14px] font-medium text-leaf">{notice}</p>}
         <ErrorText msg={error} />
         <a href={`/api/auth/kakao${q}`} className={`${btn} bg-[#FEE500] text-[#191919]`}>
           <KakaoIcon />

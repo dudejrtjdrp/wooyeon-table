@@ -6,6 +6,7 @@ import { ConfirmSheet, List, Row, SectionTitle, TabScreen, Toast } from "@/compo
 import { requireMe } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { logout } from "../login/actions";
+import { withdraw } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,8 @@ const MenuRow = ({ href, icon, label, right }: { href: string; icon: ReactNode; 
   </Row>
 );
 
-export default async function Me({ searchParams }: { searchParams: Promise<{ done?: string; m?: string }> }) {
-  const { done, m } = await searchParams;
+export default async function Me({ searchParams }: { searchParams: Promise<{ done?: string; m?: string; e?: string }> }) {
+  const { done, m, e } = await searchParams;
   const me = await requireMe();
   const [{ data: ids }, { data: passes }, { count: attended }] = await Promise.all([
     db().from("user_identities").select("provider").eq("user_id", me.id),
@@ -34,6 +35,7 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
   return (
     <TabScreen title="내 정보">
       <Toast msg={done === "feedback" ? "후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요" : m} />
+      <Toast msg={e} tone="danger" />
       <Link href="/onboarding?next=/me" className="mt-2 flex items-center gap-4 rounded-3xl bg-card p-5">
         {me.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -92,7 +94,17 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
           tone="accent"
         />
       </div>
-      <p className="mt-8 text-center text-[12px] text-muted">우연한 식탁 1.0</p>
+      <div className="mt-6 text-center">
+        <ConfirmSheet
+          trigger={<button className="text-[13px] text-muted underline underline-offset-4">회원 탈퇴</button>}
+          title="정말 탈퇴할까요?"
+          body={<>이름, 연락처, 프로필과 매칭 정보는 바로 지워져요. 결제 기록은 법에 따라 5년, 신고 기록은 1년 동안 이름 없이 보관해요. 남은 이용권은 사라져요.</>}
+          confirmLabel="탈퇴하기"
+          action={withdraw}
+          hidden={{}}
+        />
+      </div>
+      <p className="mt-6 text-center text-[12px] text-muted">우연한 식탁 1.0</p>
     </TabScreen>
   );
 }

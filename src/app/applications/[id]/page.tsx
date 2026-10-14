@@ -7,20 +7,23 @@ import { now } from "@/lib/clock";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
-import { cancelApplication } from "./actions";
+import { cancelRule } from "@/lib/attendance";
+import { REFUND_POLICY } from "@/lib/constants";
+import { Toast } from "@/components/ui";
+import { cancelApplication, cancelAttendanceAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 type Slot = { id: string; region: string; starts_at: string };
 
-export default async function ApplicationDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string }> }) {
+export default async function ApplicationDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string; m?: string }> }) {
   const me = await requireProfile();
   const { id } = await params;
-  const { e } = await searchParams;
+  const { e, m } = await searchParams;
   const { data } = await db()
     .from("applications")
     .select(
-      "id,user_id,application_status,payment_status,match_status,attendance_status,match_reason,realloc_count,table_id,submitted_at," +
+      "id,user_id,application_status,payment_status,match_status,attendance_status,match_reason,realloc_count,table_id,submitted_at,dining_tables(slots(starts_at))," +
         "rounds(id,title,match_at,apply_deadline),application_slots(slots(id,region,starts_at))",
     )
     .eq("id", id)
@@ -28,6 +31,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const app = data as unknown as {
     id: string; user_id: string; application_status: string; payment_status: string; match_status: string;
     attendance_status: string | null; match_reason: string | null; realloc_count: number; table_id: string | null;
+    dining_tables: { slots: { starts_at: string } } | null;
     rounds: { id: string; title: string; match_at: string; apply_deadline: string };
     application_slots: { slots: Slot }[];
   } | null;
@@ -49,6 +53,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
 
   return (
     <Screen title="내 신청" back="/my-tables">
+      <Toast msg={m} />
       <section className="mt-2 rounded-3xl bg-card p-6">
         <div className="flex items-start justify-between">
           <TableMark size={44} filled={matched ? 6 : paid ? 2 : 1} glow={matched} />
@@ -90,6 +95,31 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         )}
       </section>
 
+      {matched && app.attendance_status === "SCHEDULED" && app.dining_tables && (() => {
+        const start = app.dining_tables.slots.starts_at;
+        const rule = cancelRule(start, t);
+        const remind = new Date(new Date(start).getTime() - 24 * 3600_000);
+        return (
+          <>
+            <p className="mt-4 rounded-2xl bg-accent-soft px-4 py-3 text-[14px] text-accent">
+              다음 안내: {fmtDateTime(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
+            </p>
+            {rule.kind !== "blocked" && (
+              <div className="mt-6 text-center">
+                <ConfirmSheet
+                  trigger={<button className="text-[14px] font-medium text-muted underline underline-offset-4">참석 취소하기</button>}
+                  title="참석을 취소할까요?"
+                  body={<>{rule.message}. 단체방의 다른 분들께는 이름 없이 알려드려요.</>}
+                  confirmLabel={rule.kind === "early" ? "취소하고 환불받기" : "환불 없이 취소하기"}
+                  action={cancelAttendanceAction}
+                  hidden={{ app_id: app.id }}
+                />
+              </div>
+            )}
+          </>
+        );
+      })()}
+
       <SectionTitle>고른 일정</SectionTitle>
       <List>
         {slots.map((s) => (
@@ -112,6 +142,13 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         </div>
       )}
       <ErrorText msg={e} />
+
+      <SectionTitle>환불 규정</SectionTitle>
+      <ul className="space-y-1.5 rounded-3xl bg-card p-5 text-[13px] leading-relaxed text-muted">
+        {REFUND_POLICY.map((r) => (
+          <li key={r} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-muted" />{r}</li>
+        ))}
+      </ul>
 
       <p className="mt-8 text-center text-[13px] text-muted">
         <Link href="/rounds" className="underline underline-offset-4">다른 일정 보기</Link>

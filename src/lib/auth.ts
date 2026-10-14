@@ -21,6 +21,7 @@ export async function getMe(): Promise<Me | null> {
     .from("users")
     .select("id,name,role,login_id,phone,account_status,email,avatar_url,profiles(user_id)")
     .eq("id", s.uid)
+    .is("deleted_at", null)
     .maybeSingle();
   if (!data) return null;
   const prof = (data as { profiles: unknown }).profiles;

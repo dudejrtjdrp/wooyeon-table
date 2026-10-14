@@ -60,6 +60,7 @@ export async function saveProfile(form: FormData) {
     price_range: price,
     food_restrictions: food || null,
     agreed_at: new Date().toISOString(),
+    marketing_opt_in: form.get("agree_marketing") === "on",
     updated_at: new Date().toISOString(),
   });
   if (error) back("저장하지 못했어요. 다시 시도해 주세요");

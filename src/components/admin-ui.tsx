@@ -39,3 +39,26 @@ export const btnLight = `${btn} border border-line bg-card text-ink hover:bg-pap
 export const btnDanger = `${btn} bg-danger text-white`;
 export const th = "px-4 py-3 text-left text-[12px] font-semibold text-muted";
 export const td = "px-4 py-3";
+
+/** 회차 고르기 (주소의 r 값으로 넘긴다) */
+export function RoundPicker({ rounds, current, extra }: { rounds: { id: string; title: string }[]; current?: string; extra?: React.ReactNode }) {
+  return (
+    <form className="flex flex-wrap items-center gap-2">
+      <select name="r" defaultValue={current} className={ctl}>
+        {rounds.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+      </select>
+      {extra}
+      <button className={btnLight}>보기</button>
+    </form>
+  );
+}
+
+export function Stat({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: "danger" | "leaf" }) {
+  return (
+    <div className="rounded-2xl bg-card p-4">
+      <p className="text-[13px] text-muted">{label}</p>
+      <p className={`mt-1 text-[26px] font-bold tabular-nums tracking-[-0.02em] ${tone === "danger" ? "text-danger" : tone === "leaf" ? "text-leaf" : ""}`}>{value}</p>
+      {sub && <p className="text-[12px] text-muted">{sub}</p>}
+    </div>
+  );
+}

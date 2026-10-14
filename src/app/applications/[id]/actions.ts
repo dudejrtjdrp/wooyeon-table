@@ -5,6 +5,8 @@ import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
+import { cancelAttendance } from "@/lib/attendance";
+import { releaseUse } from "@/lib/billing";
 import { db } from "@/lib/supabase";
 
 /**
@@ -39,19 +41,17 @@ export async function cancelApplication(form: FormData) {
   if (!up?.length) back("이미 처리된 신청이에요. 화면을 새로 고쳐 주세요");
   await logStatus({ entityType: "application", entityId: appId, field: "application_status", from: "SUBMITTED", to: "CANCELED", actor: `user:${me.id}`, reason: "매칭 전 취소" });
 
-  let body = "결제 전이라 따로 환불할 금액은 없어요.";
-  if (app.payment_status === "PAID" && app.payments) {
-    if (app.payments.pass_id) {
-      const { data: pass } = await db().from("passes").select("remaining").eq("id", app.payments.pass_id).single();
-      await db().from("passes").update({ remaining: (pass?.remaining ?? 0) + 1 }).eq("id", app.payments.pass_id);
-      body = "쓴 이용권 1회를 돌려드렸어요. 다음 일정에 그대로 쓸 수 있어요.";
-    } else {
-      await db().from("payments").update({ status: "REFUNDED", refunded_at: new Date().toISOString() }).eq("id", app.payments.id).eq("status", "PAID");
-      await db().from("applications").update({ payment_status: "REFUNDED" }).eq("id", appId);
-      await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "PAID", to: "REFUNDED", actor: "system", reason: "매칭 전 취소로 전액 환불(모의)" });
-      body = "결제하신 수단으로 전액 돌려드렸어요.";
-    }
-  }
+  await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
+  const body = await releaseUse(appId, `user:${me.id}`, "매칭 전 취소");
   await notify({ userId: me.id, template: "canceled", title: "신청을 취소했어요", body: `${app.rounds.title} 신청을 취소했어요. ${body}`, link: "/rounds", dedupeKey: `canceled:${appId}` });
   redirect(`/applications/${appId}`);
+}
+
+/** 확정된 모임 참석 취소 (2일 전까지 전액 환불, 그 뒤는 환불 없음, 당일 불가) */
+export async function cancelAttendanceAction(form: FormData) {
+  const me = await requireProfile();
+  const appId = String(form.get("app_id"));
+  const back = String(form.get("back") ?? `/applications/${appId}`);
+  const r = await cancelAttendance(appId, me.id);
+  redirect(r.ok ? `/applications/${appId}?m=${encodeURIComponent("참석을 취소했어요")}` : `${back}?e=${encodeURIComponent(r.message)}`);
 }

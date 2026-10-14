@@ -5,17 +5,19 @@ import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
+import { won } from "@/lib/constants";
+import { fmtDateTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
 
 async function loadOwn(appId: string, userId: string) {
   const { data } = await db()
     .from("applications")
-    .select("id,user_id,match_status,payment_status,payment_id,round_id,payments(id,pass_id,status)")
+    .select("id,user_id,match_status,payment_status,payment_id,round_id,payments(id,pass_id,status,amount)")
     .eq("id", appId)
     .maybeSingle();
   const app = data as unknown as {
     id: string; user_id: string; match_status: string; payment_status: string; payment_id: string; round_id: string;
-    payments: { id: string; pass_id: string | null; status: string };
+    payments: { id: string; pass_id: string | null; status: string; amount: number };
   } | null;
   if (!app || app.user_id !== userId) redirect("/");
   if (app.match_status !== "ALTERNATIVE_OFFERED") redirect(`/applications/${appId}`);
@@ -30,11 +32,11 @@ export async function transfer(form: FormData) {
   const app = await loadOwn(appId, me.id);
   if (!slotIds.length) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("옮길 일정을 골라 주세요")}`);
 
-  const { data: slots } = await db().from("slots").select("id,round_id,rounds(status,apply_deadline,title)").in("id", slotIds);
+  const { data: slots } = await db().from("slots").select("id,round_id,rounds(status,apply_deadline,title,match_at)").in("id", slotIds);
   const roundIds = [...new Set((slots ?? []).map((s) => s.round_id))];
   if (roundIds.length !== 1) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("한 번에 한 차수의 일정만 고를 수 있어요")}`);
   const target = roundIds[0];
-  const r = (slots![0] as unknown as { rounds: { status: string; apply_deadline: string; title: string } }).rounds;
+  const r = (slots![0] as unknown as { rounds: { status: string; apply_deadline: string; title: string; match_at: string } }).rounds;
   if (r.status !== "open" || new Date(r.apply_deadline) <= (await now())) {
     redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("이미 마감된 일정이에요")}`);
   }
@@ -67,7 +69,7 @@ export async function transfer(form: FormData) {
   await db().from("application_slots").insert(slotIds.map((slot_id) => ({ application_id: next!.id, slot_id })));
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "TRANSFERRED", actor: `user:${me.id}`, reason: `${r.title}로 이동` });
   await logStatus({ entityType: "application", entityId: next!.id, field: "match_status", to: "WAITING", actor: `user:${me.id}`, reason: "이전 신청에서 일정 이동, 결제 유지" });
-  await notify({ userId: me.id, template: "transferred", title: "일정을 옮겼어요", body: `${r.title}로 옮겼어요. 결제는 그대로 유지돼요.`, link: `/applications/${next!.id}`, dedupeKey: `transferred:${appId}` });
+  await notify({ userId: me.id, template: "transferred", title: "일정을 옮겼어요", body: `${r.title}로 옮겼어요. 결제는 그대로 유지되고, ${fmtDateTime(r.match_at)}에 자동으로 테이블을 꾸려요.`, link: `/applications/${next!.id}`, dedupeKey: `transferred:${appId}` });
   redirect(`/applications/${next!.id}`);
 }
 
@@ -109,7 +111,7 @@ export async function refund(form: FormData) {
     await db().from("payments").update({ status: "REFUNDED", refunded_at: new Date().toISOString() }).eq("id", app.payment_id);
     await db().from("applications").update({ payment_status: "REFUNDED" }).eq("id", appId);
     await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "REFUND_PROCESSING", to: "REFUNDED", actor: "system", reason: "원결제수단 자동 환불(모의)" });
-    await notify({ userId: me.id, template: "refunded", title: "환불이 끝났어요", body: "결제하신 수단으로 돌려드렸어요. 카드사에 따라 며칠 걸릴 수 있어요.", link: `/applications/${appId}`, dedupeKey: `refunded:${appId}` });
+    await notify({ userId: me.id, template: "refunded", title: "환불이 끝났어요", body: `${won(app.payments.amount)}을 결제하신 수단으로 돌려드렸어요. 카드사에 따라 며칠 걸릴 수 있어요.`, link: `/applications/${appId}`, dedupeKey: `refunded:${appId}` });
   }
   redirect(`/applications/${appId}`);
 }

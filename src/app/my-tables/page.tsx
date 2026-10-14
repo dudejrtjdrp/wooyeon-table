@@ -32,7 +32,7 @@ export default async function MyTables() {
   const tables = apps.filter((a) => a.match_status === "CONFIRMED" && a.dining_tables?.slots);
   const upcoming = tables.filter((a) => new Date(a.dining_tables!.slots!.starts_at).getTime() + 3 * 3600_000 > t.getTime() && !a.attendance_status?.match(/ATTENDED|NO_SHOW|CANCELED/));
   const past = tables.filter((a) => !upcoming.includes(a));
-  const pending = apps.filter((a) => !tables.includes(a) && a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status));
+  const pending = apps.filter((a) => !tables.includes(a) && a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED"));
   const closed = apps.filter((a) => !tables.includes(a) && !pending.includes(a));
 
   if (!apps.length) {

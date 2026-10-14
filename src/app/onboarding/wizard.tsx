@@ -9,7 +9,7 @@ import { PassButton } from "./pass-button";
 
 type Profile = {
   birth_year?: number | null; gender?: string | null; job?: string | null; mbti?: string | null;
-  interests?: string[]; my_traits?: string[]; wanted_traits?: string[]; price_range?: string | null; food_restrictions?: string | null; agreed_at?: string | null;
+  interests?: string[]; my_traits?: string[]; wanted_traits?: string[]; price_range?: string | null; food_restrictions?: string | null; agreed_at?: string | null; marketing_opt_in?: boolean | null;
 } | null;
 
 type Values = {
@@ -117,7 +117,7 @@ export function OnboardingWizard({
     food: p?.food_restrictions ?? "",
     agree_privacy: Boolean(p?.agreed_at),
     agree_policy: Boolean(p?.agreed_at),
-    agree_marketing: false,
+    agree_marketing: Boolean(p?.marketing_opt_in),
   };
   const [v, setV] = useState<Values>(initial);
   const [step, setStep] = useState(0);

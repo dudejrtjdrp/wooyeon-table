@@ -50,6 +50,8 @@ export async function pay(form: FormData) {
       .single();
     await db().from("payments").update({ pass_id: pass!.id }).eq("id", app.payment_id);
     await db().from("applications").update({ payment_status: "PAID" }).eq("id", appId);
+    // 결제했으니 예약해 둔 결제 독촉 알림은 보내지 않는다
+    await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
     await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: app.payment_status, to: "PAID", actor: `user:${me.id}`, reason: "모의 결제 승인" });
     await notify({
       userId: me.id,
