@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { pushToUsers } from "@/lib/push";
 import { redirect } from "next/navigation";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
@@ -27,6 +29,11 @@ export async function sendMessage(form: FormData) {
   if (!(await membership(tableId, me.id))) redirect("/");
   const roomId = await ensureRoom(tableId);
   await db().from("chat_messages").insert({ room_id: roomId, sender_id: me.id, kind: "user", body });
+  // 같은 테이블의 다른 사람들에게 푸시 (화면 응답 뒤에 보낸다)
+  after(async () => {
+    const { data: others } = await db().from("applications").select("user_id").eq("table_id", tableId).eq("match_status", "CONFIRMED").neq("user_id", me.id);
+    await pushToUsers((others ?? []).map((o) => o.user_id), { title: `${me.name}님의 새 메시지`, body: body.slice(0, 80), url: `/tables/${tableId}`, tag: `chat-${tableId}` }).catch(() => null);
+  });
   revalidatePath(`/tables/${tableId}`);
 }
 

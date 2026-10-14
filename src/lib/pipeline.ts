@@ -3,6 +3,7 @@ import { REFUND_POLICY } from "./constants";
 import { logStatus } from "./events";
 import { fmtDate, fmtTime } from "./format";
 import { notify } from "./notify";
+import { pushNotifications } from "./push";
 import { db } from "./supabase";
 
 type TableRow = {
@@ -184,8 +185,10 @@ export async function tick() {
 
   // 2. 예약된 알림 발송 (INF-07, INF-08)
   const { data: pending } = await db().from("notifications").select("id,attempts").eq("status", "pending").lte("scheduled_at", iso).limit(200);
+  const sentNow: string[] = [];
   for (const n of pending ?? []) {
-    const { error } = await db().from("notifications").update({ status: "sent", sent_at: iso }).eq("id", n.id).eq("status", "pending");
+    const { data: up, error } = await db().from("notifications").update({ status: "sent", sent_at: iso }).eq("id", n.id).eq("status", "pending").select("id");
+    if (up?.length) sentNow.push(n.id);
     if (error) {
       const attempts = (n.attempts ?? 0) + 1;
       await db().from("notifications").update({ attempts, last_error: error.message, status: attempts >= 3 ? "failed" : "pending" }).eq("id", n.id);
@@ -197,6 +200,7 @@ export async function tick() {
       }
     }
   }
+  await pushNotifications(sentNow).catch(() => null);
   if (pending?.length) done.push(`예약 알림 ${pending.length}건 발송`);
 
   // 3. 테이블 일정에 따른 단체방 게시와 상태 전환

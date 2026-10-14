@@ -1,6 +1,7 @@
 import { logStatus } from "../events";
 import { fmtDate, fmtTime } from "../format";
 import { afterConfirm } from "../pipeline";
+import { pushNotifications } from "../push";
 import { db } from "../supabase";
 import { runMatching } from "./engine";
 import {
@@ -219,7 +220,10 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
       nt(c.userId, "alternative", "이번에는 맞는 테이블이 없었어요", `${o.message} 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요.`, `/applications/${appId}/resolve`, `alternative:${appId}`);
     }
     if (events.length) await db().from("status_events").insert(events);
-    if (notes.length) await db().from("notifications").upsert(notes, { onConflict: "dedupe_key", ignoreDuplicates: true });
+    if (notes.length) {
+      const { data: sent } = await db().from("notifications").upsert(notes, { onConflict: "dedupe_key", ignoreDuplicates: true }).select("id");
+      await pushNotifications((sent ?? []).map((n) => n.id)).catch(() => null);
+    }
 
     const summary = { ...result.summary, exceptions: exceptions.length, log: result.log };
     await db().from("match_runs").update({ status: "done", candidate_count: candidates.length, summary, finished_at: new Date().toISOString() }).eq("id", run.id);

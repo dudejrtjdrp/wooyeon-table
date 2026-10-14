@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { after } from "next/server";
+import { PushToggle } from "@/components/push-toggle";
 import { AuthChooser } from "@/components/auth-chooser";
 import { TableMark, Wordmark } from "@/components/brand";
 import { LinkButton, List, Pill, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
@@ -74,6 +75,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
       ) : active && !finished ? (
         <StatusHero a={active} />
       ) : null}
+
+      {me.hasProfile && active && <PushToggle variant="card" />}
 
       {active && finished && (
         <Link href={`/applications/${active.id}`} className="mt-6 flex items-center justify-between rounded-3xl bg-card p-5">

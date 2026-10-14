@@ -1,6 +1,7 @@
+import { pushNotifications } from "./push";
 import { db } from "./supabase";
 
-// 앱 내 알림. 푸시는 MVP에서 앱 내 알림함과 같은 내용으로 대신한다.
+// 앱 내 알림. 바로 보내는 알림은 등록된 휴대폰으로 푸시도 함께 보낸다.
 // dedupeKey가 같으면 두 번 만들지 않는다 (중복 발송 방지)
 export async function notify(n: {
   userId: string;
@@ -22,9 +23,8 @@ export async function notify(n: {
     status: n.scheduledAt ? "pending" : "sent",
     sent_at: n.scheduledAt ? null : new Date().toISOString(),
   };
-  if (n.dedupeKey) {
-    await db().from("notifications").upsert(row, { onConflict: "dedupe_key", ignoreDuplicates: true });
-  } else {
-    await db().from("notifications").insert(row);
-  }
+  const { data } = n.dedupeKey
+    ? await db().from("notifications").upsert(row, { onConflict: "dedupe_key", ignoreDuplicates: true }).select("id")
+    : await db().from("notifications").insert(row).select("id");
+  if (!n.scheduledAt && data?.length) await pushNotifications(data.map((d) => d.id)).catch(() => null);
 }

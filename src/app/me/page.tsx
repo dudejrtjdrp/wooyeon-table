@@ -1,6 +1,7 @@
 import { ChevronRight, FileText, Headphones, LogOut, Shield, Ticket, UserRound } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { PushToggle } from "@/components/push-toggle";
 import { ConfirmSheet, List, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { db } from "@/lib/supabase";
@@ -64,6 +65,7 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
 
       <SectionTitle>계정</SectionTitle>
       <List>
+        <PushToggle />
         <MenuRow href="/onboarding?next=/me" icon={<UserRound size={20} />} label="프로필과 매칭 정보" />
         <MenuRow href="/my-tables" icon={<Ticket size={20} />} label="신청·결제 내역" />
       </List>
