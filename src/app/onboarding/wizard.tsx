@@ -76,7 +76,7 @@ function StepHero({ title, accent, sub, img }: { title: string; accent: string; 
   return (
     <div className="relative pt-5">
       {img && (
-        <div className="pointer-events-none absolute -right-5 -top-24 h-[230px] w-[58%]" style={{ maskImage: "radial-gradient(100% 90% at 80% 30%, #000 45%, transparent 75%)", WebkitMaskImage: "radial-gradient(100% 90% at 80% 30%, #000 45%, transparent 75%)" }}>
+        <div className="pointer-events-none absolute -right-5 -top-4 h-[180px] w-[50%]" style={{ maskImage: "radial-gradient(100% 90% at 80% 30%, #000 45%, transparent 75%)", WebkitMaskImage: "radial-gradient(100% 90% at 80% 30%, #000 45%, transparent 75%)" }}>
           <Image src={img.src} alt="" fill sizes="260px" priority className={img.contain ? "object-contain" : "object-cover"} />
         </div>
       )}

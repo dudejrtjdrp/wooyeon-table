@@ -35,7 +35,7 @@ export function AdminNav({ exCount, mobile }: { exCount: number; mobile?: boolea
     return (
       <nav className="flex gap-1 overflow-x-auto px-3 py-2">
         {GROUPS.flatMap((g) => g.items).map(({ href, label }) => (
-          <Link key={href} href={href} className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] ${on(href) ? "bg-white text-ink" : "text-white/70"}`}>
+          <Link key={href} href={href} className={`shrink-0 rounded-full px-3 py-1.5 text-[13px] ${on(href) ? "bg-accent-soft font-semibold text-accent" : "text-muted"}`}>
             {label}
           </Link>
         ))}
@@ -43,22 +43,22 @@ export function AdminNav({ exCount, mobile }: { exCount: number; mobile?: boolea
     );
   }
   return (
-    <nav className="mt-5 flex flex-col gap-4 overflow-y-auto">
+    <nav className="mt-7 flex flex-col gap-4 overflow-y-auto">
       {GROUPS.map((g) => (
         <div key={g.name}>
-          <p className="px-3 pb-1 text-[11px] font-semibold text-white/40">{g.name}</p>
+          <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted/80">{g.name}</p>
           <div className="flex flex-col gap-0.5">
             {g.items.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
                 aria-current={on(href) ? "page" : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2 text-[14px] transition ${on(href) ? "bg-white/12 font-semibold text-white" : "text-white/65 hover:bg-white/6 hover:text-white"}`}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition ${on(href) ? "bg-accent-soft font-semibold text-accent" : "text-ink/80 hover:bg-accent-soft/40"}`}
               >
-                <Icon size={17} strokeWidth={on(href) ? 2.3 : 1.8} />
+                <Icon size={19} strokeWidth={on(href) ? 2.2 : 1.8} />
                 <span className="flex-1">{label}</span>
                 {href === "/admin/exceptions" && exCount > 0 && (
-                  <span className="rounded-full bg-danger px-1.5 text-[11px] font-bold leading-5 text-white">{exCount}</span>
+                  <span className="min-w-[22px] rounded-full bg-danger px-1.5 text-center text-[12px] font-bold leading-[22px] text-white">{exCount}</span>
                 )}
               </Link>
             ))}

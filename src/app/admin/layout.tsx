@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { TableMark } from "@/components/brand";
+import { LogOut } from "lucide-react";
+import Image from "next/image";
+import { IMG } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDateTime } from "@/lib/format";
@@ -18,33 +20,34 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const virtual = Number(clock?.offset_seconds) !== 0;
   return (
     <div className="flex min-h-dvh bg-paper">
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col bg-ink px-3 py-5 md:flex">
-        <Link href="/admin" className="flex items-center gap-2 px-3 text-[15px] font-bold text-white">
-          <TableMark size={24} tone="white" />
-          우연한 식탁 운영
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line/70 bg-gradient-to-b from-white to-[#f3f7fd] px-4 py-6 md:flex">
+        <Link href="/admin" className="flex items-center gap-3 px-2">
+          <span className="relative size-11 overflow-hidden rounded-full ring-2 ring-white"><Image src={IMG.splashTable} alt="" fill sizes="44px" className="object-cover" /></span>
+          <span>
+            <span className="block text-[18px] font-bold tracking-[-0.02em] text-ink">우연한 식탁</span>
+            <span className="block text-[13px] text-muted">운영자</span>
+          </span>
         </Link>
         <AdminNav exCount={count ?? 0} />
-        <div className="mt-auto space-y-3 px-3">
-          <div className={`rounded-xl px-3 py-2.5 text-[12px] ${virtual ? "bg-candle/20 text-candle" : "bg-white/6 text-white/60"}`}>
+        <div className="mt-auto space-y-3 border-t border-line px-2 pt-4">
+          <div className={`rounded-xl px-3 py-2.5 text-[12px] ${virtual ? "bg-warn-soft text-warn" : "text-muted"}`}>
             <p className="font-semibold">{virtual ? "시연용 가상 시각" : "현재 시각"}</p>
             <p className="mt-0.5 tabular-nums">{fmtDateTime(t.toISOString())}</p>
           </div>
-          <div className="flex items-center justify-between text-[13px] text-white/60">
-            <span>{me.name}</span>
-            <form action={logout}><button className="hover:text-white">로그아웃</button></form>
-          </div>
-          <Link href="/guide" className="block text-[12px] text-white/40 hover:text-white/70">심사위원 안내 보기</Link>
+          <p className="px-3 text-[13px] text-muted">운영자 {me.name}</p>
+          <form action={logout} className="px-3"><button className="flex items-center gap-2 text-[14px] text-muted hover:text-ink"><LogOut size={17} />로그아웃</button></form>
+          <Link href="/guide" className="block px-3 text-[12px] text-muted/70 hover:text-ink">심사위원 안내 보기</Link>
         </div>
       </aside>
       <div className="min-w-0 flex-1">
-        <div className="sticky top-0 z-20 bg-ink md:hidden">
-          <div className="flex items-center justify-between px-4 pt-3 text-[14px] font-bold text-white">
-            <span className="flex items-center gap-2"><TableMark size={20} tone="white" />우연한 식탁 운영</span>
-            {virtual && <span className="rounded-full bg-candle/20 px-2 py-0.5 text-[11px] text-candle">가상 시각</span>}
+        <div className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur md:hidden">
+          <div className="flex items-center justify-between px-4 pt-3 text-[15px] font-bold text-ink">
+            <span>우연한 식탁 운영</span>
+            {virtual && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[11px] text-warn">가상 시각</span>}
           </div>
           <AdminNav exCount={count ?? 0} mobile />
         </div>
-        <main className="mx-auto max-w-6xl px-5 py-8 md:px-8">{children}</main>
+        <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-9">{children}</main>
       </div>
     </div>
   );

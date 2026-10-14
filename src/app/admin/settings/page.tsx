@@ -1,11 +1,13 @@
+import { Lock } from "lucide-react";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { DEFAULT_SETTINGS } from "@/lib/matching/types";
 import { db } from "@/lib/supabase";
+import { WeightsForm } from "./weights-form";
 
 export const dynamic = "force-dynamic";
 
-const LABEL: Record<string, string> = { age: "연령대", gender: "성비", mbti: "MBTI 궁합", interests: "공통 관심사", wanted: "희망 성향", fresh: "새로운 사람" };
+const LABEL: Record<string, string> = { age: "연령대", gender: "성비", mbti: "MBTI", interests: "관심사", wanted: "희망 성향", fresh: "새로운 사람" };
 
 async function save(form: FormData) {
   "use server";
@@ -24,24 +26,24 @@ export default async function Settings() {
   const min = Number(map.get("matching.min_score") ?? DEFAULT_SETTINGS.minScore);
 
   return (
-    <div className="max-w-xl">
-      <h1 className="text-[26px] font-bold tracking-[-0.02em]">매칭 기준</h1>
-      <p className="mt-1 text-[14px] text-muted">
-        필수 조건(일정, 4~6명, 나이 차 8살, 차단·신고·비선호)은 바꿀 수 없어요. 아래 가중치는 선호 점수에만 쓰여요. 다음 매칭부터 적용돼요.
-      </p>
-      <form action={save} className="mt-6 space-y-3 rounded-2xl bg-card p-5">
-        {Object.keys(DEFAULT_SETTINGS.weights).map((k) => (
-          <label key={k} className="flex items-center justify-between text-[14px]">
-            {LABEL[k]}
-            <input name={k} type="number" defaultValue={w[k]} min={0} className="w-24 rounded-lg border border-line px-3 py-1.5 text-right" />
-          </label>
-        ))}
-        <label className="flex items-center justify-between border-t border-line pt-3 text-[14px] font-medium">
-          자동 확정 최소 점수 (0~100)
-          <input name="min_score" type="number" defaultValue={min} min={0} max={100} className="w-24 rounded-lg border border-line px-3 py-1.5 text-right" />
-        </label>
-        <button className="h-11 w-full rounded-xl bg-accent text-[14px] font-semibold text-white">저장</button>
-      </form>
+    <div>
+      <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">매칭 기준</h1>
+      <p className="mt-1.5 text-[15px] text-muted">다음 매칭에 적용할 선호 점수를 조정해요.</p>
+      <section className="mt-6 flex flex-wrap items-center gap-4 rounded-[20px] bg-accent-soft/60 px-6 py-5">
+        <Lock size={30} className="text-accent" />
+        <div className="flex-1">
+          <p className="text-[19px] font-bold text-ink">바꿀 수 없는 필수 조건</p>
+          <p className="mt-0.5 text-[14px] text-muted">모든 매칭에 공통으로 적용되는 기본 조건이에요. 자동 재배치에서도 완화하지 않아요.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {["같은 일정", "4~6명", "나이 차 8살 이내", "차단·신고·비선호 제외"].map((x) => (
+            <span key={x} className="rounded-full bg-card px-4 py-2 text-[14px] font-semibold text-accent">{x}</span>
+          ))}
+        </div>
+      </section>
+      <div className="mt-4">
+        <WeightsForm keys={Object.keys(DEFAULT_SETTINGS.weights)} labels={LABEL} initial={w} min={min} action={save} />
+      </div>
     </div>
   );
 }

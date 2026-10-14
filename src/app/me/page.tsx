@@ -47,13 +47,13 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
               {me.name.slice(-2, -1) || me.name.slice(0, 1)}
             </span>
           )}
-          <div className="mt-6 min-w-0 flex-1">
+          <div className="mt-9 min-w-0 flex-1">
             <p className="text-[21px] font-bold tracking-[-0.02em] text-ink">{me.name}</p>
             <p className="mt-0.5 truncate text-[14px] text-muted">
               {via.length ? `${via.join(", ")}로 로그인` : me.phone ? me.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3") : me.email ?? ""}
             </p>
           </div>
-          <ChevronRight size={22} className="mt-6 text-muted" />
+          <ChevronRight size={22} className="mt-9 text-muted" />
         </Link>
         <div className="mx-5 mt-5 grid grid-cols-2 border-t border-line py-4">
           <Link href="/my-tables" className="text-center">
