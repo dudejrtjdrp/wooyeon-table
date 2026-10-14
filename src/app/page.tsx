@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { after } from "next/server";
 import { AuthChooser } from "@/components/auth-chooser";
 import { TableMark, Wordmark } from "@/components/brand";
 import { LinkButton, List, Pill, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
@@ -25,7 +26,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   if (!me) return <AuthChooser />;
   const { m } = await searchParams;
   // 마감·리마인드·모임 시작 같은 시간 이벤트를 화면을 열 때도 처리한다 (크론 보조)
-  await tick().catch(() => null);
+  // 밀린 일(마감·리마인드·종료)은 화면을 먼저 보낸 뒤 처리한다
+  after(() => tick().catch(() => null));
   const t = await now();
 
   const { data: apps } = await db()

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDateTime } from "@/lib/format";
@@ -32,7 +33,8 @@ function Stat({ label, value, sub, tone }: { label: string; value: string | numb
 
 export default async function AdminHome({ searchParams }: { searchParams: Promise<{ r?: string; m?: string }> }) {
   await requireAdmin();
-  await tick().catch(() => null);
+  // 밀린 일(마감·리마인드·종료)은 화면을 먼저 보낸 뒤 처리한다
+  after(() => tick().catch(() => null));
   const { r, m } = await searchParams;
   const t = await now();
   const { data: clock } = await db().from("app_clock").select("offset_seconds").eq("id", 1).single();

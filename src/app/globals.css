@@ -54,3 +54,19 @@ html { -webkit-tap-highlight-color: transparent; }
 .seat-in { transform-box: fill-box; transform-origin: center; opacity: 0; animation: seat-in .38s cubic-bezier(.3,1.4,.5,1) forwards; }
 .glow-in { opacity: 0; animation: glow-in .8s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) { .seat-in, .glow-in { animation: none; opacity: 1; } }
+
+/* 첫 장면 */
+html[data-splash="off"] #splash { display: none; }
+.splash { animation: splash-out .32s ease-in 1.6s forwards; }
+.splash-ring { stroke-dasharray: 1; stroke-dashoffset: 1; transform: rotate(-90deg); transform-origin: center; animation: ring-draw .5s cubic-bezier(.6,0,.2,1) .05s forwards; }
+.splash-seat { transform-box: fill-box; transform-origin: center; opacity: 0; animation: seat-in .34s cubic-bezier(.3,1.5,.5,1) forwards; }
+.splash-glow { opacity: 0; transform-box: fill-box; transform-origin: center; animation: glow-pop .45s ease-out 1s forwards; }
+.splash-name { opacity: 0; transform: translateY(8px); animation: name-in .4s ease-out 1.05s forwards; }
+@keyframes ring-draw { to { stroke-dashoffset: 0; } }
+@keyframes glow-pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes name-in { to { opacity: 1; transform: none; } }
+@keyframes splash-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .splash { animation: splash-out .2s ease-in .5s forwards; }
+  .splash-ring, .splash-seat, .splash-glow, .splash-name { animation: none; opacity: 1; stroke-dashoffset: 0; transform: none; }
+}
