@@ -10,7 +10,7 @@ export function Splash() {
     <>
       <script
         dangerouslySetInnerHTML={{
-          __html: `try{var p=location.pathname;if(/^\\/(admin|guide|api|verify)/.test(p)||sessionStorage.getItem('wt_splash')){document.documentElement.dataset.splash='off'}else{sessionStorage.setItem('wt_splash','1')}}catch(e){}`,
+          __html: `try{var p=location.pathname;if(/^\\/(admin|guide|api|verify|offline)/.test(p)||sessionStorage.getItem('wt_splash')){document.documentElement.dataset.splash='off'}else{sessionStorage.setItem('wt_splash','1')}}catch(e){}`,
         }}
       />
       <div id="splash" aria-hidden="true" className="splash fixed inset-0 z-[100] flex flex-col items-center justify-center bg-accent">

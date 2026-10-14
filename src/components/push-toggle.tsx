@@ -1,6 +1,7 @@
 "use client";
 
 import { BellRing } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type State = "loading" | "unsupported" | "needs-install" | "denied" | "off" | "on";
@@ -52,6 +53,17 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
     }
   };
 
+  const [tested, setTested] = useState<string | null>(null);
+  const test = async () => {
+    setTested("보내는 중");
+    try {
+      const { sent } = await (await fetch("/api/push/test", { method: "POST" })).json();
+      setTested(sent ? "보냈어요. 잠시 뒤 알림을 확인해 보세요" : "이 기기로 보내지 못했어요. 알림을 껐다 다시 켜 주세요");
+    } catch {
+      setTested("보내지 못했어요");
+    }
+  };
+
   const turnOff = async () => {
     setBusy(true);
     const reg = await registration();
@@ -67,14 +79,14 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
   const desc: Record<State, string> = {
     loading: "",
     unsupported: "이 브라우저에서는 알림을 받을 수 없어요. 알림함에서 확인해 주세요.",
-    "needs-install": "아이폰은 공유 버튼 → '홈 화면에 추가'로 앱을 설치한 뒤 켤 수 있어요.",
+    "needs-install": "아이폰은 홈 화면에 앱을 추가한 뒤 알림을 켤 수 있어요.",
     denied: "알림이 꺼져 있어요. 휴대폰 설정에서 우연한 식탁 알림을 허용해 주세요.",
     off: "매칭 결과, 모임 하루 전 안내, 단체방 새 메시지를 휴대폰으로 받아요.",
     on: "매칭 결과와 모임 안내를 휴대폰으로 보내드려요.",
   };
 
   if (variant === "card") {
-    if (state !== "off" && state !== "needs-install") return null;
+    if (state !== "off") return null; // 설치 전(아이폰)은 설치 카드가 대신 안내한다
     return (
       <div className="mt-4 flex items-start gap-3 rounded-3xl bg-card p-5">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><BellRing size={20} /></span>
@@ -96,6 +108,10 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
       <div className="min-w-0">
         <p className="flex items-center gap-3 text-[16px]"><BellRing size={20} className="text-muted" />휴대폰 알림</p>
         {state !== "loading" && <p className="mt-1 pl-8 text-[13px] leading-relaxed text-muted">{desc[state]}</p>}
+        {state === "needs-install" && <Link href="/install" className="mt-1.5 inline-block pl-8 text-[13px] font-semibold text-accent">설치 방법 보기</Link>}
+        {state === "on" && (
+          <button onClick={test} className="mt-1.5 pl-8 text-left text-[13px] font-semibold text-accent">{tested ?? "시험 알림 보내기"}</button>
+        )}
       </div>
       {(state === "on" || state === "off") && (
         <button

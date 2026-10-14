@@ -15,6 +15,8 @@ export async function POST(req: NextRequest) {
   if (!s) return NextResponse.json({ error: "로그인이 필요해요" }, { status: 401 });
   const sub = await req.json().catch(() => null);
   if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  // 브라우저가 구독을 바꿨으면 예전 구독은 지운다
+  if (typeof sub.replaces === "string" && sub.replaces !== sub.endpoint) await db().from("push_subscriptions").delete().eq("endpoint", sub.replaces).eq("user_id", s.uid);
   await db().from("push_subscriptions").upsert({
     endpoint: sub.endpoint,
     user_id: s.uid,
