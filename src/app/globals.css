@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f4efe6;      /* 식탁보 */
+  --ink: #1f1b16;        /* 본문 */
+  --muted: #7a7064;      /* 보조 글자 */
+  --line: #e2d9cb;       /* 구분선 */
+  --accent: #c8553d;     /* 토마토 */
+  --accent-ink: #ffffff;
+  --leaf: #4f6d4a;       /* 확정·완료 */
+  --card: #fffdf9;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-leaf: var(--leaf);
+  --color-card: var(--card);
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  word-break: keep-all;
+}
