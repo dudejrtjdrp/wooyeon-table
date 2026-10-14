@@ -82,6 +82,8 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
     .single();
   if (runErr || !run) {
     const { data: existing } = await db().from("match_runs").select("id,summary").eq("round_id", roundId).single();
+    // 이미 실행된 차수가 모집 중으로 남아 있으면 스케줄러가 계속 부르니 상태를 맞춰 둔다
+    await db().from("rounds").update({ status: "matched" }).eq("id", roundId).eq("status", "open");
     return { runId: existing?.id ?? "", alreadyRan: true, summary: existing?.summary ?? {} };
   }
 

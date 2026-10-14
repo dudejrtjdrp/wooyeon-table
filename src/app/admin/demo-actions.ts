@@ -202,7 +202,13 @@ export async function resetRound(form: FormData) {
     await db().from("applications").update({ transferred_from: null }).in("transferred_from", appIds);
     await db().from("applications").delete().in("id", appIds);
   }
-  await db().from("match_runs").delete().eq("round_id", roundId);
+  const { data: runs } = await db().from("match_runs").select("id").eq("round_id", roundId);
+  const runIds = (runs ?? []).map((x) => x.id);
+  if (runIds.length) {
+    // 상태 기록이 매칭 실행을 가리키고 있어서 먼저 끊어야 지워진다
+    await db().from("status_events").update({ match_run_id: null }).in("match_run_id", runIds);
+    await db().from("match_runs").delete().in("id", runIds);
+  }
   await db().from("rounds").update({ status: "open" }).eq("id", roundId);
   await db().from("app_clock").update({ offset_seconds: 0 }).eq("id", 1);
 
