@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card, ErrorText, LinkButton, Pill, Screen, inputCls } from "@/components/ui";
+import { Clock, MapPin, Navigation, Receipt } from "lucide-react";
+import { TableMark } from "@/components/brand";
+import { ErrorText, LinkButton, Pill, PrimaryButton, Screen } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { checkIn, sendMessage } from "./actions";
+import { Composer } from "./composer";
 import { Refresher } from "./refresher";
 
 export const dynamic = "force-dynamic";
@@ -49,87 +52,108 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const canCheckIn = mine?.attendance_status === "SCHEDULED" && n >= new Date(start.getTime() - 3600_000) && n <= end;
   const mapUrl = t.venues ? t.venues.map_url ?? `https://map.naver.com/p/search/${encodeURIComponent(t.venues.address)}` : null;
 
+  const timeOf = (iso: string) => new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+  const chatOpen = Boolean(mine) && t.status !== "DONE";
+
   return (
-    <Screen title="우리 테이블" back="/">
+    <Screen title={`${fmtDate(t.slots.starts_at)} ${t.slots.region}`} back="/my-tables">
       <Refresher />
-      <Card className="mt-2">
-        <div className="flex items-center justify-between">
-          <p className="text-[14px] text-muted">{t.rounds.title}</p>
-          <Pill tone={t.status === "DONE" ? "muted" : "leaf"}>{t.status === "DONE" ? "모임 끝" : t.status === "IN_PROGRESS" ? "모임 중" : "확정"}</Pill>
+      <section className="mt-2 rounded-3xl bg-ink p-5 text-white">
+        <div className="flex items-start justify-between">
+          <TableMark size={44} tone="white" seats={Math.max(mems.length, 4)} filled={mems.filter((m) => m.attendance_status === "ATTENDED").length || mems.length} glow={t.status !== "DONE"} />
+          <span className="rounded-full bg-white/15 px-2.5 py-1 text-[12px] font-semibold">
+            {t.status === "DONE" ? "모임 끝" : t.status === "IN_PROGRESS" ? "모임 중" : "확정"}
+          </span>
         </div>
-        <p className="mt-2 text-[20px] font-bold">{fmtDate(t.slots.starts_at)} {fmtTime(t.slots.starts_at)}</p>
+        <p className="mt-4 flex items-center gap-1.5 text-[20px] font-bold tracking-[-0.02em]">
+          {fmtDate(t.slots.starts_at)} {fmtTime(t.slots.starts_at)}
+        </p>
         {t.venues ? (
-          <div className="mt-3 space-y-1 text-[14px]">
-            <p className="text-[16px] font-semibold">{t.venues.name}</p>
-            <p className="text-muted">{t.venues.address}</p>
-            <p>예약명 <span className="font-medium">{t.reservation_name}</span>{t.venues.price_range ? ` · 1인 ${t.venues.price_range}` : ""}</p>
-            {mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer" className="inline-block pt-1 underline underline-offset-4">지도에서 보기</a>}
+          <div className="mt-3 space-y-2 text-[14px]">
+            <p className="flex items-center gap-2 text-[16px] font-semibold"><MapPin size={16} className="text-candle" />{t.venues.name}</p>
+            <p className="pl-6 text-white/70">{t.venues.address}</p>
+            <p className="flex items-center gap-2 text-white/90"><Receipt size={16} className="text-candle" />예약명 {t.reservation_name}{t.venues.price_range ? `, 1인 ${t.venues.price_range}` : ""}</p>
+            <p className="flex items-center gap-2 text-white/90"><Clock size={16} className="text-candle" />{fmtTime(t.slots.starts_at)}부터 {fmtTime(t.slots.ends_at)}까지</p>
           </div>
         ) : (
-          <p className="mt-3 text-[14px] text-muted">{t.slots.region} · 식당을 정하고 있어요</p>
+          <p className="mt-3 text-[14px] text-white/70">{t.slots.region}, 식당을 정하고 있어요</p>
         )}
-      </Card>
+        {mapUrl && (
+          <a href={mapUrl} target="_blank" rel="noreferrer" className="mt-4 flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-white/12 text-[14px] font-semibold">
+            <Navigation size={16} /> 길찾기
+          </a>
+        )}
+      </section>
 
       {mine && canCheckIn && (
-        <form action={checkIn} className="mt-4">
+        <form action={checkIn} className="mt-3">
           <input type="hidden" name="table_id" value={id} />
-          <button className="w-full rounded-xl bg-accent py-3.5 text-[16px] font-semibold text-white">도착했어요 (체크인)</button>
+          <PrimaryButton pendingText="체크인하는 중">도착했어요, 체크인</PrimaryButton>
         </form>
       )}
       {mine?.attendance_status === "ATTENDED" && t.status === "DONE" && (
-        <div className="mt-4"><LinkButton href={`/tables/${id}/feedback`}>오늘 모임 후기 남기기</LinkButton></div>
+        <div className="mt-3"><LinkButton href={`/tables/${id}/feedback`}>오늘 모임 후기 남기기</LinkButton></div>
       )}
       <div className="mt-2"><ErrorText msg={e} /></div>
 
       <section className="mt-6">
-        <h2 className="text-[15px] font-semibold">함께하는 분들</h2>
-        <ul className="mt-2 flex flex-wrap gap-2">
+        <p className="text-[15px] font-bold">함께하는 {mems.length}명</p>
+        <ul className="mt-3 flex gap-3 overflow-x-auto pb-1">
           {mems.map((m) => (
-            <li key={m.id} className="rounded-full border border-line bg-card px-3 py-1.5 text-[14px]">
-              {m.users.name}
-              {m.users.profiles?.job && <span className="text-muted"> · {m.users.profiles.job}</span>}
-              {m.attendance_status === "ATTENDED" && <span className="ml-1 text-leaf">✓</span>}
+            <li key={m.id} className="flex w-16 shrink-0 flex-col items-center text-center">
+              <span className={`relative flex size-12 items-center justify-center rounded-full text-[16px] font-bold ${m.user_id === me.id ? "bg-accent text-white" : "bg-card text-ink"}`}>
+                {m.users.name.slice(0, 1)}
+                {m.attendance_status === "ATTENDED" && <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-paper bg-leaf" />}
+              </span>
+              <span className="mt-1.5 w-full truncate text-[13px] font-medium">{m.users.name}</span>
+              {m.users.profiles?.job && <span className="w-full truncate text-[11px] text-muted">{m.users.profiles.job}</span>}
             </li>
           ))}
         </ul>
         {t.explanation?.reasons?.length ? (
-          <p className="mt-3 text-[14px] leading-relaxed text-muted">이렇게 모였어요: {t.explanation.reasons.join(", ")}</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {t.explanation.reasons.map((r) => <Pill key={r} tone="accent">{r}</Pill>)}
+          </div>
         ) : null}
       </section>
 
-      <section className="mt-8">
-        <h2 className="text-[15px] font-semibold">단체방</h2>
-        <div className="mt-3 space-y-3">
+      <section className={`mt-8 ${chatOpen ? "pb-20" : ""}`}>
+        <p className="text-[15px] font-bold">단체방</p>
+        <div className="mt-3 space-y-2.5">
           {(msgs ?? []).map((m) =>
             m.kind === "system" ? (
-              <div key={m.id} className="whitespace-pre-line rounded-2xl bg-ink/[.04] px-4 py-3 text-[14px] leading-relaxed">
-                <p className="mb-1 text-[12px] font-semibold text-accent">우연한 식탁</p>
+              <div key={m.id} className="whitespace-pre-line rounded-3xl bg-card px-4 py-3.5 text-[14px] leading-relaxed">
+                <p className="mb-1.5 flex items-center gap-1.5 text-[12px] font-bold text-accent"><TableMark size={16} />우연한 식탁</p>
                 {m.body}
               </div>
+            ) : m.sender_id === me.id ? (
+              <div key={m.id} className="flex items-end justify-end gap-1.5">
+                <span className="text-[11px] text-muted">{timeOf(m.created_at)}</span>
+                <p className="max-w-[75%] whitespace-pre-line rounded-[20px] rounded-br-md bg-accent px-3.5 py-2.5 text-[15px] text-white">{m.body}</p>
+              </div>
             ) : (
-              <div key={m.id} className={`flex ${m.sender_id === me.id ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-[14px] ${m.sender_id === me.id ? "bg-ink text-white" : "border border-line bg-card"}`}>
-                  {m.sender_id !== me.id && <p className="text-[12px] font-medium text-muted">{names.get(m.sender_id ?? "") ?? "참가자"}</p>}
-                  {m.body}
+              <div key={m.id} className="flex items-start gap-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-card text-[13px] font-bold">{(names.get(m.sender_id ?? "") ?? "참").slice(0, 1)}</span>
+                <div className="min-w-0">
+                  <p className="mb-1 text-[12px] font-medium text-muted">{names.get(m.sender_id ?? "") ?? "참가자"}</p>
+                  <div className="flex items-end gap-1.5">
+                    <p className="max-w-[75vw] whitespace-pre-line rounded-[20px] rounded-tl-md bg-card px-3.5 py-2.5 text-[15px] sm:max-w-[280px]">{m.body}</p>
+                    <span className="shrink-0 text-[11px] text-muted">{timeOf(m.created_at)}</span>
+                  </div>
                 </div>
               </div>
             ),
           )}
         </div>
-        {mine && t.status !== "DONE" && (
-          <form action={sendMessage} className="mt-4 flex gap-2">
-            <input type="hidden" name="table_id" value={id} />
-            <input name="body" placeholder="메시지 보내기" autoComplete="off" className={inputCls} />
-            <button className="shrink-0 rounded-xl bg-ink px-4 text-[15px] font-semibold text-white">보내기</button>
-          </form>
-        )}
+        {!chatOpen && mine && <p className="mt-4 text-center text-[13px] text-muted">모임이 끝나 단체방이 닫혔어요.</p>}
       </section>
 
       {mine && (
-        <p className="mt-10 text-center text-[13px] text-muted">
-          불편한 일이 있었나요? <Link href={`/tables/${id}/feedback#report`} className="underline underline-offset-4">신고하기</Link>
+        <p className={`mt-8 text-center text-[13px] text-muted ${chatOpen ? "mb-16" : ""}`}>
+          불편한 일이 있었나요? <Link href={`/tables/${id}/feedback#report`} className="font-medium underline underline-offset-4">신고하기</Link>
         </p>
       )}
+      {chatOpen && <Composer tableId={id} action={sendMessage} />}
     </Screen>
   );
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card, ErrorText, LinkButton, Pill, Screen } from "@/components/ui";
+import { TableMark } from "@/components/brand";
+import { ConfirmSheet, ErrorText, LinkButton, List, Pill, Row, Screen, SectionTitle } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
@@ -47,33 +48,34 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   ];
 
   return (
-    <Screen title="내 신청" back="/">
-      <Card className="mt-2">
-        <div className="flex items-center justify-between">
-          <p className="text-[14px] text-muted">{app.rounds.title}</p>
+    <Screen title="내 신청" back="/my-tables">
+      <section className="mt-2 rounded-3xl bg-card p-6">
+        <div className="flex items-start justify-between">
+          <TableMark size={44} filled={matched ? 6 : paid ? 2 : 1} glow={matched} />
           <Pill tone={h.tone}>{h.label}</Pill>
         </div>
-        <p className="mt-3 text-[17px] font-semibold leading-snug">{h.desc}</p>
+        <p className="mt-4 text-[13px] text-muted">{app.rounds.title}</p>
+        <p className="mt-1 text-[20px] font-bold leading-snug tracking-[-0.02em]">{h.desc}</p>
         {app.match_reason && <p className="mt-2 text-[14px] leading-relaxed text-muted">{app.match_reason}</p>}
-      </Card>
+      </section>
 
       {app.payment_status === "PENDING" || app.payment_status === "FAILED" ? (
-        <div className="mt-4"><LinkButton href={`/pay/${app.id}`}>결제 이어서 하기</LinkButton></div>
+        <div className="mt-3"><LinkButton href={`/pay/${app.id}`}>결제 이어서 하기</LinkButton></div>
       ) : null}
       {matched && app.table_id ? (
-        <div className="mt-4"><LinkButton href={`/tables/${app.table_id}`}>테이블과 단체방 보기</LinkButton></div>
+        <div className="mt-3"><LinkButton href={`/tables/${app.table_id}`}>테이블과 단체방 보기</LinkButton></div>
       ) : null}
       {app.match_status === "ALTERNATIVE_OFFERED" ? (
-        <div className="mt-4"><LinkButton href={`/applications/${app.id}/resolve`}>다음 방법 고르기</LinkButton></div>
+        <div className="mt-3"><LinkButton href={`/applications/${app.id}/resolve`}>다음 방법 고르기</LinkButton></div>
       ) : null}
 
-      <section className="mt-8">
-        <h2 className="text-[15px] font-semibold">진행 순서</h2>
-        <ol className="mt-3 space-y-0">
+      <SectionTitle>진행 순서</SectionTitle>
+      <section className="rounded-3xl bg-card p-5">
+        <ol className="space-y-0">
           {steps.map((s, i) => (
             <li key={s.label} className="flex gap-3">
               <div className="flex flex-col items-center">
-                <span className={`mt-1 size-3 rounded-full ${s.done ? "bg-leaf" : "border-2 border-line bg-paper"}`} />
+                <span className={`mt-1 size-3.5 rounded-full ${s.done ? "bg-accent" : "border-2 border-line bg-card"}`} />
                 {i < steps.length - 1 && <span className="w-px flex-1 bg-line" />}
               </div>
               <div className="pb-5">
@@ -88,25 +90,26 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         )}
       </section>
 
-      <section className="mt-6">
-        <h2 className="text-[15px] font-semibold">고른 일정</h2>
-        <ul className="mt-3 space-y-2">
-          {slots.map((s) => (
-            <li key={s.id} className="flex items-center justify-between rounded-xl border border-line bg-card px-4 py-3 text-[14px]">
-              <span>{fmtDate(s.starts_at)} {fmtTime(s.starts_at)}</span>
-              <span className="font-medium">{s.region}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <SectionTitle>고른 일정</SectionTitle>
+      <List>
+        {slots.map((s) => (
+          <Row key={s.id} right={<span className="text-[15px] font-semibold">{s.region}</span>}>
+            <span className="text-[15px]">{fmtDate(s.starts_at)} {fmtTime(s.starts_at)}</span>
+          </Row>
+        ))}
+      </List>
 
       {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
-        <form action={cancelApplication} className="mt-8 rounded-xl border border-line bg-card p-4">
-          <input type="hidden" name="app_id" value={app.id} />
-          <p className="text-[14px] font-medium">신청 취소</p>
-          <p className="mt-1 text-[13px] text-muted">매칭 시각({fmtDateTime(app.rounds.match_at)}) 전까지는 취소할 수 있어요. 결제했다면 전액 돌려드려요.</p>
-          <button className="mt-3 text-[14px] text-accent underline underline-offset-4">이 신청 취소하기</button>
-        </form>
+        <div className="mt-8 text-center">
+          <ConfirmSheet
+            trigger={<button className="text-[14px] font-medium text-muted underline underline-offset-4">이 신청 취소하기</button>}
+            title="신청을 취소할까요?"
+            body={<>매칭 시각({fmtDateTime(app.rounds.match_at)}) 전이라 결제한 금액은 전액 돌려드려요. 이용권으로 신청했다면 1회를 다시 쓸 수 있어요.</>}
+            confirmLabel="신청 취소하기"
+            action={cancelApplication}
+            hidden={{ app_id: app.id }}
+          />
+        </div>
       )}
       <ErrorText msg={e} />
 

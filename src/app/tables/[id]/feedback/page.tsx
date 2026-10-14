@@ -12,7 +12,7 @@ function Stars({ name, label, value }: { name: string; label: string; value?: nu
         {[1, 2, 3, 4, 5].map((n) => (
           <label key={n} className="flex-1 cursor-pointer">
             <input type="radio" name={name} value={n} defaultChecked={value === n} className="peer sr-only" />
-            <span className="block rounded-lg border border-line bg-card py-2 text-center text-[15px] peer-checked:border-ink peer-checked:bg-ink peer-checked:text-white">{n}</span>
+            <span className="block rounded-lg border border-line bg-card py-2 text-center text-[15px] peer-checked:border-accent peer-checked:bg-accent peer-checked:text-white">{n}</span>
           </label>
         ))}
       </div>
@@ -50,13 +50,13 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           <p className="text-[12px] text-muted">다시 만나고 싶지 않다고 고르면 앞으로 같은 테이블에 앉지 않아요.</p>
           <ul className="mt-3 space-y-2">
             {others.map((o) => (
-              <li key={o.user_id} className="flex items-center justify-between rounded-xl border border-line bg-card px-4 py-2.5">
+              <li key={o.user_id} className="flex items-center justify-between rounded-2xl border border-line bg-card px-4 py-2.5">
                 <span className="text-[15px]">{o.users.name}</span>
                 <span className="flex gap-1.5 text-[13px]">
                   {[["again", "또 만나고 싶어요"], ["", "괜찮아요"], ["avoid", "다시는 싫어요"]].map(([v, l]) => (
                     <label key={v} className="cursor-pointer">
                       <input type="radio" name={`pref_${o.user_id}`} value={v} defaultChecked={(prefMap.get(o.user_id) ?? "") === v} className="peer sr-only" />
-                      <span className="block rounded-full border border-line px-2.5 py-1 peer-checked:border-ink peer-checked:bg-ink peer-checked:text-white">{l}</span>
+                      <span className="block rounded-full border border-line px-2.5 py-1 peer-checked:border-accent peer-checked:bg-accent peer-checked:text-white">{l}</span>
                     </label>
                   ))}
                 </span>
@@ -69,10 +69,10 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           <span className="text-[14px] font-medium">한마디</span>
           <textarea name="comment" defaultValue={fb?.comment ?? ""} rows={3} placeholder="좋았던 점이나 아쉬웠던 점을 적어 주세요" className={`${inputCls} mt-2`} />
         </label>
-        <PrimaryButton type="submit">후기 보내기</PrimaryButton>
+        <PrimaryButton type="submit" pendingText="보내는 중">후기 보내기</PrimaryButton>
       </form>
 
-      <section id="report" className="mt-12 rounded-2xl border border-line bg-card p-4">
+      <section id="report" className="mt-12 rounded-3xl bg-card p-5">
         <h2 className="text-[15px] font-semibold">신고하기</h2>
         <p className="mt-1 text-[13px] text-muted">신고하면 상대를 바로 차단하고 운영팀이 확인해요. 상대에게는 알리지 않아요.</p>
         <form action={report} className="mt-4 space-y-3">
@@ -91,7 +91,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           </select>
           <textarea name="detail" rows={2} placeholder="자세한 내용 (선택)" className={inputCls} />
           <ErrorText msg={e} />
-          <button className="w-full rounded-xl border border-accent py-3 text-[15px] font-semibold text-accent">신고하고 차단하기</button>
+          <PrimaryButton tone="danger">신고하고 차단하기</PrimaryButton>
         </form>
       </section>
     </Screen>

@@ -11,18 +11,18 @@ export async function login(form: FormData) {
   const id = normalize(String(form.get("login_id") ?? ""));
   const pw = String(form.get("password") ?? "");
   const next = String(form.get("next") ?? "/");
-  if (!id || !pw) redirect(`/login?e=${encodeURIComponent("아이디와 비밀번호를 입력해 주세요")}`);
+  if (!id || !pw) redirect(`/login/phone?e=${encodeURIComponent("아이디와 비밀번호를 입력해 주세요")}`);
 
   const { data: user } = await db()
     .from("users")
     .select("id,role,password_hash,account_status")
     .eq("login_id", id)
     .maybeSingle();
-  if (!user || !(await bcrypt.compare(pw, user.password_hash))) {
-    redirect(`/login?e=${encodeURIComponent("아이디나 비밀번호가 맞지 않아요")}`);
+  if (!user || !user.password_hash || !(await bcrypt.compare(pw, user.password_hash))) {
+    redirect(`/login/phone?e=${encodeURIComponent("아이디나 비밀번호가 맞지 않아요")}`);
   }
   if (user.account_status === "banned") {
-    redirect(`/login?e=${encodeURIComponent("이용이 제한된 계정이에요. 운영팀에 문의해 주세요")}`);
+    redirect(`/login/phone?e=${encodeURIComponent("이용이 제한된 계정이에요. 운영팀에 문의해 주세요")}`);
   }
   await setSession({ uid: user.id, role: user.role });
   redirect(user.role === "admin" ? "/admin" : next.startsWith("/") ? next : "/");

@@ -5,12 +5,12 @@ import { signup } from "../login/actions";
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
   const { e } = await searchParams;
   return (
-    <Screen back="/">
-      <h1 className="mt-4 text-[26px] font-bold leading-snug">
+    <Screen back="/login" title="휴대폰 번호로 가입">
+      <h2 className="mt-4 text-[24px] font-bold leading-snug tracking-[-0.02em]">
         우연한 식탁에
         <br />
         오신 걸 환영해요
-      </h1>
+      </h2>
       <p className="mt-2 text-[15px] text-muted">가입은 1분이면 끝나요. 모임 안내도 이 번호로 보내드려요.</p>
       <form action={signup} className="mt-8 space-y-4">
         <Field label="이름">
@@ -23,11 +23,11 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
           <input name="password" type="password" autoComplete="new-password" className={inputCls} />
         </Field>
         <ErrorText msg={e} />
-        <PrimaryButton type="submit">가입하고 시작하기</PrimaryButton>
+        <PrimaryButton type="submit" pendingText="가입하는 중">가입하고 시작하기</PrimaryButton>
       </form>
       <p className="mt-6 text-center text-[14px] text-muted">
         이미 계정이 있어요{" "}
-        <Link href="/login" className="font-medium text-ink underline underline-offset-4">
+        <Link href="/login/phone" className="font-semibold text-accent">
           로그인
         </Link>
       </p>

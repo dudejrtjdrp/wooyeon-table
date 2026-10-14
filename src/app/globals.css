@@ -1,14 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f4efe6;      /* 식탁보 */
-  --ink: #1f1b16;        /* 본문 */
-  --muted: #7a7064;      /* 보조 글자 */
-  --line: #e2d9cb;       /* 구분선 */
-  --accent: #c8553d;     /* 토마토 */
+  /* 저녁 식탁: 해 진 뒤의 남색과 식탁 위 조명 빛 */
+  --paper: #f3f4f7;      /* 앱 바탕 */
+  --card: #ffffff;       /* 면 */
+  --ink: #15161c;        /* 본문 */
+  --muted: #6b6f7b;      /* 보조 글자 */
+  --line: #e4e6ec;       /* 구분선 */
+  --accent: #3540c4;     /* 저녁 남색: 주요 행동 */
+  --accent-soft: #eceefe;
   --accent-ink: #ffffff;
-  --leaf: #4f6d4a;       /* 확정·완료 */
-  --card: #fffdf9;
+  --candle: #ffb938;     /* 조명: 확정·강조 순간에만 */
+  --leaf: #12936a;       /* 완료 */
+  --danger: #e5484d;     /* 오류·취소 */
 }
 
 @theme inline {
@@ -19,6 +23,9 @@
   --color-accent: var(--accent);
   --color-leaf: var(--leaf);
   --color-card: var(--card);
+  --color-accent-soft: var(--accent-soft);
+  --color-candle: var(--candle);
+  --color-danger: var(--danger);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
@@ -28,3 +35,22 @@ body {
   font-family: var(--font-sans);
   word-break: keep-all;
 }
+
+html { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+@keyframes sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.animate-sheet { animation: sheet-in .28s cubic-bezier(.2,.8,.2,1); }
+.animate-fade { animation: fade-in .2s ease-out; }
+.animate-toast { animation: toast-in .24s ease-out; }
+@keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+.skeleton { background: linear-gradient(90deg, #eceef2 0, #f6f7f9 40px, #eceef2 80px); background-size: 400px 100%; animation: shimmer 1.2s infinite linear; }
+@media (prefers-reduced-motion: reduce) { .animate-sheet, .animate-fade, .animate-toast, .skeleton { animation: none; } }
+@keyframes seat-in { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
+@keyframes glow-in { from { opacity: 0; } to { opacity: .9; } }
+.seat-in { transform-box: fill-box; transform-origin: center; opacity: 0; animation: seat-in .38s cubic-bezier(.3,1.4,.5,1) forwards; }
+.glow-in { opacity: 0; animation: glow-in .8s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) { .seat-in, .glow-in { animation: none; opacity: 1; } }

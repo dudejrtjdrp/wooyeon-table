@@ -10,6 +10,8 @@ export interface Me {
   phone: string | null;
   account_status: string;
   hasProfile: boolean;
+  email: string | null;
+  avatar_url: string | null;
 }
 
 export async function getMe(): Promise<Me | null> {
@@ -17,7 +19,7 @@ export async function getMe(): Promise<Me | null> {
   if (!s) return null;
   const { data } = await db()
     .from("users")
-    .select("id,name,role,login_id,phone,account_status,profiles(user_id)")
+    .select("id,name,role,login_id,phone,account_status,email,avatar_url,profiles(user_id)")
     .eq("id", s.uid)
     .maybeSingle();
   if (!data) return null;
@@ -30,6 +32,8 @@ export async function getMe(): Promise<Me | null> {
     phone: data.phone,
     account_status: data.account_status,
     hasProfile: Array.isArray(prof) ? prof.length > 0 : Boolean(prof),
+    email: (data as { email?: string | null }).email ?? null,
+    avatar_url: (data as { avatar_url?: string | null }).avatar_url ?? null,
   };
 }
 

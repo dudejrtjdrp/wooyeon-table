@@ -1,59 +1,96 @@
+import { ChevronRight, FileText, Headphones, LogOut, Shield, Ticket, UserRound } from "lucide-react";
 import Link from "next/link";
-import { Card, Pill, Screen } from "@/components/ui";
+import type { ReactNode } from "react";
+import { ConfirmSheet, List, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
-import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
 import { logout } from "../login/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function Me({ searchParams }: { searchParams: Promise<{ done?: string }> }) {
-  const { done: doneParam } = await searchParams;
+const PROVIDER_LABEL: Record<string, string> = { kakao: "카카오", naver: "네이버", google: "Google" };
+
+const MenuRow = ({ href, icon, label, right }: { href: string; icon: ReactNode; label: string; right?: ReactNode }) => (
+  <Row href={href} right={right ?? <ChevronRight size={20} className="text-muted" />}>
+    <span className="flex items-center gap-3 text-[16px]">
+      <span className="text-muted">{icon}</span>
+      {label}
+    </span>
+  </Row>
+);
+
+export default async function Me({ searchParams }: { searchParams: Promise<{ done?: string; m?: string }> }) {
+  const { done, m } = await searchParams;
   const me = await requireMe();
-  const { data } = await db()
-    .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,created_at,rounds(title)")
-    .eq("user_id", me.id)
-    .order("created_at", { ascending: false });
-  const apps = (data ?? []) as unknown as {
-    id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; rounds: { title: string };
-  }[];
-  const { data: fb } = await db().from("feedbacks").select("application_id").eq("user_id", me.id);
-  const done = new Set((fb ?? []).map((f) => f.application_id));
+  const [{ data: ids }, { data: passes }, { count: attended }] = await Promise.all([
+    db().from("user_identities").select("provider").eq("user_id", me.id),
+    db().from("passes").select("remaining,expires_at").eq("user_id", me.id).gt("remaining", 0),
+    db().from("applications").select("id", { count: "exact", head: true }).eq("user_id", me.id).eq("attendance_status", "ATTENDED"),
+  ]);
+  const via = (ids ?? []).map((i) => PROVIDER_LABEL[i.provider]).filter(Boolean);
+  const left = (passes ?? []).reduce((n, p) => n + p.remaining, 0);
 
   return (
-    <Screen title="내 정보" back="/">
-      {doneParam === "feedback" && <p className="mb-4 rounded-lg bg-leaf/10 px-4 py-3 text-[14px] text-leaf">후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요.</p>}
-      <Card className="mt-2">
-        <p className="text-[18px] font-semibold">{me.name}</p>
-        <p className="mt-1 text-[14px] text-muted">{me.phone}</p>
-        <Link href="/onboarding?next=/me" className="mt-4 inline-block text-[14px] font-medium underline underline-offset-4">
-          프로필 수정
+    <TabScreen title="내 정보">
+      <Toast msg={done === "feedback" ? "후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요" : m} />
+      <Link href="/onboarding?next=/me" className="mt-2 flex items-center gap-4 rounded-3xl bg-card p-5">
+        {me.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={me.avatar_url} alt="" className="size-14 rounded-full object-cover" />
+        ) : (
+          <span className="flex size-14 items-center justify-center rounded-full bg-accent-soft text-[20px] font-bold text-accent">
+            {me.name.slice(0, 1)}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-[19px] font-bold">{me.name}</p>
+          <p className="mt-0.5 truncate text-[13px] text-muted">
+            {via.length ? `${via.join(", ")}로 로그인` : me.phone ?? me.email ?? ""}
+          </p>
+        </div>
+        <ChevronRight size={20} className="text-muted" />
+      </Link>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-3xl bg-card p-5">
+          <p className="text-[13px] text-muted">함께한 식탁</p>
+          <p className="mt-1 text-[24px] font-bold">{attended ?? 0}번</p>
+        </div>
+        <Link href="/rounds" className="rounded-3xl bg-card p-5">
+          <p className="text-[13px] text-muted">남은 이용권</p>
+          <p className="mt-1 text-[24px] font-bold">{left}회</p>
         </Link>
-      </Card>
+      </div>
 
-      <h2 className="mt-8 text-[15px] font-semibold">참가 이력</h2>
-      {!apps.length && <p className="mt-3 text-[14px] text-muted">아직 신청한 모임이 없어요.</p>}
-      <ul className="mt-3 space-y-2">
-        {apps.map((a) => {
-          const h = headline(a);
-          return (
-            <li key={a.id}>
-              <Link href={`/applications/${a.id}`} className="flex items-center justify-between rounded-xl border border-line bg-card px-4 py-3">
-                <span className="text-[14px]">{a.rounds.title}</span>
-                <span className="flex items-center gap-2">
-                  {a.attendance_status === "ATTENDED" && (done.has(a.id) ? <Pill tone="leaf">후기 남김</Pill> : <Pill tone="accent">후기 전</Pill>)}
-                  <Pill tone={h.tone}>{h.label}</Pill>
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <SectionTitle>계정</SectionTitle>
+      <List>
+        <MenuRow href="/onboarding?next=/me" icon={<UserRound size={20} />} label="프로필과 매칭 정보" />
+        <MenuRow href="/my-tables" icon={<Ticket size={20} />} label="신청·결제 내역" />
+      </List>
 
-      <form action={logout} className="mt-10 text-center">
-        <button className="text-[14px] text-muted underline underline-offset-4">로그아웃</button>
-      </form>
-    </Screen>
+      <SectionTitle>도움</SectionTitle>
+      <List>
+        <MenuRow href="/help" icon={<Headphones size={20} />} label="자주 묻는 질문과 문의" />
+        <MenuRow href="/terms" icon={<FileText size={20} />} label="이용약관" />
+        <MenuRow href="/privacy" icon={<Shield size={20} />} label="개인정보 처리방침" />
+      </List>
+
+      <div className="mt-3">
+        <ConfirmSheet
+          trigger={
+            <button className="flex w-full items-center gap-3 rounded-3xl bg-card px-5 py-4 text-[16px]">
+              <LogOut size={20} className="text-muted" /> 로그아웃
+            </button>
+          }
+          title="로그아웃할까요?"
+          body="다시 들어올 때는 같은 방법으로 로그인하면 돼요."
+          confirmLabel="로그아웃"
+          action={logout}
+          hidden={{}}
+          tone="accent"
+        />
+      </div>
+      <p className="mt-8 text-center text-[12px] text-muted">우연한 식탁 1.0</p>
+    </TabScreen>
   );
 }
