@@ -45,7 +45,7 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
         <div className="min-w-0 flex-1">
           <p className="text-[19px] font-bold">{me.name}</p>
           <p className="mt-0.5 truncate text-[13px] text-muted">
-            {via.length ? `${via.join(", ")}로 로그인` : me.phone ?? me.email ?? ""}
+            {via.length ? `${via.join(", ")}로 로그인` : me.phone ? me.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3") : me.email ?? ""}
           </p>
         </div>
         <ChevronRight size={20} className="text-muted" />
