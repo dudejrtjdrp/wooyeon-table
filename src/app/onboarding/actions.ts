@@ -24,8 +24,9 @@ export async function saveProfile(form: FormData) {
   const gender = v?.verified_gender ?? (genderRaw === "남성" ? "M" : genderRaw === "여성" ? "F" : genderRaw);
   const job = String(form.get("job") ?? "").trim();
   const mbtiRaw = String(form.get("mbti") ?? "");
+  // '잘 모르겠어요'를 고르면 비워 둔다 (엔진은 MBTI가 없으면 중간 점수로 본다)
   const mbti = (MBTIS as readonly string[]).includes(mbtiRaw) ? mbtiRaw : null;
-  if (!mbti) back("MBTI를 골라 주세요");
+  if (!mbti && mbtiRaw !== "unknown") back("MBTI를 골라 주세요");
   const interests = pick(form, "interests", INTERESTS);
   const myTraits = pick(form, "my_traits", TRAITS);
   const wantedTraits = pick(form, "wanted_traits", TRAITS);
@@ -39,7 +40,8 @@ export async function saveProfile(form: FormData) {
   if (!["M", "F"].includes(gender)) back("성별을 골라 주세요");
   if (!job) back("하는 일을 적어 주세요");
   if (interests.length < 2) back("관심사를 두 개 이상 골라 주세요");
-  if (myTraits.length < 1 || wantedTraits.length < 1) back("성향을 하나 이상 골라 주세요");
+  if (myTraits.length < 1) back("내 성향을 하나 이상 골라 주세요");
+  if (wantedTraits.length < 1 && form.get("wanted_any") !== "on") back("만나고 싶은 사람을 하나 이상 골라 주세요");
   if (!(PRICE_RANGES as readonly string[]).includes(price)) back("식사 가격대를 골라 주세요");
   if (!agreed) back("개인정보 수집·이용과 운영 정책에 동의해야 신청할 수 있어요");
 

@@ -44,7 +44,7 @@ export async function submitFeedback(form: FormData) {
     }
   }
   await logStatus({ entityType: "application", entityId: app.id, field: "feedback", to: "SUBMITTED", actor: `user:${me.id}`, reason: "후기 제출" });
-  redirect(`/me?done=feedback`);
+  redirect(`/?m=${encodeURIComponent("후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요")}`);
 }
 
 /** 신고·차단 (SAF-01). 신고 내용은 상대에게 보이지 않는다 */
@@ -66,5 +66,5 @@ export async function report(form: FormData) {
     { kind: "safety", ref_type: "safety_report", ref_id: rep!.id, reason: `안전 신고: ${reason}`, dedupe_key: `safety:${rep!.id}` },
     { onConflict: "dedupe_key", ignoreDuplicates: true },
   );
-  redirect(`/tables/${tableId}?e=${encodeURIComponent("신고가 접수됐어요. 앞으로 이분과는 같은 테이블에 앉지 않아요")}`);
+  redirect(`/tables/${tableId}?m=${encodeURIComponent("신고가 접수됐어요. 앞으로 이분과는 같은 테이블에 앉지 않아요")}`);
 }

@@ -2,7 +2,7 @@ import { ChevronRight, CircleHelp, FileText, ShieldCheck, ReceiptText, UserRound
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PushToggle } from "@/components/push-toggle";
-import { ConfirmSheet, IMG, List, Photo, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
+import { ConfirmSheet, List, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { logout } from "../login/actions";
@@ -14,7 +14,7 @@ const PROVIDER_LABEL: Record<string, string> = { kakao: "카카오", naver: "네
 
 const MenuRow = ({ href, icon, label, right }: { href: string; icon: ReactNode; label: string; right?: ReactNode }) => (
   <Row href={href} right={right ?? <ChevronRight size={20} className="text-muted" />}>
-    <span className="flex items-center gap-3.5 text-[16px] font-medium text-ink">
+    <span className="flex items-center gap-3.5 text-[16px] font-semibold text-ink">
       <span className="flex size-10 items-center justify-center rounded-full bg-accent-soft text-accent">{icon}</span>
       {label}
     </span>
@@ -36,33 +36,32 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
     <TabScreen title="내 정보">
       <Toast msg={done === "feedback" ? "후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요" : m} />
       <Toast msg={e} tone="danger" />
-      <section className="shadow-card mt-6 overflow-hidden rounded-[24px] bg-card">
-        <Photo src={IMG.profileRestaurant} className="h-[118px]" position="center 60%" priority />
-        <Link href="/onboarding?next=/me" className="relative -mt-7 flex items-center gap-4 px-5">
+      <section className="mt-5 overflow-hidden rounded-[24px] bg-card">
+        <Link href="/onboarding?next=/me" className="flex items-center gap-4 px-5 pt-5">
           {me.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={me.avatar_url} alt="" className="size-[72px] rounded-full object-cover ring-4 ring-card" />
+            <img src={me.avatar_url} alt="" className="size-[60px] rounded-full object-cover" />
           ) : (
-            <span className="flex size-[72px] items-center justify-center rounded-full bg-[#fbf1df] text-[28px] font-bold text-ink ring-4 ring-card">
+            <span className="flex size-[60px] items-center justify-center rounded-full bg-accent text-[22px] font-black text-white">
               {me.name.slice(-2, -1) || me.name.slice(0, 1)}
             </span>
           )}
-          <div className="mt-9 min-w-0 flex-1">
-            <p className="text-[21px] font-bold tracking-[-0.02em] text-ink">{me.name}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[20px] font-black text-ink">{me.name}</p>
             <p className="mt-0.5 truncate text-[14px] text-muted">
               {via.length ? `${via.join(", ")}로 로그인` : me.phone ? me.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3") : me.email ?? ""}
             </p>
           </div>
-          <ChevronRight size={22} className="mt-9 text-muted" />
+          <ChevronRight size={22} className="text-[#b5c0ba]" />
         </Link>
         <div className="mx-5 mt-5 grid grid-cols-2 border-t border-line py-4">
           <Link href="/my-tables" className="text-center">
-            <p className="text-[14px] text-muted">함께한 식탁</p>
-            <p className="mt-1 text-[26px] font-bold text-accent">{attended ?? 0}번</p>
+            <p className="text-[14px] text-muted">함께한 테이블</p>
+            <p className="mt-1 text-[26px] font-extrabold text-accent">{attended ?? 0}번</p>
           </Link>
           <Link href="/rounds" className="border-l border-line text-center">
             <p className="text-[14px] text-muted">남은 이용권</p>
-            <p className="mt-1 text-[26px] font-bold text-accent">{left}회</p>
+            <p className="mt-1 text-[26px] font-extrabold text-accent">{left}회</p>
           </Link>
         </div>
       </section>
@@ -71,7 +70,7 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
       <List>
         <PushToggle />
         <MenuRow href="/onboarding?next=/me" icon={<UserRound size={20} />} label="프로필과 매칭 정보" />
-        <MenuRow href="/my-tables" icon={<ReceiptText size={20} />} label="신청·결제 내역" />
+        <MenuRow href="/rounds" icon={<ReceiptText size={20} />} label="신청·결제 내역" />
       </List>
 
       <SectionTitle>도움</SectionTitle>

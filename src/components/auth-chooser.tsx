@@ -1,21 +1,20 @@
-import { ChevronRight } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { enabledProviders } from "@/lib/oauth";
-import { ErrorText, IMG } from "./ui";
+import { RoundTable } from "./brand";
+import { ErrorText } from "./ui";
 
 const KakaoIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
-    <path fill="#3b1e1e" d="M12 3C6.48 3 2 6.54 2 10.9c0 2.8 1.86 5.26 4.66 6.66l-.95 3.48c-.08.3.26.54.52.37l4.15-2.74c.53.06 1.07.1 1.62.1 5.52 0 10-3.54 10-7.87S17.52 3 12 3z" />
+  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+    <path fill="#191919" d="M12 3C6.48 3 2 6.54 2 10.9c0 2.8 1.86 5.26 4.66 6.66l-.95 3.48c-.08.3.26.54.52.37l4.15-2.74c.53.06 1.07.1 1.62.1 5.52 0 10-3.54 10-7.87S17.52 3 12 3z" />
   </svg>
 );
 const NaverIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
     <path fill="#fff" d="M16.27 12.84 7.38 0H0v24h7.73V11.16L16.62 24H24V0h-7.73z" />
   </svg>
 );
 const GoogleIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+  <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
     <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
     <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
@@ -26,60 +25,57 @@ const GoogleIcon = () => (
 export function AuthChooser({ next = "/", error, notice }: { next?: string; error?: string; notice?: string }) {
   const on = enabledProviders();
   const q = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
-  const btn = "relative flex h-[56px] w-full items-center justify-center rounded-2xl text-[16px] font-bold transition active:scale-[.985]";
-  const lead = "absolute left-5 flex size-6 items-center justify-center";
-  const tail = <ChevronRight size={20} className="absolute right-5 opacity-70" />;
+  const btn = "flex h-[56px] w-full items-center justify-center gap-2 rounded-[14px] text-[16px] font-extrabold transition active:scale-[.985]";
   return (
-    <main className="pb-safe relative mx-auto flex min-h-dvh max-w-md flex-col overflow-hidden bg-paper">
-      {/* 시안 A2: 아이보리 벽에 드리운 나뭇잎 그림자와 위에서 본 식탁 사진 */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[300px]" style={{ maskImage: "linear-gradient(#000 40%, transparent)", WebkitMaskImage: "linear-gradient(#000 40%, transparent)" }}>
-        <Image src={IMG.softBg} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "right top" }} />
-      </div>
-      <div
-        className="pointer-events-none absolute right-[-10%] top-[230px] aspect-[789/659] w-[90%]"
-        style={{ maskImage: "radial-gradient(70% 70% at 55% 50%, #000 55%, transparent 100%)", WebkitMaskImage: "radial-gradient(70% 70% at 55% 50%, #000 55%, transparent 100%)" }}
-      >
-        <Image src={IMG.startTable} alt="" fill priority sizes="500px" className="object-cover" />
-      </div>
-      <div className="pt-safe relative z-10 px-6">
-        <p className="pt-5 text-[17px] font-semibold text-ink">우연한 식탁</p>
-        <h1 className="animate-rise mt-12 text-[30px] font-bold leading-[1.3] tracking-[-0.03em] text-ink">
-          처음 만나는
-          <br />
-          <span className="text-accent">네다섯 명과 저녁 한 끼</span>
-        </h1>
-        <p className="animate-rise mt-4 text-[16px] leading-relaxed text-muted" style={{ animationDelay: ".06s" }}>
-          날짜와 동네만 고르면
-          <br />
-          테이블은 저희가 꾸려요.
-        </p>
-      </div>
+    <main className="pb-safe mx-auto flex min-h-dvh max-w-md flex-col bg-paper">
+      {/* E01: 초록 색면 위 "우연히, 같은 테이블." + 원형 테이블 */}
+      <section className="pt-safe relative overflow-hidden bg-navy text-white" style={{ minHeight: "min(62dvh, 548px)" }}>
+        <div className="px-7 pt-14">
+          <p className="text-[15px] font-extrabold opacity-80">우연한 식탁</p>
+          <h1 className="animate-rise mt-4 text-[40px] font-black leading-[1.22]">
+            우연히,
+            <br />
+            같은 테이블.
+          </h1>
+          <p className="animate-rise mt-4 text-[16px] leading-relaxed text-on-accent" style={{ animationDelay: ".06s" }}>
+            처음 보는 4~6명이 모여
+            <br />
+            저녁 한 끼를 같이 먹어요.
+          </p>
+          <ul className="mt-5 flex flex-wrap gap-1.5 text-[13px] font-bold text-[#ddf0e5]">
+            {["나이 차 8살 안", "성비 맞춰서", "자동 확정"].map((t) => (
+              <li key={t} className="flex h-7 items-center rounded-[14px] bg-accent2 px-2.5">{t}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="pointer-events-none absolute -bottom-[96px] -right-[36px]">
+          <RoundTable size={300} filled={5} tone="dark" me={false} />
+        </div>
+      </section>
 
-      <div className="relative z-10 mt-auto space-y-3 px-6 pb-6 pt-8">
-        {notice && <p className="rounded-2xl bg-leaf/10 px-4 py-3 text-center text-[14px] font-medium text-leaf">{notice}</p>}
+      <div className="flex flex-1 flex-col gap-2.5 px-6 pb-8 pt-6">
+        {notice && <p className="rounded-[12px] bg-accent-soft px-4 py-3 text-center text-[14px] font-bold text-accent-text">{notice}</p>}
         <ErrorText msg={error} />
         <a href={`/api/auth/kakao${q}`} className={`${btn} bg-[#FEE500] text-[#191919]`}>
-          <span className={lead}><KakaoIcon /></span>카카오로 시작하기{tail}
+          <KakaoIcon />카카오로 계속하기
         </a>
         <a href={`/api/auth/naver${q}`} className={`${btn} bg-[#03C75A] text-white`}>
-          <span className={lead}><NaverIcon /></span>네이버로 시작하기{tail}
-        </a>
-        <a href={`/api/auth/google${q}`} className={`${btn} border border-line bg-card text-ink`}>
-          <span className={lead}><GoogleIcon /></span>Google로 시작하기{tail}
+          <NaverIcon />네이버로 계속하기
         </a>
         {!(on.kakao || on.naver || on.google) && (
-          <p className="text-center text-[12px] text-muted">소셜 로그인은 곧 열려요. 지금은 휴대폰 번호로 이용할 수 있어요.</p>
+          <p className="text-center text-[12px] text-muted">소셜 로그인은 곧 열려요. 지금은 휴대폰 번호로 쓸 수 있어요.</p>
         )}
-        <div className="flex items-center gap-4 pt-3 text-[15px] text-muted">
-          <span className="h-px flex-1 bg-line" />
-          <Link href={`/login/phone${q}`} className="flex items-center gap-0.5 font-medium">휴대폰 번호로 로그인<ChevronRight size={16} /></Link>
-          <span className="h-4 w-px bg-line" />
-          <Link href="/guide" className="flex items-center gap-0.5 font-medium">심사위원 안내<ChevronRight size={16} /></Link>
-          <span className="h-px flex-1 bg-line" />
-        </div>
-        <p className="pt-3 text-center text-[13px] leading-relaxed text-muted">
-          시작하면 <Link href="/terms" className="underline underline-offset-2">이용약관</Link> ·{" "}
-          <Link href="/privacy" className="underline underline-offset-2">개인정보 처리방침</Link>에 동의해요.
+        <nav aria-label="다른 방법" className="mt-2 flex items-center justify-center gap-1 text-[14px] text-[#4a5a51]">
+          <a href={`/api/auth/google${q}`} className="flex h-11 items-center gap-1.5 px-2"><GoogleIcon />구글</a>
+          <span aria-hidden="true" className="text-[#d5ddd8]">|</span>
+          <Link href={`/login/phone${q}`} className="flex h-11 items-center px-2">휴대폰 번호</Link>
+          <span aria-hidden="true" className="text-[#d5ddd8]">|</span>
+          <Link href="/rounds" className="flex h-11 items-center px-2">둘러보기</Link>
+        </nav>
+        <p className="mt-auto pt-4 text-center text-[12px] leading-relaxed text-faint">
+          계속하면 <Link href="/terms" className="underline underline-offset-2">이용약관</Link>과{" "}
+          <Link href="/privacy" className="underline underline-offset-2">개인정보 처리방침</Link>에 동의하게 돼요. ·{" "}
+          <Link href="/guide" className="underline underline-offset-2">심사위원 안내</Link>
         </p>
       </div>
     </main>

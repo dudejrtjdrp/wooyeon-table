@@ -32,9 +32,10 @@ export async function sendMessage(form: FormData) {
   // 같은 테이블의 다른 사람들에게 푸시 (화면 응답 뒤에 보낸다)
   after(async () => {
     const { data: others } = await db().from("applications").select("user_id").eq("table_id", tableId).eq("match_status", "CONFIRMED").neq("user_id", me.id);
-    await pushToUsers((others ?? []).map((o) => o.user_id), { title: `${me.name}님의 새 메시지`, body: body.slice(0, 80), url: `/tables/${tableId}`, tag: `chat-${tableId}` }).catch(() => null);
+    await pushToUsers((others ?? []).map((o) => o.user_id), { title: `${me.name}님의 새 메시지`, body: body.slice(0, 80), url: `/tables/${tableId}/chat`, tag: `chat-${tableId}` }).catch(() => null);
   });
   revalidatePath(`/tables/${tableId}`);
+  revalidatePath(`/tables/${tableId}/chat`);
 }
 
 /** 앱 체크인으로 참석 기록 (FDB-01). 시작 1시간 전부터 끝날 때까지 가능 */

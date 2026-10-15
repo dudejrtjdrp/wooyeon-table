@@ -1,6 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import Image from "next/image";
-import { IMG, PageTitle, Screen } from "@/components/ui";
+import { PageTitle, Screen } from "@/components/ui";
 
 const FAQ: [string, string][] = [
   ["테이블은 어떻게 정해지나요?", "신청 마감 시각에 연령대, 성비, 관심사, 성향을 함께 보고 4~6명씩 자동으로 묶어요. 전에 만난 사람이나 다시 만나고 싶지 않다고 한 사람과는 같은 테이블에 앉지 않아요."],
@@ -17,7 +16,7 @@ export default function Help() {
       <PageTitle className="mt-4" title="궁금한 점을" accent="먼저 확인해 보세요" />
       <div className="relative z-10 mt-7 space-y-3">
         {FAQ.map(([q, a], i) => (
-          <details key={q} open={i === 0} className="shadow-card group rounded-[20px] bg-card">
+          <details key={q} open={i === 0} className="group rounded-[20px] bg-field">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[20px] px-5 py-5 text-[17px] font-bold tracking-[-0.02em] text-ink group-open:bg-accent-soft/40">
               {q}
               <ChevronDown size={22} className="shrink-0 text-accent transition group-open:rotate-180" />
@@ -29,9 +28,6 @@ export default function Help() {
       <p className="relative z-10 mt-6 text-center text-[14px] text-muted">
         더 궁금한 점은 <a href="mailto:help@wooyeon-table.app" className="font-semibold text-accent">help@wooyeon-table.app</a>으로 보내 주세요.
       </p>
-      <div className="pointer-events-none relative -mx-5 mt-2 h-[260px]" style={{ maskImage: "radial-gradient(80% 90% at 80% 80%, #000 40%, transparent 80%)", WebkitMaskImage: "radial-gradient(80% 90% at 80% 80%, #000 40%, transparent 80%)" }}>
-        <Image src={IMG.startTable} alt="" fill sizes="448px" className="object-cover" style={{ objectPosition: "70% 60%" }} />
-      </div>
     </Screen>
   );
 }

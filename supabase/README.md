@@ -21,3 +21,4 @@ $q$; end $mig$;
 | 0005_push.sql | 2026-10-15 |
 | 0006_withdraw_consent.sql | 2026-10-15 |
 | 0007_waitlist_ops_content_toss.sql | 2026-10-15 |
+| 0008_area_bundles.sql | 2026-10-16 |

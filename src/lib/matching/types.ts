@@ -1,7 +1,7 @@
 // 매칭 엔진 입력·출력 타입. DB와 분리된 순수 계산 모듈이라 테스트로 바로 검증할 수 있다.
 // 규칙 문서: docs/02-matching-rules.md
 
-export const ALGORITHM_VERSION = "2026.10.15-2";
+export const ALGORITHM_VERSION = "2026.10.16-1";
 
 export type Gender = "M" | "F";
 
@@ -16,6 +16,11 @@ export interface Candidate {
   wantedTraits: string[];
   /** 신청 때 고른 일정. 고른 순서대로 */
   slotIds: string[];
+  /**
+   * '가까운 동네도 괜찮아요'를 켠 사람만: 고른 묶음에서 자리가 안 날 때 옮겨 갈 수 있는
+   * 같은 시·도 다른 묶음의 일정(같은 날짜). 끈 사람은 비워 둔다.
+   */
+  nearSlotIds?: string[];
 }
 
 export interface Slot {
@@ -115,6 +120,8 @@ export interface RunResult {
     dissolved: number;
     reallocated: number;
     merged: number;
+    /** 가까운 동네로 옮겨 자리를 찾은 사람 */
+    widened: number;
     confirmed: number;
     failed: number;
   };

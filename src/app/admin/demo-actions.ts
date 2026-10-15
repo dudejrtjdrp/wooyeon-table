@@ -8,6 +8,7 @@ import { INTERESTS, MBTIS, PRICE_RANGES, TRAITS } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
 import { tick } from "@/lib/pipeline";
+import { kstDay } from "@/lib/regions";
 import { db } from "@/lib/supabase";
 
 const FAMILY = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황"];
@@ -40,8 +41,8 @@ export async function seedParticipants(form: FormData) {
   const stamp = Date.now().toString(36).slice(-4);
 
   // 일부러 넣는 예외 상황: 성수 금요일에 몰리고, 홍대는 적게, 나이 차가 큰 사람 둘
-  const main = slots!.filter((s) => s.region === "성수" || s.region === "강남");
-  const thin = slots!.filter((s) => s.region === "홍대").slice(0, 1);
+  const main = slots!.filter((s) => s.region === "성수·건대" || s.region === "강남·역삼·선릉");
+  const thin = slots!.filter((s) => s.region === "홍대·합정·연남").slice(0, 1);
 
   // 한 번에 넣어야 서버 시간 제한 안에 끝난다 (참가자 수와 상관없이 쿼리 6번)
   const people = Array.from({ length: n }, (_, i) => {
@@ -87,7 +88,21 @@ export async function seedParticipants(form: FormData) {
   const payOf = new Map((pays ?? []).map((x) => [x.user_id, x.id]));
   const { data: apps } = await db()
     .from("applications")
-    .insert(people.map((p) => ({ user_id: uid(p.i), round_id: roundId, payment_id: payOf.get(uid(p.i)), application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: new Date().toISOString() })))
+    .insert(
+      people.map((p) => ({
+        user_id: uid(p.i),
+        round_id: roundId,
+        payment_id: payOf.get(uid(p.i)),
+        application_status: "SUBMITTED",
+        payment_status: "PAID",
+        match_status: "WAITING",
+        submitted_at: new Date().toISOString(),
+        // 고른 동네·날짜와 '가까운 동네도 괜찮아요'(열에 한 명꼴로 끔)
+        areas: [...new Set(p.slots.map((s) => s.region))],
+        dates: [...new Set(p.slots.map((s) => kstDay(s.starts_at)))],
+        near_ok: r() >= 0.1,
+      })),
+    )
     .select("id,user_id");
   const appOf = new Map((apps ?? []).map((x) => [x.user_id, x.id]));
   await db().from("application_slots").insert(people.flatMap((p) => p.slots.map((s) => ({ application_id: appOf.get(uid(p.i)), slot_id: s.id }))));
@@ -162,7 +177,7 @@ export async function reapply(form: FormData) {
   const from = String(form.get("round_id"));
   const to = String(form.get("next_round_id"));
   const { data: apps } = await db().from("applications").select("user_id,users(login_id)").eq("round_id", from).eq("attendance_status", "ATTENDED");
-  const { data: slots } = await db().from("slots").select("id,region").eq("round_id", to);
+  const { data: slots } = await db().from("slots").select("id,region,starts_at").eq("round_id", to);
   const r = rng(7);
   let n = 0;
   for (const a of (apps ?? []) as unknown as { user_id: string; users: { login_id: string } }[]) {
@@ -170,12 +185,12 @@ export async function reapply(form: FormData) {
     const { data: exists } = await db().from("applications").select("id").eq("user_id", a.user_id).eq("round_id", to).maybeSingle();
     if (exists) continue;
     const { data: pay } = await db().from("payments").insert({ user_id: a.user_id, amount: 29000, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() }).select("id").single();
+    const chosen = (slots ?? []).filter((s) => s.region === "성수·건대" || s.region === "강남·역삼·선릉").sort(() => r() - 0.5).slice(0, 2);
     const { data: app } = await db()
       .from("applications")
-      .insert({ user_id: a.user_id, round_id: to, payment_id: pay!.id, application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: new Date().toISOString() })
+      .insert({ user_id: a.user_id, round_id: to, payment_id: pay!.id, application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: new Date().toISOString(), areas: [...new Set(chosen.map((s) => s.region))], dates: [...new Set(chosen.map((s) => kstDay(s.starts_at)))], near_ok: true })
       .select("id")
       .single();
-    const chosen = (slots ?? []).filter((s) => s.region === "성수" || s.region === "강남").sort(() => r() - 0.5).slice(0, 2);
     await db().from("application_slots").insert(chosen.map((s) => ({ application_id: app!.id, slot_id: s.id })));
     n++;
   }

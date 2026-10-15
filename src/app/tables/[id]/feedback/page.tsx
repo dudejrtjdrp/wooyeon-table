@@ -19,12 +19,12 @@ export default async function Feedback({ params, searchParams }: { params: Promi
   const { data: prefs } = await db().from("person_prefs").select("to_user,pref").eq("from_user", me.id).eq("table_id", id);
   const prefMap = new Map((prefs ?? []).map((p) => [p.to_user, p.pref]));
 
-  const AV = ["bg-accent-soft text-accent", "bg-[#fdecee] text-[#e2556b]", "bg-[#f0ecfd] text-[#6a4fd6]", "bg-[#fdf3e3] text-[#c2780e]", "bg-[#e6f6ee] text-[#16a06b]"];
-  const ta = "w-full resize-none rounded-2xl border border-[#e8edf5] bg-field px-4 pt-3.5 text-[16px] text-ink outline-none placeholder:text-muted/70 focus:border-accent focus:bg-card";
+  const AV = ["bg-accent-soft text-accent-text", "bg-[#CFE3D8] text-accent-text", "bg-[#EEF1EF] text-ink2", "bg-[#FDF3D2] text-[#6b5410]"];
+  const ta = "w-full resize-none rounded-[14px] border border-line bg-field px-4 pt-3.5 text-[16px] text-ink outline-none placeholder:text-muted/70 focus:border-accent focus:bg-card";
   return (
     <Screen title="모임 후기" back={`/tables/${id}`}>
-      <PageTitle className="mt-4" title="함께한 저녁," accent="어떠셨나요?" />
-      <p className="mt-5 flex items-center gap-2.5 rounded-2xl bg-accent-soft/70 px-4 py-3.5 text-[14px] text-accent"><Lock size={17} className="shrink-0 fill-accent/20" />남겨 주신 내용은 다른 참가자에게 보이지 않아요.</p>
+      <PageTitle className="mt-4" title="함께한 저녁," accent="어떠셨나요?" sub="남겨 주신 점수와 선택은 다음 테이블을 꾸릴 때 바로 반영돼요." />
+      <p className="mt-5 flex items-center gap-2.5 rounded-[14px] bg-field px-4 py-3.5 text-[14px] text-ink2"><Lock size={17} className="shrink-0 text-accent" />다른 참가자에게는 보이지 않아요.</p>
 
       <form action={submitFeedback} className="mt-5 space-y-3">
         <input type="hidden" name="table_id" value={id} />
@@ -53,7 +53,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
                   {[["again", "또 만나고 싶어요"], ["", "괜찮아요"], ["avoid", "다시는 싫어요"]].map(([v, l]) => (
                     <label key={v} className="cursor-pointer">
                       <input type="radio" name={`pref_${o.user_id}`} value={v} defaultChecked={(prefMap.get(o.user_id) ?? "") === v} className="peer sr-only" />
-                      <span className="flex h-11 items-center justify-center rounded-xl border border-line text-[14px] text-muted transition peer-checked:border-accent peer-checked:bg-accent peer-checked:font-semibold peer-checked:text-white">{l}</span>
+                      <span className="flex h-11 items-center justify-center rounded-[22px] bg-row text-[14px] font-semibold text-ink2 transition peer-checked:bg-accent peer-checked:font-extrabold peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-accent">{l}</span>
                     </label>
                   ))}
                 </div>
@@ -68,9 +68,9 @@ export default async function Feedback({ params, searchParams }: { params: Promi
         </SectionCard>
       </form>
 
-      <section id="report" className="shadow-card mt-6 scroll-mt-16 rounded-[22px] bg-card p-5">
-        <h2 className="text-[22px] font-bold tracking-[-0.03em] text-ink">불편한 일이 있었나요?</h2>
-        <p className="mt-1 text-[14px] text-muted">신고 내용은 상대에게 알리지 않아요. 신고하면 바로 차단돼요.</p>
+      <section id="report" className="mt-10 scroll-mt-16 border-t border-line pt-8">
+        <h2 className="text-[20px] font-extrabold text-ink">불편한 일이 있었나요?</h2>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-muted">후기와 따로 접수돼요. 상대에게는 알리지 않고, 신고하면 바로 같은 테이블에 앉지 않게 막아요.</p>
         <form action={report} className="mt-5 space-y-5">
           <input type="hidden" name="table_id" value={id} />
           <div>
@@ -91,7 +91,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
               {REASONS.map((r) => (
                 <label key={r} className="cursor-pointer">
                   <input type="radio" name="reason" value={r} className="peer sr-only" />
-                  <span className="flex min-h-12 items-center justify-center rounded-xl border border-line px-2 text-center text-[14px] text-ink transition peer-checked:border-danger peer-checked:bg-danger/5 peer-checked:font-semibold peer-checked:text-danger">{r}</span>
+                  <span className="flex min-h-12 items-center justify-center rounded-[14px] bg-row px-2 text-center text-[14px] text-ink transition peer-checked:bg-danger/10 peer-checked:font-extrabold peer-checked:text-danger peer-focus-visible:ring-2 peer-focus-visible:ring-danger">{r}</span>
                 </label>
               ))}
             </div>

@@ -67,7 +67,7 @@ export function TossCheckout(p: Props) {
 
   return (
     <>
-      <section className="shadow-card mt-3 rounded-[22px] bg-card p-5">
+      <section className="mt-3 rounded-[22px] bg-field p-5">
         <p className="text-[17px] font-bold text-ink">결제 수단<span className="ml-2 inline-flex h-[22px] items-center rounded-full bg-accent-soft px-2 align-middle text-[11px] font-semibold text-accent">필수</span></p>
         <div className="mt-2 divide-y divide-line" role="radiogroup">
           {METHODS.map((m) => (

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { ChevronDown, Clock3, Ticket } from "lucide-react";
-import { ErrorText, IMG, PageTitle, Photo, Screen } from "@/components/ui";
+import { ErrorText, PageTitle, Screen } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { PASSES, REFUND_POLICY, type PassType, won } from "@/lib/constants";
 import { db } from "@/lib/supabase";
@@ -28,19 +28,18 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
         <input type="hidden" name="app_id" value={app.id} />
         <PageTitle className="mt-4" title="결제 내용을" accent="확인해 주세요" />
 
-        <section className="shadow-card mt-7 flex gap-4 rounded-[22px] bg-card p-5">
+        <section className="mt-7 flex gap-4 rounded-[22px] bg-field p-5">
           <div className="min-w-0 flex-1">
             <p className="text-[19px] font-bold tracking-[-0.02em] text-ink">{app.rounds.title}</p>
             <span className="mt-2 inline-flex rounded-full bg-accent-soft px-3 py-1 text-[13px] font-semibold text-accent">{passDef.label}</span>
-            <p className="mt-5 flex items-center gap-2 text-[14px] text-[#4c5368]"><Ticket size={18} className="text-muted" />이용권 · {passDef.label}</p>
-            <p className="mt-2.5 flex items-start gap-2 text-[13px] leading-snug text-[#4c5368]"><Clock3 size={18} className="shrink-0 text-muted" />매칭 · 결제 후 마감 시각에 진행해요</p>
+            <p className="mt-5 flex items-center gap-2 text-[14px] text-ink2"><Ticket size={18} className="text-muted" />이용권 · {passDef.label}</p>
+            <p className="mt-2.5 flex items-start gap-2 text-[13px] leading-snug text-ink2"><Clock3 size={18} className="shrink-0 text-muted" />매칭 · 결제 후 마감 시각에 진행해요</p>
           </div>
-          <Photo src={IMG.placeSetting} className="w-[38%] shrink-0 rounded-2xl" sizes="160px" />
         </section>
 
-        <section className="shadow-card mt-3 rounded-[22px] bg-card p-5">
+        <section className="mt-3 rounded-[22px] bg-field p-5">
           <p className="text-[14px] text-muted">결제 금액</p>
-          <p className="mt-1 text-[36px] font-bold tracking-[-0.03em] text-accent">{won(app.payments.amount)}</p>
+          <p className="mt-1 text-[34px] font-black text-ink">{won(app.payments.amount)}</p>
           <p className="mt-1 text-[14px] text-muted">식사비는 현장에서 각자 계산해요.</p>
         </section>
 
@@ -56,7 +55,7 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
           orderName={`우연한 식탁 ${passDef.label}`}
         />
 
-        <details className="shadow-card group mt-3 rounded-[22px] bg-card">
+        <details className="group mt-3 rounded-[22px] bg-field">
           <summary className="flex cursor-pointer list-none items-center justify-between p-5">
             <span>
               <span className="block text-[16px] font-bold text-ink">환불 규정 확인하기</span>
@@ -64,7 +63,7 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
             </span>
             <ChevronDown size={20} className="text-muted transition group-open:rotate-180" />
           </summary>
-          <ul className="space-y-2 px-5 pb-5 text-[14px] leading-relaxed text-[#4c5368]">
+          <ul className="space-y-2 px-5 pb-5 text-[14px] leading-relaxed text-ink2">
             {REFUND_POLICY.map((r) => (
               <li key={r} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-muted" />{r}</li>
             ))}

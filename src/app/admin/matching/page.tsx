@@ -6,6 +6,7 @@ import { MATCH, TABLE, label } from "@/lib/labels";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime, fmtDay, fmtTime } from "@/lib/format";
 import type { ScoreDetail } from "@/lib/matching/types";
+import { sidoOf } from "@/lib/regions";
 import { db } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +32,10 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
   }[];
   const { data: appsRaw } = await db()
     .from("applications")
-    .select("id,table_id,match_status,realloc_count,match_reason,users(name,profiles(birth_year,gender,mbti))")
+    .select("id,table_id,match_status,realloc_count,match_reason,areas,near_ok,users(name,profiles(birth_year,gender,mbti))")
     .eq("round_id", round.id);
   const apps = (appsRaw ?? []) as unknown as {
-    id: string; table_id: string | null; match_status: string; realloc_count: number; match_reason: string | null;
+    id: string; table_id: string | null; match_status: string; realloc_count: number; match_reason: string | null; areas: string[] | null; near_ok: boolean | null;
     users: { name: string; profiles: { birth_year: number; gender: string; mbti: string | null } | null };
   }[];
   const failed = apps.filter((a) => ["ALTERNATIVE_OFFERED", "EXCEPTION", "TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.table_id);
@@ -69,7 +70,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold text-accent">실행 요약</span>
               <span className="mt-0.5 block text-[14px] text-[#4c5368]">
-                {fmtDateTime(run.started_at)} 실행 · 알고리즘 {run.algorithm_version} · 대상 {run.candidate_count}명 → 확정 {st("confirmed")}명 / 테이블 {tables.length}개 / 재배치 {st("reallocated")}명 / 병합 {st("merged")} / 해제 {st("dissolved")} / 대안 안내 {st("failed")}명{st("exceptions") ? ` / 데이터 예외 ${st("exceptions")}` : ""}
+                {fmtDateTime(run.started_at)} 실행 · 알고리즘 {run.algorithm_version} · 대상 {run.candidate_count}명 → 확정 {st("confirmed")}명 / 테이블 {tables.length}개 / 재배치 {st("reallocated")}명 / 가까운 동네 {st("widened")}명 / 병합 {st("merged")} / 해제 {st("dissolved")} / 대안 안내 {st("failed")}명{st("exceptions") ? ` / 데이터 예외 ${st("exceptions")}` : ""}
               </span>
             </span>
             <span className="flex items-center gap-1 border-l border-line pl-4 text-[14px] font-semibold text-accent">처리 기록 보기 <ChevronDown size={18} className="transition group-open:rotate-180" /></span>
@@ -103,7 +104,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                   </div>
                   <div className="mt-5 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
                     <table className="w-full text-[14px]">
-                      <thead><tr>{["이름", "출생연도", "성별", "MBTI", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+                      <thead><tr>{["이름", "출생연도", "성별", "MBTI", "희망 지역", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
                       <tbody className="divide-y divide-line">
                         {members.map((mb) => (
                           <tr key={mb.id}>
@@ -111,6 +112,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                             <td className="px-4 py-2.5 tabular-nums text-[#4c5368]">{mb.users.profiles?.birth_year}</td>
                             <td className="px-4 py-2.5 text-[#4c5368]">{mb.users.profiles?.gender === "M" ? "남" : "여"}</td>
                             <td className="px-4 py-2.5 text-[#4c5368]">{mb.users.profiles?.mbti ?? "-"}</td>
+                            <td className="px-4 py-2.5 text-[13px]">{!mb.areas?.length ? <span className="text-muted">-</span> : (mb.areas.includes(t.slots.region) || mb.areas.includes(`${sidoOf(t.slots.region)} 전체`)) ? <span className="text-ink2">고른 동네</span> : <span className="rounded-full bg-warn-soft px-2 py-0.5 font-semibold text-warn">가까운 동네로 이동</span>}</td>
                             <td className="px-2 py-2.5">{mb.realloc_count > 0 && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[12px] font-semibold text-warn">재배치</span>}</td>
                           </tr>
                         ))}

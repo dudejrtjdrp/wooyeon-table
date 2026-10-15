@@ -4,6 +4,7 @@ import { afterConfirm } from "../pipeline";
 import { pushNotifications } from "../push";
 import { loadTemplates, render } from "../templates";
 import { db } from "../supabase";
+import { nearSlotsFor } from "../regions";
 import { runMatching } from "./engine";
 import {
   ALGORITHM_VERSION,
@@ -21,6 +22,9 @@ type AppRow = {
   payment_status: string;
   users: { account_status: string; profiles: ProfileRow | ProfileRow[] | null };
   application_slots: { slot_id: string }[];
+  areas: string[] | null;
+  dates: string[] | null;
+  near_ok: boolean | null;
 };
 type ProfileRow = {
   birth_year: number;
@@ -93,16 +97,18 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
     await db().from("rounds").update({ status: "matching" }).eq("id", roundId);
 
     // 2. 대상 불러오기: 제출 + 결제 완료 + 매칭 대기
-    const { data: slotRows } = await db().from("slots").select("id,region,starts_at,max_tables").eq("round_id", roundId);
+    const { data: slotRows, error: slotErr } = await db().from("slots").select("id,region,sido,starts_at,max_tables").eq("round_id", roundId);
+    if (slotErr) throw new Error(`일정 조회 실패: ${slotErr.message}`);
     const slots: Slot[] = (slotRows ?? []).map((s) => ({ id: s.id, region: s.region, startsAt: s.starts_at, maxTables: s.max_tables }));
     const slotMap = new Map(slots.map((s) => [s.id, s]));
 
-    const { data: apps } = await db()
+    const { data: apps, error: appErr } = await db()
       .from("applications")
-      .select("id,user_id,payment_status,users(account_status,profiles(*)),application_slots(slot_id)")
+      .select("id,user_id,payment_status,areas,dates,near_ok,users(account_status,profiles(*)),application_slots(slot_id)")
       .eq("round_id", roundId)
       .eq("application_status", "SUBMITTED")
       .eq("match_status", "WAITING");
+    if (appErr) throw new Error(`신청 조회 실패: ${appErr.message}`);
     const rows = (apps ?? []) as unknown as AppRow[];
 
     const candidates: Candidate[] = [];
@@ -125,6 +131,8 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
         myTraits: p.my_traits ?? [],
         wantedTraits: p.wanted_traits ?? [],
         slotIds: a.application_slots.map((s) => s.slot_id),
+        // '가까운 동네도 괜찮아요'를 켠 사람만 같은 시·도 다른 묶음(같은 날짜)으로 넓힐 수 있다
+        nearSlotIds: a.near_ok && a.areas?.length ? nearSlotsFor(a.areas, a.dates ?? [], slotRows ?? []) : undefined,
       });
     }
 

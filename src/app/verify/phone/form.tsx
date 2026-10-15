@@ -50,7 +50,7 @@ export function PhoneVerifyForm({ initialPhone, next, demo }: { initialPhone: st
     router.replace(`${next}${next.includes("?") ? "&" : "?"}m=${encodeURIComponent("휴대폰 인증을 마쳤어요")}`);
   };
 
-  const field = "shadow-card rounded-[22px] bg-card p-5";
+  const field = "rounded-[22px] bg-field p-5";
   return (
     <div className="pb-32">
       <h2 className="animate-rise mt-6 text-[28px] font-bold leading-[1.3] tracking-[-0.03em] text-ink">

@@ -8,16 +8,17 @@ import { notify } from "@/lib/notify";
 import { refundPayment } from "@/lib/payments";
 import { won } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
+import { kstDay } from "@/lib/regions";
 import { db } from "@/lib/supabase";
 
 async function loadOwn(appId: string, userId: string) {
   const { data } = await db()
     .from("applications")
-    .select("id,user_id,match_status,payment_status,payment_id,round_id,payments(id,pass_id,status,amount)")
+    .select("id,user_id,match_status,payment_status,payment_id,round_id,near_ok,payments(id,pass_id,status,amount)")
     .eq("id", appId)
     .maybeSingle();
   const app = data as unknown as {
-    id: string; user_id: string; match_status: string; payment_status: string; payment_id: string; round_id: string;
+    id: string; user_id: string; match_status: string; payment_status: string; payment_id: string; round_id: string; near_ok: boolean | null;
     payments: { id: string; pass_id: string | null; status: string; amount: number };
   } | null;
   if (!app || app.user_id !== userId) redirect("/");
@@ -33,7 +34,7 @@ export async function transfer(form: FormData) {
   const app = await loadOwn(appId, me.id);
   if (!slotIds.length) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("옮길 일정을 골라 주세요")}`);
 
-  const { data: slots } = await db().from("slots").select("id,round_id,rounds(status,apply_deadline,title,match_at)").in("id", slotIds);
+  const { data: slots } = await db().from("slots").select("id,round_id,region,starts_at,rounds(status,apply_deadline,title,match_at)").in("id", slotIds);
   const roundIds = [...new Set((slots ?? []).map((s) => s.round_id))];
   if (roundIds.length !== 1) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("한 번에 한 차수의 일정만 고를 수 있어요")}`);
   const target = roundIds[0];
@@ -64,6 +65,9 @@ export async function transfer(form: FormData) {
       match_status: "WAITING",
       transferred_from: appId,
       submitted_at: new Date().toISOString(),
+      areas: [...new Set((slots ?? []).map((x) => x.region))],
+      dates: [...new Set((slots ?? []).map((x) => kstDay(x.starts_at)))],
+      near_ok: app.near_ok ?? false,
     })
     .select("id")
     .single();

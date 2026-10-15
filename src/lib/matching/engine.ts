@@ -37,6 +37,8 @@ export function runMatching(
   const candidates = [...candidatesIn]
     .map((c) => ({ ...c, slotIds: c.slotIds.filter((id) => slots.has(id)) }))
     .sort((a, b) => a.applicationId.localeCompare(b.applicationId));
+  // 본인이 동의한 일정 범위(고른 일정 + 가까운 동네). widen이 slotIds를 늘려도 재검증은 이 범위로 본다
+  const consent = new Map(candidates.map((c) => [c.applicationId, new Set([...c.slotIds, ...(c.nearSlotIds ?? [])])]));
 
   const reallocCount = new Map<string, number>(candidates.map((c) => [c.applicationId, 0]));
   const homeSlot = new Map<string, string>();
@@ -232,12 +234,89 @@ export function runMatching(
     if (!changed) break;
   }
 
+  // ── 5-1. 가까운 동네 확장: '가까운 동네도 괜찮아요'를 켠 사람만 같은 시·도 다른 묶음으로 ──
+  //         끈 사람은 고른 묶음 밖으로 보내지 않는다(희망 지역 반영). 기존 테이블 합류 → 새로 묶기 순서.
+  const near = (c: Candidate) => c.nearSlotIds ?? [];
+  const widen = (c: Candidate, slotId: string) => {
+    if (!c.slotIds.includes(slotId)) c.slotIds = [...c.slotIds, slotId];
+    reallocCount.set(c.applicationId, (reallocCount.get(c.applicationId) ?? 0) + 1);
+    failReason.delete(c.applicationId);
+  };
+  if (remaining.some((c) => near(c).length)) {
+    const after: Candidate[] = [];
+    for (const c of remaining) {
+      if (!near(c).length) {
+        after.push(c);
+        continue;
+      }
+      const probe = { ...c, slotIds: near(c) };
+      const target = findReallocTarget(probe, tables, slots, homeSlot.get(c.applicationId), rel, settings);
+      if (target) {
+        const to = slots.get(target.table.slotId)!;
+        widen(c, to.id);
+        target.table.members.push(c);
+        moveNote.set(c.applicationId, `가까운 동네 ${to.region} 테이블`);
+        log.push(`${short(c)} → 가까운 동네 ${label(to)} 테이블로 합류`);
+      } else after.push(c);
+    }
+    remaining = after;
+    // 남은 사람끼리: 일정마다 그 일정을 고른 사람 + 가까운 동네로 허용한 사람을 모은다
+    const allowed = (c: Candidate) => [...c.slotIds, ...near(c)];
+    for (let round = 0; round < 3 && remaining.length >= settings.minSize; round++) {
+      const d = new Map<string, number>();
+      for (const c of remaining) for (const s of allowed(c)) d.set(s, (d.get(s) ?? 0) + 1);
+      const order = [...d.entries()].filter(([, n]) => n >= settings.minSize).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      let changed = false;
+      for (const [slotId] of order) {
+        const slot = slots.get(slotId);
+        if (!slot) continue;
+        const used = tables.filter((t) => !t.dissolved && t.slotId === slotId).length;
+        const room = slot.maxTables - used;
+        if (room <= 0) continue;
+        const pool = remaining.filter((c) => allowed(c).includes(slotId));
+        // 원래 이 묶음을 고른 사람이 한 명도 없으면 열지 않는다 (아무도 안 고른 동네에 테이블을 만들지 않음)
+        if (pool.length < settings.minSize || !pool.some((c) => c.slotIds.includes(slotId))) continue;
+        const { groups } = formGroups(pool, rel, settings, room);
+        const ok = groups.filter((g) => scoreGroup(g, rel, settings).total >= settings.minScore);
+        if (!ok.length) continue;
+        const placed = new Set<string>();
+        for (const g of ok) {
+          tables.push({ slotId, members: g, origin: "merged", dissolved: false });
+          merged++;
+          for (const m of g) {
+            placed.add(m.applicationId);
+            if (!m.slotIds.includes(slotId)) {
+              widen(m, slotId);
+              moveNote.set(m.applicationId, `가까운 동네 ${slot.region} 테이블`);
+            } else {
+              reallocCount.set(m.applicationId, (reallocCount.get(m.applicationId) ?? 0) + 1);
+              failReason.delete(m.applicationId);
+            }
+          }
+          log.push(`가까운 동네까지 넓혀 ${g.length}명을 ${label(slot)}에 새 테이블로 묶음`);
+        }
+        remaining = remaining.filter((c) => !placed.has(c.applicationId));
+        changed = true;
+      }
+      if (!changed) break;
+    }
+  }
+  for (const c of remaining) {
+    if (!failReason.has(c.applicationId) || failReason.get(c.applicationId)!.startsWith("처음")) {
+      failReason.set(
+        c.applicationId,
+        near(c).length ? "이웃 동네까지 찾아봤는데 4명이 안 모였어요" : "고른 동네에서 4명이 안 모였어요",
+      );
+    }
+  }
+
   // ── 6. 재검증과 확정 ────────────────────────────────────────────────
   const finalTables: TableResult[] = [];
   const outcomes: Record<string, Outcome> = {};
   for (const t of tables) {
     if (t.dissolved) continue;
     const violations = validateTable(t.members, t.slotId, rel, settings);
+    if (t.members.some((m) => !consent.get(m.applicationId)?.has(t.slotId))) violations.push("slot");
     const score = scoreGroup(t.members, rel, settings);
     if (violations.length || score.total < settings.minScore) {
       // 재배치로 조건이 깨졌으면 확정하지 않는다
@@ -280,6 +359,11 @@ export function runMatching(
   }
 
   const confirmed = Object.values(outcomes).filter((o) => o.status === "CONFIRMED").length;
+  // 가까운 동네로 옮겨 실제로 확정된 사람 수 (해제된 테이블은 세지 않는다)
+  const widened = finalTables.reduce(
+    (n, t) => n + t.applicationIds.filter((id) => moveNote.get(id)?.startsWith("가까운 동네") && !candidatesIn.find((c) => c.applicationId === id)?.slotIds.includes(t.slotId)).length,
+    0,
+  );
   log.push(`확정 테이블 ${finalTables.length}개 (${confirmed}명), 대안 안내 ${remaining.length}명`);
 
   return {
@@ -293,6 +377,7 @@ export function runMatching(
       dissolved,
       reallocated,
       merged,
+      widened,
       confirmed,
       failed: remaining.length,
     },

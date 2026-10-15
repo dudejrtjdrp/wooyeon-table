@@ -42,18 +42,20 @@ export default async function Notifications() {
 
   return (
     <TabScreen title="알림">
-      {!data?.length && <EmptyState icon={<Bell size={40} className="text-accent/40" />} title="아직 받은 알림이 없어요" body="매칭 결과와 모임 안내가 여기로 와요." />}
+      {!data?.length && <EmptyState icon={<Bell size={40} className="text-faint" />} title="아직 받은 알림이 없어요" body="매칭 결과와 모임 안내가 여기로 와요." />}
       <ul className="mt-6 space-y-2.5">
         {data?.map((n, i) => {
           const Icon = ICON[n.template] ?? Bell;
           const unread = !n.read_at;
           const body = (
-            <div className={`relative flex items-center gap-4 rounded-[20px] p-4 pl-5 ${unread ? "bg-accent-soft/70" : "shadow-card bg-card"}`}>
-              {unread && <span className="absolute left-2 top-1/2 size-2 -translate-y-1/2 rounded-full bg-accent" />}
-              <span className={`flex size-12 shrink-0 items-center justify-center rounded-full ${unread ? "bg-card" : "bg-accent-soft"} text-accent`}><Icon size={22} /></span>
+            <div className="relative flex items-center gap-4 rounded-[20px] bg-card p-4">
+              <span className={`relative flex size-11 shrink-0 items-center justify-center rounded-full ${unread ? "bg-accent text-white" : "bg-accent-soft text-accent"}`}>
+                <Icon size={20} />
+                {unread && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-card bg-[#F4C542]" aria-label="새 알림" />}
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-[17px] font-bold tracking-[-0.02em] text-ink">{n.title}</p>
+                  <p className={`text-[16px] text-ink ${unread ? "font-extrabold" : "font-bold"}`}>{n.title}</p>
                   <span className="shrink-0 pt-0.5 text-[12px] text-muted">{ago(n.scheduled_at, t)}</span>
                 </div>
                 <p className="mt-1 line-clamp-2 text-[14px] leading-relaxed text-muted">{n.body}</p>

@@ -1,15 +1,16 @@
-import { CalendarDays, ChevronRight } from "lucide-react";
-import Image from "next/image";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { after } from "next/server";
 import { PushToggle } from "@/components/push-toggle";
 import { InstallCard } from "@/components/pwa";
 import { AuthChooser } from "@/components/auth-chooser";
 import { OfferBanner } from "@/components/offer-banner";
-import { Backdrop, IMG, LinkButton, Pill, SectionTitle, TabScreen, Toast } from "@/components/ui";
+import { RoundTable } from "@/components/brand";
+import { Card, LinkButton, List, Pill, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { dday, ddayLabel, fmtDateTime, fmtSlot } from "@/lib/format";
+import { dday, ddayLabel, fmtClock, fmtDateTime, fmtDay, fmtSlot } from "@/lib/format";
+import { areasLabel } from "@/lib/regions";
 import { tick } from "@/lib/pipeline";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
@@ -19,7 +20,7 @@ export const maxDuration = 60;
 
 type ActiveRow = {
   id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null;
-  table_id: string | null;
+  table_id: string | null; areas: string[] | null; dates: string[] | null;
   rounds: { title: string; match_at: string };
   dining_tables: { slots: { starts_at: string; region: string } | null; venues: { name: string } | null } | null;
 };
@@ -35,13 +36,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,table_id,created_at,rounds(title,match_at),dining_tables(slots(starts_at,region),venues(name))")
+    .select("id,application_status,payment_status,match_status,attendance_status,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(slots(starts_at,region),venues(name))")
     .eq("user_id", me.id)
-    .order("created_at", { ascending: false })
-    .limit(5);
+    .order("submitted_at", { ascending: false, nullsFirst: false })
+    .limit(10);
   const list = (apps ?? []) as unknown as ActiveRow[];
-  const active = list.find((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED"));
-  const finished = !active || ["ATTENDED", "NO_SHOW"].includes(active.attendance_status ?? "");
+  // 진행 중인 신청(결제 대기 포함)을 먼저 보여준다. 다시 신청하면 같은 줄을 되살리므로 생성 시각이 아니라 제출 시각으로 고른다
+  const live = list.filter((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED"));
+  const ongoing = live.filter((a) => !["ATTENDED", "NO_SHOW"].includes(a.attendance_status ?? ""));
+  const active = ongoing[0] ?? live[0];
+  const finished = !ongoing.length;
   const next = me.hasProfile && finished ? await nextPick(me.id) : null;
 
   const { data: open } = await db()
@@ -62,154 +66,128 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
     }
   }
   const upcoming = [...slotRows.values()].sort((x, y) => x.startsAt.localeCompare(y.startsAt)).slice(0, 4);
-  const confirmedSoon = active?.match_status === "CONFIRMED" && !finished;
 
   return (
-    <TabScreen backdrop={<Backdrop side height={300} />}>
+    <TabScreen>
       <Toast msg={m} />
-      <h1 className="animate-rise mt-6 text-[30px] font-bold leading-[1.3] tracking-[-0.03em] text-ink">
-        {me.name}님,
-        <br />
-        <span className="text-accent">{confirmedSoon ? "곧 식탁에서 만나요" : "이번 주 저녁 어때요?"}</span>
-      </h1>
+      <div className="flex flex-col gap-2.5 pt-2.5">
+        {me.hasProfile && <OfferBanner userId={me.id} />}
 
-      {me.hasProfile && <OfferBanner userId={me.id} />}
+        {!me.hasProfile ? (
+          <Card>
+            <p className="text-[14px] text-muted">{me.name}님, 반가워요</p>
+            <h1 className="mt-1.5 text-[23px] font-black leading-[1.4]">프로필부터 채워주세요</h1>
+            <p className="mt-1.5 text-[15px] leading-relaxed text-muted">결이 맞는 사람을 찾으려면 몇 가지가 필요해요. 2분이면 끝나요.</p>
+            <div className="my-5 flex justify-center"><RoundTable size={180} filled={1} /></div>
+            <LinkButton href="/onboarding">프로필 만들기</LinkButton>
+          </Card>
+        ) : active && !finished ? (
+          <StatusCard a={active} t={t} />
+        ) : (
+          <Card>
+            <p className="text-[14px] text-muted">{me.name}님</p>
+            <h1 className="mt-1.5 text-[23px] font-black leading-[1.4]">{upcoming[0] ? <>이번 주 저녁,<br />같이 먹을래요?</> : <>다음 테이블을<br />준비하고 있어요</>}</h1>
+            <div className="my-5 flex justify-center"><RoundTable size={200} filled={1} center={upcoming[0] ? <>{fmtDay(upcoming[0].startsAt)}<br />{fmtClock(upcoming[0].startsAt)}</> : null} /></div>
+            <LinkButton href={upcoming[0] ? `/apply/${upcoming[0].roundId}` : "/my-tables"}>{upcoming[0] ? "신청하기" : "지난 테이블 보기"}</LinkButton>
+          </Card>
+        )}
 
-      {!me.hasProfile ? (
-        <HeroCard
-          pill={["프로필 필요", "candle"]}
-          title="프로필부터 채워 주세요"
-          desc="결이 맞는 사람을 찾으려면 몇 가지가 필요해요. 2분이면 끝나요."
-          cta="프로필 작성하기"
-          href="/onboarding"
-        />
-      ) : active && !finished ? (
-        <StatusHero a={active} t={t} />
-      ) : (
-        <HeroCard
-          pill={["새 식탁", "accent"]}
-          title={upcoming[0] ? "이번 주 식탁이 열렸어요" : "다음 식탁을 준비 중이에요"}
-          desc={upcoming[0] ? `${fmtSlot(upcoming[0].startsAt)}부터 신청할 수 있어요.` : "새 일정이 열리면 바로 알려드릴게요."}
-          cta={upcoming[0] ? "일정 보러 가기" : "지난 식탁 보기"}
-          href={upcoming[0] ? "/rounds" : "/my-tables"}
-        />
-      )}
+        {active && (
+          <List>
+            {!finished && !["PENDING", "FAILED"].includes(active.payment_status) && <Row href={`/applications/${active.id}`} right={<ChevronRight size={18} className="text-[#b5c0ba]" />}><span className="text-[15px]">결제 완료 · 영수증과 환불 규정</span></Row>}
+            {finished && <Row href={`/applications/${active.id}`} right={<Pill tone={headline(active).tone}>{headline(active).label}</Pill>}><span className="text-[15px]">{active.rounds.title}</span></Row>}
+          </List>
+        )}
 
-      {me.hasProfile && <InstallCard />}
-      {me.hasProfile && <PushToggle variant="card" />}
+        {next && (
+          <Card>
+            <p className="text-[13px] font-bold text-accent">다음 테이블 추천</p>
+            <p className="mt-1.5 text-[18px] font-extrabold leading-snug">{next.why}</p>
+            <p className="mt-1 text-[14px] text-muted">{next.roundTitle} · {fmtDateTime(next.deadline)} 마감</p>
+            <LinkButton href={`/apply/${next.roundId}`} className="mt-4">이 일정 신청하기</LinkButton>
+          </Card>
+        )}
 
-      {active && finished && (
-        <Link href={`/applications/${active.id}`} className="shadow-card mt-4 flex items-center justify-between gap-3 rounded-[22px] bg-card p-5">
-          <div className="min-w-0">
-            <p className="text-[13px] text-muted">{active.rounds.title}</p>
-            <p className="mt-1 text-[16px] font-semibold text-ink">{headline(active).desc}</p>
-          </div>
-          <Pill tone={headline(active).tone}>{headline(active).label}</Pill>
-        </Link>
-      )}
-
-      {next && (
-        <div className="shadow-card mt-4 rounded-[22px] bg-card p-5">
-          <p className="text-[13px] font-semibold text-accent">다음 식탁 추천</p>
-          <p className="mt-1.5 text-[18px] font-bold leading-snug text-ink">{next.why}</p>
-          <p className="mt-1 text-[14px] text-muted">{next.roundTitle}, {fmtDateTime(next.deadline)} 마감</p>
-          <LinkButton href={`/apply/${next.roundId}`} className="mt-4">이 일정 신청하기 <ChevronRight size={19} /></LinkButton>
-        </div>
-      )}
+        {me.hasProfile && <InstallCard />}
+        {me.hasProfile && <PushToggle variant="card" />}
+      </div>
 
       {!!upcoming.length && (
         <>
-          <SectionTitle action={<Link href="/rounds" className="flex items-center text-[15px] font-medium text-accent">전체 보기<ChevronRight size={18} /></Link>}>모집 중인 일정</SectionTitle>
-          <div className="space-y-2.5">
+          <SectionTitle action={<Link href="/rounds" className="flex h-11 items-center text-[14px] font-bold text-accent">전체 보기</Link>}>모집 중인 날</SectionTitle>
+          <List>
             {upcoming.map((u) => (
-              <Link key={`${u.roundId}${u.startsAt}`} href={`/apply/${u.roundId}`} className="shadow-card flex items-center gap-4 rounded-[20px] bg-card p-4 active:scale-[.99]">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><CalendarDays size={22} /></span>
-                <span className="min-w-0 flex-1">
-                  <span className="block whitespace-nowrap text-[16px] font-bold tracking-[-0.02em] text-ink">{fmtSlot(u.startsAt)}</span>
-                  <span className="mt-0.5 block truncate text-[14px] text-muted">{u.regions.join(" · ")}</span>
-                </span>
-                <span className="rounded-full bg-accent-soft px-3 py-1 text-[13px] font-semibold text-accent">{ddayLabel(dday(u.startsAt, t))}</span>
-                <ChevronRight size={20} className="shrink-0 text-muted" />
-              </Link>
+              <Row key={`${u.roundId}${u.startsAt}`} href={`/apply/${u.roundId}`} right={<span className="text-[13px] font-bold text-accent">{ddayLabel(dday(u.startsAt, t))}</span>}>
+                <span className="block text-[16px] font-extrabold">{fmtSlot(u.startsAt)}</span>
+                <span className="mt-0.5 block truncate text-[13px] text-muted">{u.regions.join(" · ")}</span>
+              </Row>
             ))}
-          </div>
+          </List>
         </>
       )}
 
       {!list.length && me.hasProfile && (
         <>
           <SectionTitle>이렇게 진행돼요</SectionTitle>
-          <ol className="shadow-card space-y-4 rounded-[22px] bg-card p-5">
-            {[
-              ["갈 수 있는 날짜와 동네를 골라요", "여러 개 고를수록 테이블이 잘 꾸려져요."],
-              ["마감 시각에 4~6명 테이블이 자동으로 꾸려져요", "나이대, 관심사, 성향을 함께 봐요."],
-              ["식당과 단체방 안내를 받고 만나요", "모임 하루 전에 한 번 더 알려드려요."],
-            ].map(([a, b], i) => (
-              <li key={a} className="flex gap-3.5">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13px] font-bold text-accent">{i + 1}</span>
-                <div>
-                  <p className="text-[15px] font-semibold text-ink">{a}</p>
-                  <p className="mt-0.5 text-[13px] text-muted">{b}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
+          <Card>
+            <ol className="space-y-4">
+              {[
+                ["동네와 날짜를 골라요", "여러 곳 고를수록 테이블이 잘 꾸려져요."],
+                ["마감 시각에 4~6명 테이블이 자동으로 정해져요", "나이대, 성비, 관심사, 성향을 같이 봐요."],
+                ["식당과 단체방 안내를 받고 만나요", "하루 전에 한 번 더 알려드려요."],
+              ].map(([a, b], i) => (
+                <li key={a} className="flex gap-3.5">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13px] font-extrabold text-accent-text">{i + 1}</span>
+                  <div>
+                    <p className="text-[15px] font-bold">{a}</p>
+                    <p className="mt-0.5 text-[13px] text-muted">{b}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </Card>
         </>
       )}
     </TabScreen>
   );
 }
 
-/** 시안 B1의 큰 사진 카드: 왼쪽 글자, 오른쪽 식탁, 아래 블루 버튼 */
-function HeroCard({ pill, title, desc, foot, cta, href }: { pill: [string, "accent" | "leaf" | "candle" | "muted" | "danger" | "ink"]; title: string; desc?: string; foot?: string; cta: string; href: string }) {
-  return (
-    <section className="shadow-card animate-rise relative mt-6 overflow-hidden rounded-[26px] bg-card">
-      <Image src={IMG.homeBg} alt="" fill priority sizes="448px" className="object-cover" style={{ objectPosition: "57% 50%" }} />
-      <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/75 via-45% to-white/0" />
-      <div className="relative px-6 pb-5 pt-6">
-        <Pill tone={pill[1]}>{pill[0]}</Pill>
-        <p className="mt-4 max-w-[64%] text-[26px] font-bold leading-[1.25] tracking-[-0.03em] text-ink">{title}</p>
-        {desc && <p className="mt-3 max-w-[56%] text-[15px] leading-relaxed text-[#4c5368]">{desc}</p>}
-        {foot && (
-          <>
-            <span className="mt-5 block h-px w-6 bg-[#c9cfdb]" />
-            <p className="mt-4 max-w-[60%] text-[14px] text-[#5d6478]">{foot}</p>
-          </>
-        )}
-        <Link href={href} className="shadow-cta mt-20 flex h-[56px] items-center justify-center gap-1 rounded-2xl bg-accent text-[17px] font-semibold text-white active:scale-[.985]">
-          {cta} <ChevronRight size={20} />
-        </Link>
-      </div>
-    </section>
-  );
-}
+const STEPS = ["신청", "결제", "매칭 중", "확정"] as const;
 
-/** 진행 중인 신청을 첫 화면 맨 위에 크게 보여준다 */
-function StatusHero({ a, t }: { a: ActiveRow; t: Date }) {
+/** E10 매칭 대기 / 확정 카드: 원형 테이블 + 진행 막대 */
+function StatusCard({ a, t }: { a: ActiveRow; t: Date }) {
   const h = headline(a);
-  const confirmed = a.match_status === "CONFIRMED";
   const slot = a.dining_tables?.slots;
-  if (confirmed && slot && a.table_id) {
-    return (
-      <HeroCard
-        pill={[`${h.label} · ${ddayLabel(dday(slot.starts_at, t))}`, "leaf"]}
-        title={fmtSlot(slot.starts_at)}
-        desc={`${slot.region}${a.dining_tables?.venues ? ` · ${a.dining_tables.venues.name}` : ""}`}
-        cta="테이블과 단체방 보기"
-        href={`/tables/${a.table_id}`}
-      />
-    );
-  }
-  const cta = a.payment_status === "PENDING" || a.payment_status === "FAILED" ? "결제 이어서 하기" : a.match_status === "ALTERNATIVE_OFFERED" ? "다음 방법 고르기" : "진행 상황 보기";
-  const href = a.payment_status === "PENDING" || a.payment_status === "FAILED" ? `/pay/${a.id}` : a.match_status === "ALTERNATIVE_OFFERED" ? `/applications/${a.id}/resolve` : `/applications/${a.id}`;
+  const confirmed = a.match_status === "CONFIRMED" && slot && a.table_id;
+  const paid = !["PENDING", "FAILED"].includes(a.payment_status);
+  const failed = a.match_status === "ALTERNATIVE_OFFERED";
+  const realloc = a.match_status === "REALLOCATING" || a.match_status === "EXCEPTION";
+  const at = confirmed ? 4 : paid ? 3 : 2;
+  const dates = (a.dates ?? []).map((d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일`);
+  const where = `${dates.length > 1 ? `${dates[0]} 또는 ${dates.slice(1).map((x) => x.replace(/^\d+월 /, "")).join(", ")}` : dates[0] ?? a.rounds.title} · ${areasLabel(a.areas ?? [])}`;
+  const title = confirmed ? "테이블이 정해졌어요" : failed ? "이번엔 테이블을 못 만들었어요" : !paid ? "결제를 마치면 매칭에 들어가요" : realloc ? "다른 테이블을 찾고 있어요" : "같이 앉을 사람을 찾고 있어요";
+  const cta = confirmed ? ["테이블과 단체방 보기", `/tables/${a.table_id}`] : failed ? ["다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["진행 상황 보기", `/applications/${a.id}`];
   return (
-    <HeroCard
-      pill={[h.label, h.tone]}
-      title={a.rounds.title}
-      desc={a.match_status === "WAITING" && a.payment_status === "PAID" ? `${fmtSlot(a.rounds.match_at)}에 테이블을 꾸려요` : h.desc}
-      cta={cta}
-      href={href}
-    />
+    <section className="animate-rise rounded-[24px] bg-card px-[22px] pb-[22px] pt-6" aria-label="내 신청">
+      <p className="text-[14px] text-muted">{confirmed ? `${fmtSlot(slot!.starts_at)} · ${slot!.region}` : where}</p>
+      <h1 className="mt-1.5 text-[23px] font-black leading-[1.4]">{title}</h1>
+      <div className="mx-auto mb-1 mt-5 flex justify-center">
+        <RoundTable
+          size={220}
+          filled={confirmed ? 6 : failed ? 3 : 1}
+          label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"}
+          center={confirmed ? <>{ddayLabel(dday(slot!.starts_at, t))}</> : failed ? null : <>결과<br />{fmtDay(a.rounds.match_at)}<br />{fmtClock(a.rounds.match_at)}</>}
+        />
+      </div>
+      <div className="mt-4 flex gap-1" aria-hidden="true">
+        {STEPS.map((s, i) => <span key={s} className={`h-1 flex-1 rounded-full ${i + 1 < at ? "bg-accent" : i + 1 === at ? (failed ? "bg-danger" : "bg-seat") : "bg-line"}`} />)}
+      </div>
+      <ol className="mt-2 flex text-[12px] text-faint">
+        {STEPS.map((s, i) => <li key={s} aria-current={i + 1 === at ? "step" : undefined} className={`flex-1 ${i + 1 === at ? `font-extrabold ${failed ? "text-danger" : "text-accent"}` : ""}`}>{i + 1 === at && failed ? "매칭 실패" : realloc && i + 1 === at ? "재배치 중" : s}</li>)}
+      </ol>
+      {(failed || !paid || realloc) && <p className="mt-4 text-[14px] leading-relaxed text-muted">{h.desc}</p>}
+      <LinkButton href={cta[1]} tone={confirmed || failed || !paid ? "accent" : "outline"} className="mt-5">{cta[0]}</LinkButton>
+    </section>
   );
 }
 
@@ -243,5 +221,5 @@ async function nextPick(userId: string) {
     }
   }
   const r = open[0];
-  return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why: pastSlots.length ? "다음 식탁도 저희가 꾸려 드릴게요." : "이번 주 저녁, 새로운 사람들과 어때요?" };
+  return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why: pastSlots.length ? "다음 테이블도 저희가 꾸려 드릴게요." : "이번 주 저녁, 새로운 사람들과 어때요?" };
 }

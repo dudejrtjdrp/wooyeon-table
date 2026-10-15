@@ -6,7 +6,7 @@ export const metadata = { title: "앱 설치하기 · 우연한 식탁" };
 export default function Install() {
   return (
     <Screen title="앱 설치하기" back="/">
-      <section className="shadow-card mt-2 rounded-[24px] bg-card p-6">
+      <section className="mt-2 rounded-[24px] bg-field p-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon-192.png" alt="" className="size-14 rounded-[16px]" />
         <p className="mt-4 text-[20px] font-bold leading-snug tracking-[-0.02em]">

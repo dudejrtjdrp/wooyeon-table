@@ -1,8 +1,8 @@
+import { RoundTable } from "@/components/brand";
 import { CalendarDays, Check, ChevronRight } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ConfirmSheet, ErrorText, IMG, List, Pill, Row, Screen, SectionTitle } from "@/components/ui";
+import { ConfirmSheet, ErrorText, List, Pill, Row, Screen, SectionTitle } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDateTime, fmtSlot } from "@/lib/format";
@@ -59,25 +59,23 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const ctaLabel = app.payment_status === "PENDING" || app.payment_status === "FAILED" ? "결제 이어서 하기" : matched && app.table_id ? "테이블과 단체방 보기" : app.match_status === "ALTERNATIVE_OFFERED" ? "다음 방법 고르기" : "진행 상황 보기";
 
   return (
-    <Screen title="내 신청" back="/my-tables">
+    <Screen title="내 신청" back="/rounds">
       <Toast msg={m} />
-      <section className="shadow-card animate-rise relative mt-3 overflow-hidden rounded-[26px] bg-card">
-        <div className="pointer-events-none absolute -right-6 top-6 h-[220px] w-[56%]">
-          <Image src={IMG.tableObject} alt="" fill sizes="240px" priority className="object-contain" />
+      <section className="animate-rise relative mt-3 overflow-hidden rounded-[24px] bg-field">
+        <div className="pointer-events-none absolute right-4 top-6">
+          <RoundTable size={104} filled={matched ? 6 : app.match_status === "ALTERNATIVE_OFFERED" ? 3 : 1} />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-white/0" />
         <div className="relative p-6">
           <Pill tone={h.tone}>{h.label}</Pill>
-          <p className="mt-4 max-w-[62%] text-[26px] font-bold leading-[1.25] tracking-[-0.03em] text-ink">{app.rounds.title}</p>
-          <p className="mt-3 max-w-[60%] text-[15px] leading-relaxed text-[#4c5368]">{app.match_reason ?? h.desc}</p>
+          <p className="mt-4 max-w-[62%] text-[24px] font-black leading-[1.35] text-ink">{app.rounds.title}</p>
+          <p className="mt-3 max-w-[60%] text-[15px] leading-relaxed text-ink2">{app.match_reason ?? h.desc}</p>
           {!matched && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
             <>
-              <span className="mt-5 block h-px w-6 bg-[#c9cfdb]" />
-              <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-[#5d6478]">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>
+              <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-muted">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>
             </>
           )}
           {app.application_status !== "CANCELED" && (
-            <Link href={ctaHref} className="shadow-cta mt-6 flex h-[56px] items-center justify-center gap-1 rounded-2xl bg-accent text-[17px] font-semibold text-white active:scale-[.985]">
+            <Link href={ctaHref} className="mt-6 flex h-[56px] items-center justify-center gap-1 rounded-[14px] bg-accent text-[17px] font-extrabold text-white active:scale-[.985]">
               {ctaLabel} <ChevronRight size={20} />
             </Link>
           )}
@@ -87,7 +85,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       {app.match_status === "ALTERNATIVE_OFFERED" && <OfferBanner userId={me.id} applicationId={app.id} />}
 
       <SectionTitle>이렇게 진행돼요</SectionTitle>
-      <section id="progress" className="shadow-card scroll-mt-20 rounded-[22px] bg-card p-5">
+      <section id="progress" className="scroll-mt-20 rounded-[22px] bg-field p-5">
         <ol>
           {steps.map((st, i) => {
             const now_ = i === current;
@@ -165,7 +163,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       <ErrorText msg={e} />
 
       <SectionTitle>환불 규정</SectionTitle>
-      <ul className="shadow-card space-y-1.5 rounded-[22px] bg-card p-5 text-[13px] leading-relaxed text-muted">
+      <ul className="space-y-1.5 rounded-[22px] bg-field p-5 text-[13px] leading-relaxed text-muted">
         {REFUND_POLICY.map((r) => (
           <li key={r} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-muted" />{r}</li>
         ))}

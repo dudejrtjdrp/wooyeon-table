@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { REGIONS } from "@/lib/constants";
+import { sidoOf } from "@/lib/regions";
 import { db } from "@/lib/supabase";
 
 export async function createRound(form: FormData) {
@@ -14,7 +15,7 @@ export async function createRound(form: FormData) {
   const minutes = Math.max(60, Number(form.get("duration") ?? 150));
   const dates = form.getAll("dates").map(String).filter(Boolean);
   const time = String(form.get("time") ?? "19:30");
-  const regions = form.getAll("regions").map(String).filter((r) => (REGIONS as readonly string[]).includes(r));
+  const regions = form.getAll("regions").map(String).filter((r) => REGIONS.includes(r));
   const maxTables = Number(form.get("max_tables") ?? 4);
   if (matchAtRaw < deadline) redirect(`/admin/rounds?e=${encodeURIComponent("자동 매칭은 신청 마감과 같거나 뒤여야 해요")}`);
   if (!title || !deadline || !dates.length || !regions.length) redirect(`/admin/rounds?e=${encodeURIComponent("이름, 마감, 날짜, 동네를 모두 채워 주세요")}`);
@@ -28,7 +29,7 @@ export async function createRound(form: FormData) {
   const rows = dates.flatMap((d) =>
     regions.map((region) => {
       const start = kst(d, time);
-      return { round_id: round!.id, region, starts_at: start, ends_at: new Date(new Date(start).getTime() + minutes * 60_000).toISOString(), max_tables: maxTables };
+      return { round_id: round!.id, region, sido: sidoOf(region) ?? null, starts_at: start, ends_at: new Date(new Date(start).getTime() + minutes * 60_000).toISOString(), max_tables: maxTables };
     }),
   );
   const { data: slots } = await db().from("slots").insert(rows).select("id,region");

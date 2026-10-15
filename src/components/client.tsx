@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarDays, ChevronLeft, Eye, EyeOff, Home, Star, User, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, Eye, EyeOff, Home, MessageSquare, Star, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
@@ -20,19 +20,19 @@ export function PrimaryButton({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "accent" | "ink" | "light" | "danger" | "outline" | "danger-soft"; pendingText?: string }) {
   const { pending } = useFormStatus();
   const map = {
-    accent: "bg-accent text-white shadow-cta",
+    accent: "bg-accent text-white",
     ink: "bg-ink text-white",
-    light: "border border-line bg-card text-ink",
+    light: "bg-field text-ink",
     danger: "bg-danger text-white",
-    outline: "border-[1.5px] border-accent bg-card text-accent",
-    "danger-soft": "border-[1.5px] border-danger/40 bg-danger/5 text-danger",
+    outline: "bg-accent-soft text-accent-text",
+    "danger-soft": "bg-danger/8 text-danger",
   };
   return (
     <button
       {...rest}
       disabled={pending || rest.disabled}
       aria-busy={pending}
-      className={`flex h-[56px] w-full items-center justify-center gap-2 rounded-2xl text-[17px] font-semibold tracking-[-0.01em] transition duration-150 active:scale-[.985] disabled:opacity-50 disabled:shadow-none ${map[tone]} ${className}`}
+      className={`flex h-[56px] w-full items-center justify-center gap-2 rounded-[14px] text-[17px] font-extrabold transition duration-150 active:scale-[.985] disabled:opacity-40 ${map[tone]} ${className}`}
     >
       {pending ? (
         <>
@@ -53,26 +53,27 @@ export function BackButton({ href }: { href: string }) {
       type="button"
       aria-label="뒤로"
       onClick={() => (window.history.length > 1 ? router.back() : router.push(href))}
-      className="flex size-10 items-center justify-center rounded-full text-ink active:bg-line/60"
+      className="flex size-11 items-center justify-center rounded-full text-ink active:bg-field"
     >
-      <ChevronLeft size={27} strokeWidth={2} />
+      <ChevronLeft size={26} strokeWidth={2} />
     </button>
   );
 }
 
+// 하단 탭 4개 (E10): 홈 · 일정 · 단체방 · 내 정보. 알림은 홈 위쪽 종 아이콘으로 들어간다
 const TABS = [
-  { href: "/", label: "홈", icon: Home, match: (p: string) => p === "/" },
+  { href: "/", label: "홈", icon: Home, match: (p: string) => p === "/" || p.startsWith("/notifications") },
   { href: "/rounds", label: "일정", icon: CalendarDays, match: (p: string) => p.startsWith("/rounds") },
-  { href: "/my-tables", label: "내 식탁", icon: Users, match: (p: string) => p.startsWith("/my-tables") },
-  { href: "/notifications", label: "알림", icon: Bell, match: (p: string) => p.startsWith("/notifications") },
+  { href: "/my-tables", label: "단체방", icon: MessageSquare, match: (p: string) => p.startsWith("/my-tables") },
   { href: "/me", label: "내 정보", icon: User, match: (p: string) => p.startsWith("/me") },
 ];
 
 export function TabBar({ unread = 0 }: { unread?: number }) {
   const path = usePathname();
+  void unread;
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md rounded-t-[22px] bg-card/95 shadow-[0_-6px_24px_-8px_rgb(20_40_90/.12)] backdrop-blur">
-      <ul className="grid h-[68px] grid-cols-5">
+    <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-line bg-card">
+      <ul className="grid h-[64px] grid-cols-4">
         {TABS.map(({ href, label, icon: Icon, match }) => {
           const on = match(path);
           return (
@@ -80,15 +81,10 @@ export function TabBar({ unread = 0 }: { unread?: number }) {
               <Link
                 href={href}
                 aria-current={on ? "page" : undefined}
-                className={`relative flex h-full flex-col items-center justify-center gap-1 text-[12px] font-medium transition-colors ${on ? "text-accent" : "text-[#8a90a2]"}`}
+                className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] ${on ? "font-extrabold text-accent" : "font-medium text-[#5f6d66]"}`}
               >
-                <Icon size={25} strokeWidth={on ? 2.2 : 1.7} fill={on ? "currentColor" : "none"} fillOpacity={on ? 0.15 : 0} />
+                <Icon size={24} strokeWidth={on ? 2.3 : 1.8} />
                 {label}
-                {href === "/notifications" && unread > 0 && (
-                  <span className="absolute left-1/2 top-2.5 ml-2 min-w-[18px] rounded-full bg-danger px-1 text-center text-[11px] font-bold leading-[18px] text-white ring-2 ring-card">
-                    {unread > 9 ? "9+" : unread}
-                  </span>
-                )}
               </Link>
             </li>
           );
@@ -98,7 +94,6 @@ export function TabBar({ unread = 0 }: { unread?: number }) {
   );
 }
 
-/** 화면 위에 잠깐 떴다 사라지는 안내. 주소의 안내용 값은 지워서 새로 고쳐도 다시 뜨지 않게 한다 */
 export function Toast({ msg, tone = "ink" }: { msg?: string | null; tone?: "ink" | "danger" }) {
   const [show, setShow] = useState(Boolean(msg));
   useEffect(() => {
@@ -114,7 +109,7 @@ export function Toast({ msg, tone = "ink" }: { msg?: string | null; tone?: "ink"
   return (
     <div
       role="status"
-      className={`animate-toast fixed left-1/2 top-[calc(env(safe-area-inset-top)+12px)] z-50 w-[calc(100%-32px)] max-w-sm -translate-x-1/2 rounded-2xl px-4 py-3.5 text-center text-[14px] font-medium text-white shadow-lg ${tone === "danger" ? "bg-danger" : "bg-ink/95"}`}
+      className={`animate-toast fixed left-1/2 top-[calc(env(safe-area-inset-top)+12px)] z-50 w-[calc(100%-32px)] max-w-sm -translate-x-1/2 rounded-[14px] px-4 py-3.5 text-center text-[14px] font-bold text-white ${tone === "danger" ? "bg-danger" : "bg-ink/95"}`}
     >
       {msg}
     </div>
@@ -200,7 +195,7 @@ export function StarRating({ name, label, value }: { name: string; label: string
       <span className="flex gap-1" role="radiogroup" aria-label={label}>
         {[1, 2, 3, 4, 5].map((n) => (
           <button key={n} type="button" role="radio" aria-checked={v === n} aria-label={`${n}점`} onClick={() => setV(n)} className="p-0.5 transition active:scale-90">
-            <Star size={28} strokeWidth={0} className={n <= v ? "fill-accent" : "fill-line"} />
+            <Star size={30} strokeWidth={0} className={n <= v ? "fill-accent" : "fill-dot"} />
           </button>
         ))}
       </span>

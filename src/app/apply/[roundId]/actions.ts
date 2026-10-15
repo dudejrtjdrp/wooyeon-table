@@ -8,23 +8,28 @@ import { usablePass } from "@/lib/billing";
 import { fmtDateTime } from "@/lib/format";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
+import { areasLabel, sidoOf, slotsFor } from "@/lib/regions";
 import { db } from "@/lib/supabase";
 
 export async function submitApplication(form: FormData) {
   const me = await requireProfile();
   const roundId = String(form.get("round_id"));
-  const slotIds = form.getAll("slot_ids").map(String);
+  const areas = form.getAll("areas").map(String).filter((a) => Boolean(sidoOf(a)));
+  const dates = form.getAll("dates").map(String).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+  const nearOk = form.get("near_ok") === "on";
   const passRaw = String(form.get("pass"));
   const useOwned = passRaw === "owned";
   const pass = (useOwned ? "single" : passRaw) as PassType;
   const back = (m: string) => redirect(`/apply/${roundId}?e=${encodeURIComponent(m)}`);
 
-  const { data: round } = await db().from("rounds").select("id,title,apply_deadline,match_at,status,slots(id)").eq("id", roundId).maybeSingle();
+  const { data: round } = await db().from("rounds").select("id,title,apply_deadline,match_at,status,slots(id,region,sido,starts_at)").eq("id", roundId).maybeSingle();
   if (!round || round.status !== "open") back("모집이 끝난 일정이에요");
   if (new Date(round!.apply_deadline) <= (await now())) back("신청 마감 시간이 지났어요");
-  const valid = new Set((round!.slots ?? []).map((s: { id: string }) => s.id));
-  const chosen = slotIds.filter((id) => valid.has(id));
-  if (chosen.length === 0) back("참가할 수 있는 날짜와 동네를 하나 이상 골라 주세요");
+  if (!areas.length) back("동네를 하나 이상 골라주세요");
+  if (!dates.length) back("갈 수 있는 날을 하나 이상 골라주세요");
+  // 고른 동네 묶음 × 날짜에 열린 일정이 지원 대상이다. '가까운 동네'는 매칭 때 엔진이 따로 넓힌다
+  const chosen = slotsFor(areas, dates, round!.slots ?? []);
+  if (chosen.length === 0) back("고른 동네와 날짜에 열린 테이블이 없어요. 다시 골라주세요");
   if (!(pass in PASSES)) back("이용권을 골라 주세요");
   if (form.get("agree_refund") !== "on") back("환불 규정을 확인해 주세요");
 
@@ -59,6 +64,9 @@ export async function submitApplication(form: FormData) {
     resolution: null,
     match_reason: null,
     submitted_at: new Date().toISOString(),
+    areas,
+    dates,
+    near_ok: nearOk,
   };
   if (existing) await db().from("application_slots").delete().eq("application_id", existing.id);
   const { data: app, error } = existing
@@ -68,7 +76,7 @@ export async function submitApplication(form: FormData) {
 
   await db().from("application_slots").insert(chosen.map((slot_id) => ({ application_id: app!.id, slot_id })));
   await db().from("payments").update({ idempotency_key: `app:${app!.id}:${payment!.id}` }).eq("id", payment!.id);
-  await logStatus({ entityType: "application", entityId: app!.id, field: "application_status", from: "DRAFT", to: "SUBMITTED", actor: `user:${me.id}`, reason: `${chosen.length}개 일정 선택` });
+  await logStatus({ entityType: "application", entityId: app!.id, field: "application_status", from: "DRAFT", to: "SUBMITTED", actor: `user:${me.id}`, reason: `${areasLabel(areas)} · ${dates.length}일 · 일정 ${chosen.length}개${nearOk ? " · 가까운 동네 허용" : ""}` });
   await notify({
     userId: me.id,
     template: "applied",

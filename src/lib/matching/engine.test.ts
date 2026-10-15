@@ -140,3 +140,59 @@ describe("자동 매칭", () => {
     expect(res.summary.confirmed / res.summary.candidates).toBeGreaterThan(0.7);
   });
 });
+
+describe("가까운 동네 확장 (2026-10-16)", () => {
+  // 같은 날 서울 두 묶음: 성수·건대에는 3명, 강남·역삼·선릉에는 3명뿐이라 각자로는 4명이 안 된다
+  const nearSlots: Slot[] = [
+    { id: "s-seongsu", region: "성수·건대", startsAt: "2026-10-23T10:30:00Z", maxTables: 2 },
+    { id: "s-gangnam", region: "강남·역삼·선릉", startsAt: "2026-10-23T10:30:00Z", maxTables: 2 },
+  ];
+  const six = (nearOk: (i: number) => boolean) =>
+    makeCandidates(6, 31).map((x, i) => {
+      const own = i < 3 ? "s-seongsu" : "s-gangnam";
+      const other = i < 3 ? "s-gangnam" : "s-seongsu";
+      return { ...x, birthYear: 1995, slotIds: [own], nearSlotIds: nearOk(i) ? [other] : undefined };
+    });
+
+  it("체크한 사람은 같은 시·도 다른 묶음으로 옮겨 테이블을 만든다", () => {
+    const c = six(() => true);
+    const res = runMatching(c, nearSlots, emptyRel());
+    expect(res.summary.confirmed).toBe(6);
+    expect(res.summary.widened).toBeGreaterThanOrEqual(3);
+    // 옮겨 간 사람은 메시지에 가까운 동네라고 알려 준다
+    const moved = Object.values(res.outcomes).filter((o) => o.status === "CONFIRMED" && o.message.includes("가까운 동네"));
+    expect(moved.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("체크 안 한 사람은 고른 묶음 밖으로 보내지 않는다", () => {
+    const c = six(() => false);
+    const res = runMatching(c, nearSlots, emptyRel());
+    expect(res.summary.confirmed).toBe(0);
+    for (const o of Object.values(res.outcomes)) {
+      expect(o.status).toBe("ALTERNATIVE_OFFERED");
+      expect(o.message).toBe("고른 동네에서 4명이 안 모였어요");
+    }
+  });
+
+  it("섞여 있으면 체크한 사람만 넘어가고, 확정 테이블엔 고른 묶음이거나 허용한 사람만 앉는다", () => {
+    // 강남 3명 중 2명만 체크 → 성수 3명 + 강남에서 넘어온 2명 = 5명 테이블, 체크 안 한 1명은 실패
+    const c = six((i) => i === 3 || i === 4);
+    const res = runMatching(c, nearSlots, emptyRel());
+    const byApp = new Map(c.map((x) => [x.applicationId, x]));
+    for (const t of res.tables) {
+      for (const id of t.applicationIds) {
+        const orig = byApp.get(id)!;
+        expect([...orig.slotIds, ...(orig.nearSlotIds ?? [])]).toContain(t.slotId);
+      }
+    }
+    expect(res.outcomes[c[5].applicationId].status).toBe("ALTERNATIVE_OFFERED");
+    expect(res.summary.confirmed).toBe(5);
+  });
+
+  it("먼저 고른 묶음 안에서 해결되면 넓히지 않는다", () => {
+    const c = makeCandidates(8, 41).map((x) => ({ ...x, birthYear: 1996, slotIds: ["s-seongsu"], nearSlotIds: ["s-gangnam"] }));
+    const res = runMatching(c, nearSlots, emptyRel());
+    expect(res.summary.widened).toBe(0);
+    expect(res.tables.every((t) => t.slotId === "s-seongsu")).toBe(true);
+  });
+});

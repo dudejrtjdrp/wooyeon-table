@@ -1,55 +1,75 @@
 @import "tailwindcss";
 
 :root {
-  /* 7안: 아이보리·옅은 블루 바탕, 네이비 제목, 선명한 블루 버튼, 원목 식탁과 따뜻한 조명 사진 */
-  --paper: #f5f8fd;      /* 앱 바탕 */
-  --card: #ffffff;       /* 카드 */
-  --field: #f6f8fc;      /* 입력칸 */
-  --ink: #0f1733;        /* 제목·본문 (네이비) */
-  --muted: #7b8194;      /* 보조 글자 */
-  --line: #e6ebf3;       /* 구분선 */
-  --accent: #2f7fe8;     /* 주요 행동 */
-  --accent-soft: #e8f0fd;
+  /* E안 (2026-10-16): 브랜드 색 하나(딥그린), 흰 바탕, 회색 블록. 그라데이션·유리 질감·보라색 쓰지 않음 */
+  --paper: #ffffff;      /* 앱 바탕 */
+  --card: #ffffff;
+  --field: #f4f6f5;      /* 회색 블록·입력칸 */
+  --row: #f7f9f8;        /* 고르지 않은 선택 줄 */
+  --ink: #17201b;        /* 본문 */
+  --ink2: #33413a;       /* 진한 보조 */
+  --muted: #6a7a71;      /* 보조 글 */
+  --faint: #5f6d66;      /* 흐린 글 (흰 바탕 5.4:1, field 5.0:1) */
+  --line: #e3e8e5;       /* 구분선 */
+  --line2: #eef1ef;
+  --dot: #dce3df;        /* 고르지 않은 체크 */
+  --accent: #1e5e45;     /* 브랜드 */
+  --accent2: #2a7357;    /* 브랜드 보조 */
+  --accent-soft: #e7f1eb;/* 선택 배경 */
+  --accent-text: #17533d;/* 선택 글자 */
+  --on-accent: #cfe3d8;  /* 초록 위 보조 글 */
   --accent-ink: #ffffff;
-  --navy: #1a2768;       /* 첫 실행 화면 바탕 */
-  --candle: #ffb938;     /* 조명 */
-  --warn: #c27a10;
-  --warn-soft: #fdf6e9;
-  --leaf: #16a06b;       /* 완료 */
-  --danger: #e5484d;     /* 오류·취소 */
+  --navy: #1e5e45;       /* 첫 화면 색면 */
+  --candle: #f4c542;     /* 좌석 포인트 */
+  --seat: #8fbfa6;       /* 좌석 포인트 2 */
+  --warn: #9a6400;
+  --warn-soft: #fbf3df;
+  --leaf: #1e5e45;       /* 완료 */
+  --danger: #c2412d;     /* 오류·취소 */
 }
 
 @theme inline {
   --color-paper: var(--paper);
   --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
   --color-muted: var(--muted);
+  --color-faint: var(--faint);
   --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-dot: var(--dot);
+  --color-row: var(--row);
   --color-accent: var(--accent);
+  --color-accent2: var(--accent2);
+  --color-accent-text: var(--accent-text);
+  --color-on-accent: var(--on-accent);
   --color-leaf: var(--leaf);
   --color-card: var(--card);
   --color-accent-soft: var(--accent-soft);
   --color-candle: var(--candle);
+  --color-seat: var(--seat);
   --color-danger: var(--danger);
   --color-field: var(--field);
   --color-navy: var(--navy);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
-  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-sans: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
+  letter-spacing: -0.03em;
   word-break: keep-all;
 }
 
 html { -webkit-tap-highlight-color: transparent; }
 /* 카드 그림자: 아주 옅게, 바닥에서 살짝 떠 있는 정도 */
-.shadow-card { box-shadow: 0 1px 2px rgb(20 40 90 / .04), 0 10px 28px -6px rgb(20 40 90 / .07); }
-.shadow-cta { box-shadow: 0 10px 22px -8px rgb(47 127 232 / .55); }
+/* E안은 그림자 없이 회색 블록으로 나눈다 */
+.shadow-card { box-shadow: none; }
+.shadow-cta { box-shadow: none; }
 /* 위쪽 은은한 빛 배경 (사진 없는 화면용) */
-.bg-soft-top { background: radial-gradient(120% 60% at 100% 0%, #ffffff 0%, rgb(255 255 255 / 0) 60%), var(--paper); }
+.bg-soft-top { background: var(--paper); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .animate-rise { animation: rise .28s cubic-bezier(.2,.8,.2,1) both; }
 @media (prefers-reduced-motion: reduce) { .animate-rise { animation: none; } }
@@ -63,7 +83,8 @@ html { -webkit-tap-highlight-color: transparent; }
 .animate-fade { animation: fade-in .2s ease-out; }
 .animate-toast { animation: toast-in .24s ease-out; }
 @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
-.skeleton { background: linear-gradient(90deg, #e9eef6 0, #f5f8fd 40px, #e9eef6 80px); background-size: 400px 100%; animation: shimmer 1.2s infinite linear; }
+.skeleton { background: var(--field); animation: pulse 1.2s infinite ease-in-out; }
+@keyframes pulse { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .animate-sheet, .animate-fade, .animate-toast, .skeleton { animation: none; } }
 @keyframes seat-in { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
 @keyframes glow-in { from { opacity: 0; } to { opacity: .9; } }
@@ -73,11 +94,11 @@ html { -webkit-tap-highlight-color: transparent; }
 
 /* 첫 장면 (A1) */
 html[data-splash="off"] #splash { display: none; }
-.splash { animation: splash-out .32s ease-in 1.6s forwards; }
+.splash { animation: splash-out .3s ease-in 1.25s forwards; }
 .splash-photo { opacity: 0; transform: scale(.94); animation: photo-in .55s cubic-bezier(.2,.8,.2,1) .05s forwards; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent); mask-image: radial-gradient(closest-side, #000 72%, transparent); }
 .splash-photo img { filter: brightness(.55) saturate(.8); animation: seats-on .5s ease-out .45s forwards; }
 .splash-lamp { opacity: 0; background: radial-gradient(closest-side, rgb(255 214 140 / .85), rgb(255 185 56 / .25) 60%, transparent); mix-blend-mode: screen; animation: glow-pop .45s ease-out 1s forwards; }
-.splash-name { opacity: 0; transform: translateY(8px); animation: name-in .4s ease-out 1.05s forwards; }
+.splash-name { opacity: 0; transform: translateY(8px); animation: name-in .4s ease-out .8s forwards; }
 @keyframes photo-in { to { opacity: 1; transform: none; } }
 @keyframes seats-on { to { filter: none; } }
 @keyframes glow-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }

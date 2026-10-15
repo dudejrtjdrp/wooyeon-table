@@ -4,7 +4,8 @@ import { Badge, PageHeader, Panel, RoundPicker, btnPrimary, ctl, td, th } from "
 import { Optional, Required } from "@/components/ui";
 import { roundsAndCurrent } from "@/lib/admin-data";
 import { requireAdmin } from "@/lib/auth";
-import { REGIONS } from "@/lib/constants";
+import { DEFAULT_REGIONS } from "@/lib/constants";
+import { SIDOS } from "@/lib/regions";
 import { fmtDateTime, fmtDay, fmtTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { addVenue, createRound, setCapacity } from "./actions";
@@ -121,7 +122,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
             </div>
             <p className="mt-5 text-[15px] font-bold text-ink">식당 추가</p>
             <form action={addVenue} className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-[110px_1fr_1.4fr_120px_auto]">
-              <select name="region" className={ctl} aria-label="지역">{REGIONS.map((x) => <option key={x}>{x}</option>)}</select>
+              <select name="region" className={ctl} aria-label="동네 묶음">{SIDOS.map((s) => <optgroup key={s.name} label={s.name}>{s.areas.map((x) => <option key={x}>{x}</option>)}</optgroup>)}</select>
               <input name="name" placeholder="식당 이름 (필수)" className={ctl} />
               <input name="address" placeholder="주소 (필수)" className={ctl} />
               <input name="price" placeholder="가격대 (선택)" className={ctl} />
@@ -139,15 +140,20 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
             <div><span className={lbl}>시작 시각 · 진행 시간<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="time" type="time" defaultValue="19:30" className={ctl} aria-label="시작 시각" /><span className="flex items-center gap-2"><input name="duration" type="number" defaultValue={150} min={60} className={`${ctl} w-full`} aria-label="진행 시간" /><span className="shrink-0 text-muted">분</span></span></span><span className={help}>모든 식당에 같은 시각에 시작해요.</span></div>
             <div>
               <span className={lbl}>동네<Required /></span>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {REGIONS.map((x) => (
+              {SIDOS.map((s) => (
+              <details key={s.name} open={s.name === "서울"} className="mt-2">
+              <summary className="cursor-pointer py-1 text-[13px] font-semibold text-muted">{s.name}</summary>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                {s.areas.map((x) => (
                   <label key={x} className="cursor-pointer">
-                    <input type="checkbox" name="regions" value={x} defaultChecked className="peer sr-only" />
+                    <input type="checkbox" name="regions" value={x} defaultChecked={(DEFAULT_REGIONS as readonly string[]).includes(x)} className="peer sr-only" />
                     <span className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-line text-[14px] text-ink transition peer-checked:border-accent peer-checked:bg-accent-soft/60 peer-checked:font-semibold peer-checked:text-accent [&>svg]:hidden peer-checked:[&>svg]:block"><Check size={16} strokeWidth={2.8} />{x}</span>
                   </label>
                 ))}
               </div>
-              <span className={help}>여러 개 고를 수 있어요.</span>
+              </details>
+              ))}
+              <span className={help}>동네 묶음을 여러 개 고를 수 있어요. 기본은 식당이 있는 서울 네 곳이에요.</span>
             </div>
             <label className="block"><span className={lbl}>일정당 최대 테이블 수<Required /></span><input name="max_tables" type="number" defaultValue={4} min={1} className={`${ctl} mt-2 w-28`} /><span className={help}>한 동네·날짜에 운영할 최대 테이블 수예요.</span></label>
             <button className={`${btnPrimary} h-12 w-full text-[15px]`}>회차 만들기</button>

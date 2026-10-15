@@ -1,21 +1,17 @@
-import Image from "next/image";
 import Link from "next/link";
-import { Backdrop, ErrorText, Field, IMG, PasswordInput, PageTitle, PrimaryButton, Screen, inputCls } from "@/components/ui";
+import { ErrorText, Field, PasswordInput, PageTitle, PrimaryButton, Screen, inputCls } from "@/components/ui";
 import { signup } from "../login/actions";
 
 /** A3-signup 휴대폰 번호로 가입하기 */
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ e?: string }> }) {
   const { e } = await searchParams;
   return (
-    <Screen back="/login" title="휴대폰 번호로 가입하기" backdrop={<Backdrop height={460} />}>
-      <div className="relative mt-6 min-h-[150px]">
-        <div className="pointer-events-none absolute -right-8 -top-10 size-[210px]">
-          <Image src={IMG.startTable} alt="" fill sizes="210px" priority className="rounded-full object-cover" style={{ maskImage: "radial-gradient(closest-side, #000 68%, transparent)", WebkitMaskImage: "radial-gradient(closest-side, #000 68%, transparent)" }} />
-        </div>
-        <PageTitle title="첫 식탁을" accent="함께 준비해요" sub="기본 정보만 입력하면 시작할 수 있어요." />
+    <Screen back="/login" title="휴대폰 번호로 가입하기">
+      <div className="mt-4">
+        <PageTitle title="휴대폰 번호로" accent="시작해요" sub="기본 정보만 입력하면 시작할 수 있어요." />
       </div>
       <form action={signup} className="mt-8">
-        <div className="shadow-card space-y-6 rounded-[22px] bg-card p-5">
+        <div className="space-y-6">
           <Field label="이름" required>
             <input name="name" autoComplete="name" placeholder="이름" className={inputCls} />
           </Field>
