@@ -4,11 +4,19 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PrimaryButton } from "@/components/client";
+import { neighborsOf } from "@/lib/regions";
 
 type Area = { name: string; open: boolean };
 type Slot = { id: string; region: string; sido: string | null; day: string; label: string; startsAt: string };
 type Pass = { key: string; label: string; amount: number; desc: string };
 
+/** 받침에 따라 '로/으로' (ㄹ 받침은 '로') */
+const ro = (w: string) => {
+  const c = w.charCodeAt(w.length - 1) - 0xac00;
+  if (c < 0 || c > 11171) return "로";
+  const jong = c % 28;
+  return jong === 0 || jong === 8 ? "로" : "으로";
+};
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 const CHECK = (
@@ -58,7 +66,10 @@ export function ApplyFlow({
     });
   };
 
-  // 날짜 화면: 고른 동네(가까운 동네 허용이면 같은 시·도까지)에 테이블이 열리는 날
+  const nb = neighborsOf(picked).map((a) => a.split("·")[0]);
+  const nearLabel = nb.length ? `${nb.slice(0, 3).join("·")}${nb.length > 3 ? " 같은 곳" : ""}` : "";
+
+  // 날짜 화면: 고른 동네에 테이블이 열리는 날
   const mineSlots = slots.filter((s) => expanded.has(s.region));
   const openDays = new Set(mineSlots.map((s) => s.day));
   const months = useMemo(() => {
@@ -69,7 +80,6 @@ export function ApplyFlow({
   const [mi, setMi] = useState(0);
   const month = months[Math.min(mi, months.length - 1)];
 
-  const chosenSlots = mineSlots.filter((s) => days.includes(s.day));
   const firstLabel = (d: string) => mineSlots.find((s) => s.day === d)?.label ?? d;
 
   const next = () => {
@@ -268,7 +278,7 @@ export function ApplyFlow({
               <span className={`flex size-[22px] shrink-0 items-center justify-center rounded-[6px] ${near ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
               <span className="flex flex-col gap-0.5">
                 <span className="text-[15px] font-extrabold">가까운 동네도 괜찮아요</span>
-                <span className="text-[12px] text-muted">사람이 모자라면 같은 시·도 안 이웃 동네로 잡아드려요</span>
+                <span className="text-[12px] text-muted">{nearLabel ? `사람이 모자라면 바로 옆 ${nearLabel}${ro(nearLabel)} 잡아드려요` : "사람이 모자라면 바로 옆 동네로 잡아드려요"}</span>
               </span>
             </button>
           )}

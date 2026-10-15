@@ -6,6 +6,7 @@ import { now } from "@/lib/clock";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
 import { refundPayment } from "@/lib/payments";
+import { joinTable, keepPassFor, startWaiting } from "@/lib/resolve";
 import { won } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
 import { kstDay } from "@/lib/regions";
@@ -48,7 +49,7 @@ export async function transfer(form: FormData) {
   // 기존 신청을 먼저 닫는다 (조건부: 두 번 눌러도 한 번만 이동)
   const { data: closed } = await db()
     .from("applications")
-    .update({ match_status: "TRANSFERRED", payment_status: "PAID", resolution: "transfer" })
+    .update({ match_status: "TRANSFERRED", payment_status: "PAID", resolution: "transfer", wait_until: null })
     .eq("id", appId)
     .eq("match_status", "ALTERNATIVE_OFFERED")
     .select("id");
@@ -82,20 +83,30 @@ export async function transfer(form: FormData) {
 export async function keepPass(form: FormData) {
   const me = await requireProfile();
   const appId = String(form.get("app_id"));
-  const app = await loadOwn(appId, me.id);
-  const { data: up } = await db()
-    .from("applications")
-    .update({ match_status: "NO_MATCH", payment_status: "PAID", resolution: "keep_pass" })
-    .eq("id", appId)
-    .eq("match_status", "ALTERNATIVE_OFFERED")
-    .select("id");
-  if (up?.length && app.payments.pass_id) {
-    const { data: pass } = await db().from("passes").select("remaining").eq("id", app.payments.pass_id).single();
-    await db().from("passes").update({ remaining: (pass?.remaining ?? 0) + 1 }).eq("id", app.payments.pass_id);
-    await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "NO_MATCH", actor: `user:${me.id}`, reason: "이용권 보관" });
-    await notify({ userId: me.id, template: "kept", title: "이용권을 보관했어요", body: "다음 일정을 신청할 때 그대로 쓸 수 있어요.", link: "/rounds", dedupeKey: `kept:${appId}` });
-  }
+  await loadOwn(appId, me.id);
+  await keepPassFor(appId, `user:${me.id}`, "choice");
   redirect(`/applications/${appId}`);
+}
+
+/** 빈자리가 있는 테이블에 바로 합류 */
+export async function join(form: FormData) {
+  const me = await requireProfile();
+  const appId = String(form.get("app_id"));
+  const tableId = String(form.get("table_id") ?? "");
+  await loadOwn(appId, me.id);
+  const r = await joinTable(appId, tableId, `user:${me.id}`);
+  if (!r.ok) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent(r.message)}`);
+  redirect(`/tables/${tableId}?m=${encodeURIComponent("테이블에 합류했어요. 단체방에서 인사를 나눠 보세요")}`);
+}
+
+/** 자리 나면 알려 주기 (마감 있음) */
+export async function wait(form: FormData) {
+  const me = await requireProfile();
+  const appId = String(form.get("app_id"));
+  await loadOwn(appId, me.id);
+  const r = await startWaiting(appId, `user:${me.id}`);
+  if (!r.ok) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent(r.message)}`);
+  redirect(`/applications/${appId}?m=${encodeURIComponent(r.message)}`);
 }
 
 /** 자동 환불 (PAY-03). 계좌 입력이나 운영자 승인 없이 원래 결제수단으로 (모의) */
@@ -104,7 +115,7 @@ export async function refund(form: FormData) {
   const appId = String(form.get("app_id"));
   const app = await loadOwn(appId, me.id);
   if (!["PAID", "REFUND_AVAILABLE", "REFUND_FAILED"].includes(app.payments.status)) redirect(`/applications/${appId}`);
-  await db().from("applications").update({ payment_status: "REFUND_REQUESTED", match_status: "NO_MATCH", resolution: "refund" }).eq("id", appId);
+  await db().from("applications").update({ payment_status: "REFUND_REQUESTED", match_status: "NO_MATCH", resolution: "refund", wait_until: null }).eq("id", appId);
   await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "REFUND_AVAILABLE", to: "REFUND_REQUESTED", actor: `user:${me.id}`, reason: "참가자가 환불 선택" });
   const r = await refundPayment(app.payment_id, appId, "system", "매칭 실패 후 환불 선택");
   if (r.ok) {

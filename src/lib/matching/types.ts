@@ -18,7 +18,7 @@ export interface Candidate {
   slotIds: string[];
   /**
    * '가까운 동네도 괜찮아요'를 켠 사람만: 고른 묶음에서 자리가 안 날 때 옮겨 갈 수 있는
-   * 같은 시·도 다른 묶음의 일정(같은 날짜). 끈 사람은 비워 둔다.
+   * 붙어 있는 동네의 일정(같은 날짜, regions.ts NEIGHBOR_PAIRS). 끈 사람은 비워 둔다.
    */
   nearSlotIds?: string[];
 }

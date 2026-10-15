@@ -154,7 +154,7 @@ describe("가까운 동네 확장 (2026-10-16)", () => {
       return { ...x, birthYear: 1995, slotIds: [own], nearSlotIds: nearOk(i) ? [other] : undefined };
     });
 
-  it("체크한 사람은 같은 시·도 다른 묶음으로 옮겨 테이블을 만든다", () => {
+  it("체크한 사람은 가까운 동네(이웃 일정)로 옮겨 테이블을 만든다", () => {
     const c = six(() => true);
     const res = runMatching(c, nearSlots, emptyRel());
     expect(res.summary.confirmed).toBe(6);

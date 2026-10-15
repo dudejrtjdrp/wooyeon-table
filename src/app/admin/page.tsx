@@ -45,7 +45,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const paid = list.filter((a) => !["PENDING", "FAILED"].includes(a.payment_status));
   const confirmed = list.filter((a) => a.match_status === "CONFIRMED");
   const reallocated = confirmed.filter((a) => a.realloc_count > 0);
-  const waitingChoice = list.filter((a) => a.match_status === "ALTERNATIVE_OFFERED");
+  const waitingChoice = list.filter((a) => a.match_status === "ALTERNATIVE_OFFERED" && a.resolution !== "wait");
   const attended = list.filter((a) => a.attendance_status === "ATTENDED");
   const ranMatching = round && round.status !== "open";
   const matchRate = paid.length && ranMatching ? Math.round((confirmed.length / paid.length) * 100) : null;

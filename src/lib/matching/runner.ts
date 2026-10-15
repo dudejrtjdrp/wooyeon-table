@@ -131,7 +131,7 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
         myTraits: p.my_traits ?? [],
         wantedTraits: p.wanted_traits ?? [],
         slotIds: a.application_slots.map((s) => s.slot_id),
-        // '가까운 동네도 괜찮아요'를 켠 사람만 같은 시·도 다른 묶음(같은 날짜)으로 넓힐 수 있다
+        // '가까운 동네도 괜찮아요'를 켠 사람만 붙어 있는 동네(같은 날짜)로 넓힐 수 있다
         nearSlotIds: a.near_ok && a.areas?.length ? nearSlotsFor(a.areas, a.dates ?? [], slotRows ?? []) : undefined,
       });
     }

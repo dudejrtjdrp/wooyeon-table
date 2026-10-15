@@ -3,68 +3,108 @@
 import { useState } from "react";
 import { PrimaryButton } from "@/components/client";
 
-type Opt = { id: string; label: string; note: string; hot: boolean };
+type Opt = { id: string; label: string; note: string; tag: string; hot?: boolean };
 type Act = (f: FormData) => void | Promise<void>;
+type Choice = "join" | "move" | "wait" | "keep" | "refund";
 
 const CHECK = (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
 
-/** 실패했을 때 고를 수 있는 세 가지. 고른 것에 따라 아래 버튼이 바뀐다 */
-export function ResolveChoice({ appId, options, actions }: { appId: string; options: Opt[]; actions: { transfer: Act; keepPass: Act; refund: Act } }) {
-  const [choice, setChoice] = useState<"transfer" | "keep" | "refund">(options.length ? "transfer" : "keep");
-  const [slot, setSlot] = useState(options[0]?.id ?? "");
-  const cur = options.find((o) => o.id === slot);
-  const action = choice === "transfer" ? actions.transfer : choice === "keep" ? actions.keepPass : actions.refund;
-  const button = choice === "transfer" ? `${cur?.label.split(" · ")[0] ?? "다른 날"}로 옮기기` : choice === "keep" ? "이용권 보관하기" : "환불받기";
+const Dot = ({ on }: { on: boolean }) => <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${on ? "bg-accent" : "bg-dot"}`}>{on && CHECK}</span>;
 
-  const Dot = ({ on }: { on: boolean }) => <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${on ? "bg-accent" : "bg-dot"}`}>{on && CHECK}</span>;
+/** 태그: 고른 동네는 초록, 옆 동네는 연한 초록, 조금 멀어요는 회색 */
+const Tag = ({ t }: { t: string }) => (
+  <span className={`inline-flex h-6 shrink-0 items-center rounded-[12px] px-2 text-[12px] font-bold ${t === "고른 동네" ? "bg-accent text-white" : t === "옆 동네" ? "bg-[#CFE3D8] text-accent-text" : "bg-[#EEF1EF] text-ink2"}`}>{t}</span>
+);
+
+
+function OptList({ items, value, onPick, label }: { items: Opt[]; value: string; onPick: (id: string) => void; label: string }) {
+  return (
+    <ul className="mt-3.5 flex flex-col gap-1.5" role="radiogroup" aria-label={label}>
+      {items.map((o) => {
+        const on = o.id === value;
+        return (
+          <li key={o.id}>
+            <button type="button" role="radio" aria-checked={on} onClick={() => onPick(o.id)} className={`flex min-h-14 w-full items-center gap-2.5 rounded-[12px] bg-paper px-[14px] py-2.5 text-left ${on ? "ring-2 ring-inset ring-accent" : ""}`}>
+              <span className="min-w-0 flex-1">
+                <span className={`block text-[15px] ${on ? "font-extrabold" : "font-semibold"}`}>{o.label}</span>
+                <span className={`mt-0.5 block text-[12px] ${o.hot ? "font-bold text-accent" : "text-faint"}`}>{o.note}</span>
+              </span>
+              <Tag t={o.tag} />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ChoiceRow({ on, onPick, title, sub, disabled, children }: { on: boolean; onPick: () => void; title: string; sub: string; disabled?: boolean; children?: React.ReactNode }) {
+  return (
+    <div className={`rounded-[18px] p-[18px] ${on ? "bg-accent-soft" : "bg-row"}`}>
+      <button type="button" role="radio" aria-checked={on} disabled={disabled} onClick={onPick} className="flex w-full items-center justify-between gap-3 text-left disabled:opacity-50">
+        <span>
+          <span className={`block text-[16px] ${on ? "font-extrabold text-accent-text" : "font-semibold"}`}>{title}</span>
+          <span className={`mt-0.5 block text-[13px] ${on ? "text-ink2" : "text-faint"}`}>{sub}</span>
+        </span>
+        <Dot on={on} />
+      </button>
+      {on && children}
+    </div>
+  );
+}
+
+/**
+ * 실패했을 때 고를 수 있는 방법. 고른 것에 따라 아래 버튼이 바뀐다.
+ * 순서: 바로 앉을 자리 → 다른 일정 → 기다리기 → 이용권 보관 → 환불
+ */
+export function ResolveChoice({ appId, joins, moves, waitUntil, nearOk, actions }: {
+  appId: string;
+  nearOk: boolean;
+  joins: Opt[];
+  moves: Opt[];
+  waitUntil: string | null;
+  actions: { join: Act; transfer: Act; wait: Act; keepPass: Act; refund: Act };
+}) {
+  const first: Choice = joins.length ? "join" : moves.length ? "move" : waitUntil ? "wait" : "keep";
+  const [choice, setChoice] = useState<Choice>(first);
+  const [table, setTable] = useState(joins[0]?.id ?? "");
+  const [slot, setSlot] = useState(moves[0]?.id ?? "");
+  const curJoin = joins.find((o) => o.id === table);
+  const curMove = moves.find((o) => o.id === slot);
+  const action = { join: actions.join, move: actions.transfer, wait: actions.wait, keep: actions.keepPass, refund: actions.refund }[choice];
+  const short = (o?: Opt) => o?.label.split(" · ")[0].replace(/ (오전|오후).*$/, "") ?? "";
+  const button = {
+    join: `${short(curJoin)} 테이블에 앉기`,
+    move: `${short(curMove)} 일정으로 옮기기`,
+    wait: "자리 나면 알려 주세요",
+    keep: "이용권 보관하기",
+    refund: "환불받기",
+  }[choice];
 
   return (
     <form action={action} className="flex flex-1 flex-col">
       <input type="hidden" name="app_id" value={appId} />
-      {choice === "transfer" && slot && <input type="hidden" name="slot_ids" value={slot} />}
+      {choice === "join" && table && <input type="hidden" name="table_id" value={table} />}
+      {choice === "move" && slot && <input type="hidden" name="slot_ids" value={slot} />}
       <p className="px-6 pt-6 text-[14px] font-extrabold text-ink2">어떻게 할까요?</p>
       <div className="flex flex-col gap-2 px-4 pt-3" role="radiogroup" aria-label="다음 방법">
-        <div className={`rounded-[18px] p-[18px] ${choice === "transfer" ? "bg-accent-soft" : "bg-row"}`}>
-          <button type="button" role="radio" aria-checked={choice === "transfer"} disabled={!options.length} onClick={() => setChoice("transfer")} className="flex w-full items-center justify-between text-left disabled:opacity-50">
-            <span>
-              <span className={`block text-[16px] ${choice === "transfer" ? "font-extrabold text-accent-text" : "font-semibold"}`}>다른 날로 옮기기</span>
-              <span className="mt-0.5 block text-[13px] text-muted">{options.length ? "결제는 그대로 이어져요" : "지금 옮길 수 있는 날이 없어요"}</span>
-            </span>
-            <Dot on={choice === "transfer"} />
-          </button>
-          {choice === "transfer" && options.length > 0 && (
-            <ul className="mt-3.5 flex flex-col gap-1.5" role="radiogroup" aria-label="옮길 날">
-              {options.map((o) => {
-                const on = o.id === slot;
-                return (
-                  <li key={o.id}>
-                    <button type="button" role="radio" aria-checked={on} onClick={() => setSlot(o.id)} className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-[12px] bg-paper px-[14px] py-2 text-left ${on ? "ring-2 ring-inset ring-accent" : ""}`}>
-                      <span className={`text-[15px] ${on ? "font-extrabold" : "font-semibold"}`}>{o.label}</span>
-                      <span className={`shrink-0 text-[12px] ${o.hot ? "font-bold text-accent" : "text-muted"}`}>{o.note}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-        <button type="button" role="radio" aria-checked={choice === "keep"} onClick={() => setChoice("keep")} className={`flex min-h-16 items-center justify-between rounded-[18px] px-[18px] py-3 text-left ${choice === "keep" ? "bg-accent-soft" : "bg-row"}`}>
-          <span>
-            <span className={`block text-[16px] ${choice === "keep" ? "font-extrabold text-accent-text" : "font-semibold"}`}>이용권 보관하기</span>
-            <span className="mt-0.5 block text-[13px] text-muted">다음에 원하는 날 쓸 수 있어요</span>
-          </span>
-          <Dot on={choice === "keep"} />
-        </button>
-        <button type="button" role="radio" aria-checked={choice === "refund"} onClick={() => setChoice("refund")} className={`flex min-h-16 items-center justify-between rounded-[18px] px-[18px] py-3 text-left ${choice === "refund" ? "bg-accent-soft" : "bg-row"}`}>
-          <span>
-            <span className={`block text-[16px] ${choice === "refund" ? "font-extrabold text-accent-text" : "font-semibold"}`}>환불받기</span>
-            <span className="mt-0.5 block text-[13px] text-muted">결제한 카드로 바로 돌려드려요</span>
-          </span>
-          <Dot on={choice === "refund"} />
-        </button>
+        {joins.length > 0 && (
+          <ChoiceRow on={choice === "join"} onPick={() => setChoice("join")} title="빈자리에 바로 앉기" sub="이미 모인 테이블에 자리가 있어요. 바로 확정돼요">
+            <OptList items={joins} value={table} onPick={setTable} label="앉을 테이블" />
+          </ChoiceRow>
+        )}
+        <ChoiceRow on={choice === "move"} onPick={() => setChoice("move")} title="다른 일정으로 옮기기" sub={moves.length ? "결제는 그대로, 그 일정 마감 때 다시 매칭해요" : "지금 옮길 수 있는 일정이 없어요"} disabled={!moves.length}>
+          <OptList items={moves} value={slot} onPick={setSlot} label="옮길 일정" />
+        </ChoiceRow>
+        {waitUntil && <ChoiceRow on={choice === "wait"} onPick={() => setChoice("wait")} title="자리 나면 알려 주기" sub={`${waitUntil}까지 ${nearOk ? "고른 동네나 같은 날 옆 동네" : "고른 동네·날짜"}에 자리가 나면 먼저 여쭤볼게요`} />}
+        <ChoiceRow on={choice === "keep"} onPick={() => setChoice("keep")} title="이용권 보관하기" sub="다음에 원하는 일정에 바로 쓸 수 있어요" />
+        <ChoiceRow on={choice === "refund"} onPick={() => setChoice("refund")} title="환불받기" sub="결제한 수단으로 바로 돌려드려요" />
       </div>
+      {!joins.length && !moves.length && (
+        <p className="px-6 pt-4 text-[13px] leading-relaxed text-muted">새 일정이 열리면 일정 탭에서 보관한 이용권으로 바로 신청할 수 있어요.</p>
+      )}
       <div className="h-32" />
       <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-paper px-6 pt-3">
         <div className="pb-4">

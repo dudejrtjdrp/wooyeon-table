@@ -22,7 +22,7 @@ export default async function Rounds() {
     .gt("apply_deadline", t.toISOString())
     .order("apply_deadline");
   const { data: mineRaw } = me
-    ? await db().from("applications").select("id,round_id,application_status,payment_status,match_status,attendance_status,table_id,created_at,rounds(title)").eq("user_id", me.id).order("created_at", { ascending: false })
+    ? await db().from("applications").select("id,round_id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title)").eq("user_id", me.id).order("created_at", { ascending: false })
     : { data: [] };
   const mine = (mineRaw ?? []) as unknown as (Parameters<typeof headline>[0] & { id: string; round_id: string; application_status: string; match_status: string; attendance_status: string | null; rounds: { title: string } })[];
   const applied = new Map(mine.filter((a) => a.application_status !== "CANCELED").map((a) => [a.round_id, a.id]));

@@ -25,14 +25,14 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const { data } = await db()
     .from("applications")
     .select(
-      "id,user_id,application_status,payment_status,match_status,attendance_status,match_reason,realloc_count,table_id,submitted_at,payments(paid_at),dining_tables(slots(starts_at))," +
+      "id,user_id,application_status,payment_status,match_status,attendance_status,resolution,match_reason,realloc_count,table_id,submitted_at,payments(paid_at),dining_tables(slots(starts_at))," +
         "rounds(id,title,match_at,apply_deadline),application_slots(slots(id,region,starts_at))",
     )
     .eq("id", id)
     .maybeSingle();
   const app = data as unknown as {
     id: string; user_id: string; application_status: string; payment_status: string; match_status: string;
-    attendance_status: string | null; match_reason: string | null; realloc_count: number; table_id: string | null; submitted_at: string | null;
+    attendance_status: string | null; resolution: string | null; match_reason: string | null; realloc_count: number; table_id: string | null; submitted_at: string | null;
     payments: { paid_at: string | null } | null;
     dining_tables: { slots: { starts_at: string } } | null;
     rounds: { id: string; title: string; match_at: string; apply_deadline: string };
@@ -56,7 +56,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   ];
   const current = steps.findIndex((x) => !x.done);
   const ctaHref = app.payment_status === "PENDING" || app.payment_status === "FAILED" ? `/pay/${app.id}` : matched && app.table_id ? `/tables/${app.table_id}` : app.match_status === "ALTERNATIVE_OFFERED" ? `/applications/${app.id}/resolve` : "#progress";
-  const ctaLabel = app.payment_status === "PENDING" || app.payment_status === "FAILED" ? "결제 이어서 하기" : matched && app.table_id ? "테이블과 단체방 보기" : app.match_status === "ALTERNATIVE_OFFERED" ? "다음 방법 고르기" : "진행 상황 보기";
+  const ctaLabel = app.payment_status === "PENDING" || app.payment_status === "FAILED" ? "결제 이어서 하기" : matched && app.table_id ? "테이블과 단체방 보기" : app.match_status === "ALTERNATIVE_OFFERED" ? (app.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기") : "진행 상황 보기";
 
   return (
     <Screen title="내 신청" back="/rounds">

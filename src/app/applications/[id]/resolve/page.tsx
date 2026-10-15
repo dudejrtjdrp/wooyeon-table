@@ -4,57 +4,30 @@ import { ErrorText } from "@/components/ui";
 import { BackButton } from "@/components/client";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { fmtDay, fmtSlot } from "@/lib/format";
-import { sidoOf } from "@/lib/regions";
+import { fmtDate, fmtTime } from "@/lib/format";
+import { autoKeepAt, joinOptions, loadApp, moveOptions, waitDeadline } from "@/lib/resolve";
 import { db } from "@/lib/supabase";
-import { keepPass, refund, transfer } from "./actions";
+import { join, keepPass, refund, transfer, wait } from "./actions";
 import { ResolveChoice } from "./picker";
 
 export const dynamic = "force-dynamic";
 
-/** E12 매칭 실패: 다른 날로 옮기기(추천 회차 펼침) / 이용권 보관 / 환불받기 */
+/** E12 매칭 실패: 빈자리 합류 / 다른 일정으로 옮기기 / 자리 나면 알려 주기 / 이용권 보관 / 환불 */
 export default async function Resolve({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string }> }) {
   const me = await requireProfile();
   const { id } = await params;
   const { e } = await searchParams;
-  const { data } = await db()
-    .from("applications")
-    .select("id,user_id,match_status,match_reason,round_id,near_ok,areas,application_slots(slots(region))")
-    .eq("id", id)
-    .maybeSingle();
-  const app = data as unknown as { id: string; user_id: string; match_status: string; match_reason: string | null; round_id: string; near_ok: boolean | null; areas: string[] | null; application_slots: { slots: { region: string } }[] } | null;
-  if (!app || app.user_id !== me.id) redirect("/");
-  if (app.match_status !== "ALTERNATIVE_OFFERED") redirect(`/applications/${id}`);
-
-  const liked = new Set([...(app.areas ?? []), ...app.application_slots.map((s) => s.slots.region)]);
-  const likedSido = new Set([...liked].map((a) => sidoOf(a)).filter(Boolean));
+  const { data } = await db().from("applications").select("id,user_id,match_status,match_reason").eq("id", id).maybeSingle();
+  if (!data || data.user_id !== me.id) redirect("/");
+  if (data.match_status !== "ALTERNATIVE_OFFERED") redirect(`/applications/${id}`);
+  const app = (await loadApp(id))!;
   const t = await now();
-  const { data: rounds } = await db()
-    .from("rounds")
-    .select("id,title,apply_deadline,slots(id,region,sido,starts_at,application_slots(count))")
-    .eq("status", "open")
-    .gt("apply_deadline", t.toISOString())
-    .neq("id", app.round_id)
-    .order("apply_deadline")
-    .limit(3);
 
-  // 추천: 고른 동네 → 같은 시·도 → 그 밖의 순, 같은 순위면 신청자가 많은 곳
-  type S = { id: string; region: string; sido: string | null; starts_at: string; application_slots: { count: number }[] };
-  const options = ((rounds ?? []) as unknown as { id: string; apply_deadline: string; slots: S[] }[])
-    .flatMap((r) => r.slots.map((s) => ({ s, deadline: r.apply_deadline })))
-    .map(({ s, deadline }) => ({
-      id: s.id,
-      label: `${fmtSlot(s.starts_at).replace(/ (저녁|오후|낮|오전) .*$/, "")} · ${s.region}`,
-      rank: liked.has(s.region) ? 0 : likedSido.has(s.sido ?? sidoOf(s.region) ?? "") ? 1 : 2,
-      demand: s.application_slots?.[0]?.count ?? 0,
-      note: (s.application_slots?.[0]?.count ?? 0) >= 4 ? "신청자 많아요" : `${fmtDay(deadline)} 마감`,
-      hot: (s.application_slots?.[0]?.count ?? 0) >= 4,
-      starts: s.starts_at,
-    }))
-    .sort((a, b) => a.rank - b.rank || b.demand - a.demand || a.starts.localeCompare(b.starts))
-    .slice(0, 4);
-
-  const reason = app.match_reason ?? "고른 동네에서 4명이 안 모였어요.";
+  // 생각해 둔 순서: 바로 앉을 자리 → 다른 일정(고른 동네 → 옆 동네 → 조금 먼 동네) → 기다리기 → 보관·환불
+  const [joins, moves, keepAt] = await Promise.all([joinOptions(app), moveOptions(app), autoKeepAt(id)]);
+  const waitUntil = waitDeadline(app, t);
+  const reason = data.match_reason ?? "고른 동네에서 4명이 안 모였어요.";
+  const iso = (d: Date) => d.toISOString();
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-paper">
@@ -66,8 +39,24 @@ export default async function Resolve({ params, searchParams }: { params: Promis
         </div>
         <RoundTable size={84} filled={3} me label="세 자리만 찬 테이블" />
       </div>
+      {app.resolution === "wait" && app.wait_until ? (
+        <p className="mx-6 mt-4 rounded-[14px] bg-accent-soft px-4 py-3 text-[13px] leading-relaxed text-accent-text">
+          지금 자리를 기다리는 중이에요. {fmtDate(app.wait_until)} {fmtTime(app.wait_until)}까지 자리가 없으면 이용권으로 보관해 드려요. 그 전에 다른 방법으로 바꿔도 돼요.
+        </p>
+      ) : keepAt ? (
+        <p className="mx-6 mt-4 rounded-[14px] bg-field px-4 py-3 text-[13px] leading-relaxed text-ink2">
+          {fmtDate(iso(keepAt))} {fmtTime(iso(keepAt))}까지 고르지 않으면 이용권으로 보관해 드려요. 결제한 금액은 그대로 남아요.
+        </p>
+      ) : null}
       <div className="px-6"><ErrorText msg={e} /></div>
-      <ResolveChoice appId={app.id} options={options} actions={{ transfer, keepPass, refund }} />
+      <ResolveChoice
+        appId={app.id}
+        joins={joins.map((j) => ({ id: j.tableId, label: `${fmtDate(j.startsAt)} ${fmtTime(j.startsAt)} · ${j.region}`, note: `${j.members}명 모였어요${j.venue ? ` · ${j.venue}` : ""}`, tag: j.tag }))}
+        moves={moves.map((o) => ({ id: o.id, label: o.label, note: o.note, tag: o.tag, hot: o.hot }))}
+        waitUntil={waitUntil && app.resolution !== "wait" ? `${fmtDate(iso(waitUntil))} ${fmtTime(iso(waitUntil))}` : null}
+        nearOk={Boolean(app.near_ok)}
+        actions={{ join, transfer, wait, keepPass, refund }}
+      />
     </div>
   );
 }

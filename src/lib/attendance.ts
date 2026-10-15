@@ -8,6 +8,7 @@ import { loadRelations, loadSettings } from "./matching/runner";
 import type { Candidate } from "./matching/types";
 import { notify } from "./notify";
 import { ensureRoom } from "./pipeline";
+import { neighborsOf } from "./regions";
 import { db } from "./supabase";
 
 const KST = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
@@ -23,7 +24,7 @@ export function cancelRule(startsAt: string, at: Date): CancelRule {
   return { kind: "late", message: "모임 2일 전이 지나 환불 없이 취소돼요" };
 }
 
-type Member = { id: string; user_id: string; birth_year: number; slotIds: string[]; name: string };
+export type Member = { id: string; user_id: string; birth_year: number; slotIds: string[]; name: string };
 
 export async function tableMembers(tableId: string): Promise<Member[]> {
   const { data } = await db()
@@ -38,7 +39,7 @@ export async function tableMembers(tableId: string): Promise<Member[]> {
   });
 }
 
-const toCand = (m: Member): Candidate => ({
+export const toCand = (m: Member): Candidate => ({
   applicationId: m.id, userId: m.user_id, birthYear: m.birth_year, gender: "M", mbti: null, interests: [], myTraits: [], wantedTraits: [], slotIds: m.slotIds,
 });
 
@@ -124,7 +125,7 @@ export async function reflowTable(tableId: string, actor: string) {
     } else {
       await db().from("applications").update({ table_id: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "함께하기로 한 분이 취소해 테이블 인원이 모자라요. 조건에 맞는 다른 테이블도 없었어요." }).eq("id", m.id).eq("payment_status", "PAID");
       await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: "확정 후 취소로 인원 부족, 옮길 테이블 없음" });
-      await notify({ userId: m.user_id, template: "alternative", title: "테이블 인원이 모자라졌어요", body: "함께하기로 한 분이 취소해 모임을 열 수 없게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요.", link: `/applications/${m.id}/resolve`, dedupeKey: `reflow-alt:${m.id}` });
+      await notify({ userId: m.user_id, template: "alternative", title: "테이블 인원이 모자라졌어요", body: "함께하기로 한 분이 취소해 모임을 열 수 없게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", link: `/applications/${m.id}/resolve`, dedupeKey: `reflow-alt:${m.id}` });
       offered++;
     }
   }
@@ -140,14 +141,14 @@ export async function reflowTable(tableId: string, actor: string) {
 // 사람에게 먼저 신청한 순서대로 한 명씩 참가 의사를 묻는다. 응답 기한이 지나거나 거절하면 다음 사람에게 넘어간다.
 // ─────────────────────────────────────────────
 
-const ACTIVE_TABLE = ["CONFIRMED", "VENUE_ASSIGNED", "READY"];
+export const ACTIVE_TABLE = ["CONFIRMED", "VENUE_ASSIGNED", "READY"];
 /** 응답 기한: 지금부터 6시간, 다만 모임 3시간 전을 넘지 않는다 */
 const OFFER_WINDOW = 6 * 3600_000;
-const OFFER_CUTOFF = 3 * 3600_000;
+export const OFFER_CUTOFF = 3 * 3600_000;
 
-type TableInfo = { id: string; status: string; round_id: string; slot_id: string; slots: { starts_at: string; region: string }; venues: { name: string } | null };
+export type TableInfo = { id: string; status: string; round_id: string; slot_id: string; slots: { starts_at: string; region: string }; venues: { name: string } | null };
 
-async function tableInfo(tableId: string) {
+export async function tableInfo(tableId: string) {
   const { data } = await db().from("dining_tables").select("id,status,round_id,slot_id,slots(starts_at,region),venues(name)").eq("id", tableId).maybeSingle();
   return data as unknown as TableInfo | null;
 }
@@ -164,13 +165,18 @@ export async function seatCandidates(tableId: string): Promise<Waiter[]> {
   const skip = new Set((asked ?? []).map((o) => o.application_id));
   const { data } = await db()
     .from("applications")
-    .select("id,user_id,submitted_at,payment_status,users(name,account_status,profiles(birth_year)),application_slots(slot_id)")
+    .select("id,user_id,submitted_at,payment_status,near_ok,areas,dates,users(name,account_status,profiles(birth_year)),application_slots(slot_id)")
     .eq("round_id", tb.round_id)
     .eq("match_status", "ALTERNATIVE_OFFERED")
     .in("payment_status", ["REFUND_AVAILABLE", "PAID"])
     .order("submitted_at", { ascending: true });
-  const rows = ((data ?? []) as unknown as { id: string; user_id: string; submitted_at: string; users: { name: string; account_status: string; profiles: { birth_year: number } | { birth_year: number }[] | null }; application_slots: { slot_id: string }[] }[])
-    .filter((a) => !skip.has(a.id) && ["active", "warned"].includes(a.users.account_status) && a.application_slots.some((x) => x.slot_id === tb.slot_id));
+  // 고른 일정이거나, '가까운 동네도 괜찮아요'를 켰고 같은 날 바로 옆 동네면 대기자로 본다
+  const day = KST(new Date(tb.slots.starts_at));
+  const fits = (a: { near_ok: boolean | null; areas: string[] | null; dates: string[] | null; application_slots: { slot_id: string }[] }) =>
+    a.application_slots.some((x) => x.slot_id === tb.slot_id) ||
+    (Boolean(a.near_ok) && (a.dates ?? []).includes(day) && neighborsOf(a.areas ?? []).includes(tb.slots.region));
+  const rows = ((data ?? []) as unknown as { id: string; user_id: string; submitted_at: string; near_ok: boolean | null; areas: string[] | null; dates: string[] | null; users: { name: string; account_status: string; profiles: { birth_year: number } | { birth_year: number }[] | null }; application_slots: { slot_id: string }[] }[])
+    .filter((a) => !skip.has(a.id) && ["active", "warned"].includes(a.users.account_status) && fits(a));
   const waiters = rows.map((a) => {
     const p = Array.isArray(a.users.profiles) ? a.users.profiles[0] : a.users.profiles;
     return { id: a.id, user_id: a.user_id, birth_year: p?.birth_year ?? 0, slotIds: a.application_slots.map((x) => x.slot_id), name: a.users.name, submitted_at: a.submitted_at };
@@ -274,6 +280,8 @@ export async function respondOffer(offerId: string, userId: string, accept: bool
     })
     .eq("id", o.application_id)
     .eq("match_status", "ALTERNATIVE_OFFERED");
+  // 옆 동네 자리였으면 그 일정도 고른 것으로 남긴다 (이후 재배치 검사가 같은 기준을 보도록)
+  await db().from("application_slots").upsert({ application_id: o.application_id, slot_id: tb!.slot_id }, { onConflict: "application_id,slot_id", ignoreDuplicates: true });
   await logStatus({ entityType: "application", entityId: o.application_id, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "CONFIRMED", actor, reason: `빈자리 제안 수락 (테이블 ${o.table_id.slice(0, 8)})` });
   await logStatus({ entityType: "dining_table", entityId: o.table_id, field: "seat_offer", to: "ACCEPTED", actor, reason: `대기자 ${me!.name}님 합류` });
   // 같은 사람에게 동시에 나간 다른 테이블 제안은 무효로 하고 그 테이블은 다음 사람에게 넘긴다
@@ -296,7 +304,7 @@ export async function respondOffer(offerId: string, userId: string, accept: bool
   return { ok: true, message: "테이블에 합류했어요", tableId: o.table_id };
 }
 
-async function tableMembersOf(appId: string): Promise<Member | null> {
+export async function tableMembersOf(appId: string): Promise<Member | null> {
   const { data } = await db().from("applications").select("id,user_id,users(name,profiles(birth_year)),application_slots(slot_id)").eq("id", appId).maybeSingle();
   if (!data) return null;
   const a = data as unknown as { id: string; user_id: string; users: { name: string; profiles: { birth_year: number } | { birth_year: number }[] | null }; application_slots: { slot_id: string }[] };

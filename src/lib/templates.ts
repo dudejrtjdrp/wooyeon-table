@@ -4,7 +4,8 @@ import { db } from "./supabase";
 
 export const TEMPLATES = {
   confirmed: { label: "테이블 확정", when: "자동 매칭으로 테이블이 확정된 직후", channel: "푸시·알림함", title: "테이블이 확정됐어요", body: "{date} {time} {region}에서 만나요. 식당과 단체방 안내를 확인해 주세요.", vars: ["date", "time", "region"] },
-  alternative: { label: "매칭 실패", when: "재배치까지 실패한 직후", channel: "푸시·알림함", title: "이번에는 맞는 테이블이 없었어요", body: "{reason} {alternatives}다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요.", vars: ["reason", "alternatives"] },
+  alternative: { label: "매칭 실패", when: "재배치까지 실패한 직후", channel: "푸시·알림함", title: "이번에는 맞는 테이블이 없었어요", body: "{reason} {alternatives}빈자리에 앉거나, 다른 일정으로 옮기거나, 자리가 나길 기다리거나, 이용권 보관·환불 중에 골라 주세요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", vars: ["reason", "alternatives"] },
+  alternative_remind: { label: "매칭 실패 다시 알림", when: "실패 안내 2일 뒤까지 고르지 않았을 때 1회", channel: "푸시·알림함", title: "내일까지 다음 방법을 골라 주세요", body: "고르지 않으면 내일 이용권으로 보관해 드려요. 결제한 금액은 그대로 남아요. 빈자리에 앉거나 다른 일정으로 옮기거나, 자리가 나길 기다릴 수도 있어요.", vars: [] },
   reminder: { label: "하루 전 안내", when: "모임 24시간 전", channel: "푸시·알림함", title: "내일 저녁 약속 잊지 마세요", body: "{date} {time} {region}. 예약명은 '{reservation}'이에요. 당일 취소는 할 수 없어요.", vars: ["date", "time", "region", "reservation"] },
   reminder_chat: { label: "하루 전 단체방 공지", when: "모임 24시간 전", channel: "단체방", title: "", body: "내일 {time}, {region}에서 만나요. 예약명은 '{reservation}'이에요.\n당일 취소와 단체방 나가기는 할 수 없어요. 늦을 것 같으면 이 방에 미리 알려 주세요.", vars: ["time", "region", "reservation"] },
   feedback: { label: "후기 요청", when: "모임 종료 직후 (참석자만)", channel: "푸시·알림함", title: "오늘 저녁 어떠셨어요?", body: "1분이면 끝나요. 남겨 주신 후기는 다음 매칭에 반영돼요.", vars: [] },

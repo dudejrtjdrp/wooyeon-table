@@ -239,6 +239,13 @@ export async function tick() {
   const expired = await expireOffers();
   if (expired) done.push(`빈자리 제안 ${expired}건 기한 만료, 다음 대기자 확인`);
 
+  // 매칭 실패 뒤: 하루 전 다시 알림, 3일 무응답·기다리기 마감이면 이용권 보관
+  const { autoResolve } = await import("./resolve");
+  const ar = await autoResolve();
+  if (ar.reminded) done.push(`실패 안내 다시 알림 ${ar.reminded}건`);
+  if (ar.kept) done.push(`3일 무응답 이용권 보관 ${ar.kept}건`);
+  if (ar.waitOver) done.push(`기다리기 마감 이용권 보관 ${ar.waitOver}건`);
+
   // 3. 테이블 일정에 따른 단체방 게시와 상태 전환
   const tpl = await loadTemplates();
   const { data: tables } = await db()

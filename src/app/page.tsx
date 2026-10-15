@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 type ActiveRow = {
-  id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null;
+  id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; resolution: string | null;
   table_id: string | null; areas: string[] | null; dates: string[] | null;
   rounds: { title: string; match_at: string };
   dining_tables: { slots: { starts_at: string; region: string } | null; venues: { name: string } | null } | null;
@@ -36,7 +36,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(slots(starts_at,region),venues(name))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(slots(starts_at,region),venues(name))")
     .eq("user_id", me.id)
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .limit(10);
@@ -161,12 +161,13 @@ function StatusCard({ a, t }: { a: ActiveRow; t: Date }) {
   const confirmed = a.match_status === "CONFIRMED" && slot && a.table_id;
   const paid = !["PENDING", "FAILED"].includes(a.payment_status);
   const failed = a.match_status === "ALTERNATIVE_OFFERED";
+  const waiting = failed && a.resolution === "wait";
   const realloc = a.match_status === "REALLOCATING" || a.match_status === "EXCEPTION";
   const at = confirmed ? 4 : paid ? 3 : 2;
   const dates = (a.dates ?? []).map((d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일`);
   const where = `${dates.length > 1 ? `${dates[0]} 또는 ${dates.slice(1).map((x) => x.replace(/^\d+월 /, "")).join(", ")}` : dates[0] ?? a.rounds.title} · ${areasLabel(a.areas ?? [])}`;
-  const title = confirmed ? "테이블이 정해졌어요" : failed ? "이번엔 테이블을 못 만들었어요" : !paid ? "결제를 마치면 매칭에 들어가요" : realloc ? "다른 테이블을 찾고 있어요" : "같이 앉을 사람을 찾고 있어요";
-  const cta = confirmed ? ["테이블과 단체방 보기", `/tables/${a.table_id}`] : failed ? ["다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["진행 상황 보기", `/applications/${a.id}`];
+  const title = confirmed ? "테이블이 정해졌어요" : failed ? (a.resolution === "wait" ? "자리가 나길 기다리고 있어요" : "이번엔 테이블을 못 만들었어요") : !paid ? "결제를 마치면 매칭에 들어가요" : realloc ? "다른 테이블을 찾고 있어요" : "같이 앉을 사람을 찾고 있어요";
+  const cta = confirmed ? ["테이블과 단체방 보기", `/tables/${a.table_id}`] : failed ? [a.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["진행 상황 보기", `/applications/${a.id}`];
   return (
     <section className="animate-rise rounded-[24px] bg-card px-[22px] pb-[22px] pt-6" aria-label="내 신청">
       <p className="text-[14px] text-muted">{confirmed ? `${fmtSlot(slot!.starts_at)} · ${slot!.region}` : where}</p>
@@ -180,10 +181,10 @@ function StatusCard({ a, t }: { a: ActiveRow; t: Date }) {
         />
       </div>
       <div className="mt-4 flex gap-1" aria-hidden="true">
-        {STEPS.map((s, i) => <span key={s} className={`h-1 flex-1 rounded-full ${i + 1 < at ? "bg-accent" : i + 1 === at ? (failed ? "bg-danger" : "bg-seat") : "bg-line"}`} />)}
+        {STEPS.map((s, i) => <span key={s} className={`h-1 flex-1 rounded-full ${i + 1 < at ? "bg-accent" : i + 1 === at ? (waiting ? "bg-[#F4C542]" : failed ? "bg-danger" : "bg-seat") : "bg-line"}`} />)}
       </div>
       <ol className="mt-2 flex text-[12px] text-faint">
-        {STEPS.map((s, i) => <li key={s} aria-current={i + 1 === at ? "step" : undefined} className={`flex-1 ${i + 1 === at ? `font-extrabold ${failed ? "text-danger" : "text-accent"}` : ""}`}>{i + 1 === at && failed ? "매칭 실패" : realloc && i + 1 === at ? "재배치 중" : s}</li>)}
+        {STEPS.map((s, i) => <li key={s} aria-current={i + 1 === at ? "step" : undefined} className={`flex-1 ${i + 1 === at ? `font-extrabold ${waiting ? "text-[#6b5410]" : failed ? "text-danger" : "text-accent"}` : ""}`}>{i + 1 === at && waiting ? "자리 기다리는 중" : i + 1 === at && failed ? "매칭 실패" : realloc && i + 1 === at ? "재배치 중" : s}</li>)}
       </ol>
       {(failed || !paid || realloc) && <p className="mt-4 text-[14px] leading-relaxed text-muted">{h.desc}</p>}
       <LinkButton href={cta[1]} tone={confirmed || failed || !paid ? "accent" : "outline"} className="mt-5">{cta[0]}</LinkButton>

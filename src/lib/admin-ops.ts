@@ -117,7 +117,7 @@ export async function dissolveTable(tableId: string, reason: string, adminId: st
     await db().from("applications").update({ table_id: null, attendance_status: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "운영팀 사정으로 이번 테이블이 열리지 못하게 됐어요." }).eq("id", m.id).eq("payment_status", "PAID");
     await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: tag(`테이블 해제: ${reason}`) });
     await db().from("notifications").delete().eq("user_id", m.user_id).eq("status", "pending").eq("link", `/tables/${tableId}`);
-    await notify({ userId: m.user_id, template: "alternative", title: "모임이 취소됐어요", body: "운영팀 사정으로 이번 테이블이 열리지 못하게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 전액 환불받을 수 있어요.", link: `/applications/${m.id}/resolve`, dedupeKey: `admin-dissolve:${m.id}:${tableId}` });
+    await notify({ userId: m.user_id, template: "alternative", title: "모임이 취소됐어요", body: "운영팀 사정으로 이번 테이블이 열리지 못하게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 전액 환불받을 수 있어요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", link: `/applications/${m.id}/resolve`, dedupeKey: `admin-dissolve:${m.id}:${tableId}` });
   }
   await say(tableId, "운영팀 사정으로 이번 모임이 취소됐어요. 알림에서 다음 방법을 골라 주세요. 불편을 드려 죄송해요.");
   return { ok: true, message: `테이블을 해제하고 ${ms.length}명에게 안내했어요` };

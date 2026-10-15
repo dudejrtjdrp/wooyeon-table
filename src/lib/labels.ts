@@ -63,7 +63,7 @@ export const FIELD: Record<string, string> = {
   account_status: "계정",
 };
 
-export const RESOLUTION: Record<string, string> = { transfer: "일정 이동", keep_pass: "이용권 보관", refund: "환불" };
+export const RESOLUTION: Record<string, string> = { transfer: "일정 이동", keep_pass: "이용권 보관", refund: "환불", wait: "자리 기다리는 중" };
 
 export const label = (map: Record<string, [string, Tone]>, v: string | null | undefined): [string, Tone] =>
   v ? map[v] ?? [v, "muted"] : ["-", "muted"];

@@ -234,7 +234,7 @@ export function runMatching(
     if (!changed) break;
   }
 
-  // ── 5-1. 가까운 동네 확장: '가까운 동네도 괜찮아요'를 켠 사람만 같은 시·도 다른 묶음으로 ──
+  // ── 5-1. 가까운 동네 확장: '가까운 동네도 괜찮아요'를 켠 사람만 붙어 있는 동네로 ──
   //         끈 사람은 고른 묶음 밖으로 보내지 않는다(희망 지역 반영). 기존 테이블 합류 → 새로 묶기 순서.
   const near = (c: Candidate) => c.nearSlotIds ?? [];
   const widen = (c: Candidate, slotId: string) => {

@@ -4,6 +4,7 @@ export type AppRow = {
   payment_status: string;
   match_status: string;
   attendance_status: string | null;
+  resolution?: string | null;
 };
 
 export function headline(a: AppRow): { label: string; tone: "muted" | "accent" | "leaf" | "ink" | "candle" | "danger"; desc: string } {
@@ -13,6 +14,7 @@ export function headline(a: AppRow): { label: string; tone: "muted" | "accent" |
   if (a.payment_status === "REFUND_REQUESTED" || a.payment_status === "REFUND_PROCESSING")
     return { label: "환불 중", tone: "muted", desc: "원래 결제수단으로 환불하고 있어요." };
   if (a.payment_status === "REFUNDED") return { label: "환불 완료", tone: "muted", desc: "환불이 끝났어요." };
+  if (a.payment_status === "REFUND_FAILED") return { label: "환불 다시 처리 중", tone: "candle", desc: "환불이 한 번 실패해 운영팀이 다시 처리하고 있어요. 따로 하실 일은 없어요." };
   switch (a.match_status) {
     case "WAITING":
       return { label: "매칭 중", tone: "accent", desc: "신청 마감 뒤 자동으로 테이블을 꾸려요." };
@@ -26,7 +28,8 @@ export function headline(a: AppRow): { label: string; tone: "muted" | "accent" |
       if (a.attendance_status?.startsWith("CANCELED")) return { label: "참석 취소", tone: "muted", desc: "참석을 취소했어요." };
       return { label: "매칭 확정", tone: "leaf", desc: "테이블이 정해졌어요. 단체방에서 만나요." };
     case "ALTERNATIVE_OFFERED":
-      return { label: "매칭 실패", tone: "candle", desc: "이번에는 테이블을 못 만들었어요. 다른 날로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요." };
+      if (a.resolution === "wait") return { label: "자리 기다리는 중", tone: "candle", desc: "고른 일정에 자리가 나면 먼저 여쭤볼게요. 마감까지 자리가 없으면 이용권으로 보관해 드려요." };
+      return { label: "매칭 실패", tone: "candle", desc: "이번에는 테이블을 못 만들었어요. 빈자리에 앉거나, 다른 일정으로 옮기거나, 자리가 나길 기다리거나, 이용권 보관·환불 중에 골라 주세요." };
     case "TRANSFERRED":
       return { label: "일정 이동", tone: "muted", desc: "다른 일정으로 옮겼어요." };
     case "NO_MATCH":
