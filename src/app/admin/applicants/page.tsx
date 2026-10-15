@@ -58,7 +58,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
         <button className={btnLight}>보기</button>
       </form>
 
-      <p className="mt-4 text-[13px] text-muted">{rows.length}명</p>
+      
       <div className="mt-2 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[1040px] text-[14px]">
           <thead className="border-b border-line">
@@ -70,11 +70,11 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
               return (
                 <tr key={a.id} className="hover:bg-paper/60">
                   <td className={td}>
-                    <Link href={`/admin/applicants/${a.id}`} className="font-semibold text-accent hover:underline">{a.users.name}</Link>
+                    <Link href={`/admin/applicants/${a.id}`} className="text-[16px] font-bold text-ink hover:text-accent">{a.users.name}</Link>
                     {a.users.account_status !== "active" && <span className="ml-2"><Badge v={label(ACCOUNT, a.users.account_status)} /></span>}
                   </td>
-                  <td className={`${td} text-muted`}>{p ? `${p.birth_year}년생 ${p.gender === "M" ? "남" : "여"}${p.mbti ? ` ${p.mbti}` : ""}${p.job ? `, ${p.job}` : ""}` : "-"}</td>
-                  <td className={td}>{[...new Set(a.application_slots.map((x) => x.slots.region))].join(", ")}</td>
+                  <td className={`${td} text-[#4c5368]`}>{p ? <><span className="block">{p.birth_year} · {p.gender === "M" ? "남" : "여"}{p.mbti ? ` · ${p.mbti}` : ""}</span>{p.job && <span className="block text-[12px] text-muted">{p.job}</span>}</> : "-"}</td>
+                  <td className={td}>{[...new Set(a.application_slots.map((x) => x.slots.region))].join(" · ")}</td>
                   <td className={td}><Badge v={label(PAYMENT, a.payment_status)} /></td>
                   <td className={td}>
                     {a.application_status === "CANCELED" ? <Badge v={["신청 취소", "muted"]} /> : <Badge v={label(MATCH, a.match_status)} />}
@@ -91,6 +91,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
           </tbody>
         </table>
         {!rows.length && <p className="p-10 text-center text-muted">조건에 맞는 신청자가 없어요.</p>}
+        <p className="border-t border-line px-4 py-3 text-[14px] text-muted">총 {rows.length}명</p>
       </div>
     </div>
   );

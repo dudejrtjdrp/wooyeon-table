@@ -1,8 +1,11 @@
+import { CalendarDays, Check, ChevronDown, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { Badge, PageHeader, Panel, RoundPicker, btnPrimary, ctl, td, th } from "@/components/admin-ui";
+import { Optional, Required } from "@/components/ui";
 import { roundsAndCurrent } from "@/lib/admin-data";
 import { requireAdmin } from "@/lib/auth";
 import { REGIONS } from "@/lib/constants";
-import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
+import { fmtDateTime, fmtDay, fmtTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { addVenue, createRound, setCapacity } from "./actions";
 
@@ -22,97 +25,132 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   const cap = new Map((inv ?? []).map((v) => [`${v.venue_id}:${v.slot_id}`, v.tables_available]));
   const tablesUsed = (vid: string, sid: string) => (used ?? []).filter((u) => u.venue_id === vid && u.slot_id === sid).length;
 
+  const selected = (rounds ?? []).find((x) => x.id === cur?.id);
+  const lbl = "block text-[15px] font-bold text-ink";
+  const help = "mt-1.5 block text-[12px] text-muted";
+
   return (
     <div>
-      <PageHeader title="회차·식당 재고" desc="회차를 만들면 날짜×동네마다 일정이 생기고, 그 동네 제휴 식당이 일정마다 2테이블씩 잡혀요. 테이블 수는 아래 재고 표에서 바꿀 수 있어요." />
+      <PageHeader title="회차·식당" desc="다음 저녁의 일정과 식당을 준비해요. 회차를 만들면 날짜×동네마다 일정이 생기고, 그 동네 제휴 식당이 일정마다 2테이블씩 잡혀요." />
       {e && <p className="mt-4 rounded-xl bg-danger/10 px-4 py-2 text-[14px] text-danger">{e}</p>}
 
-      <h2 className="mb-3 mt-8 text-[17px] font-bold">회차</h2>
-      <div className="shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
-        <table className="w-full min-w-[820px] text-[14px]">
-          <thead className="border-b border-line"><tr>{["회차", "상태", "신청 마감", "자동 매칭", "일정 (날짜·동네별 신청 수 / 최대 테이블)"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-line">
-            {(rounds ?? []).map((x) => (
-              <tr key={x.id} className="align-top">
-                <td className={`${td} font-semibold`}>{x.title}</td>
-                <td className={td}><Badge v={ROUND_STATUS[x.status] ?? [x.status, "muted"]} /></td>
-                <td className={`${td} text-muted`}>{fmtDateTime(x.apply_deadline)}</td>
-                <td className={`${td} text-muted`}>{fmtDateTime(x.match_at)}</td>
-                <td className={td}>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[...x.slots].sort((a, b) => a.starts_at.localeCompare(b.starts_at) || a.region.localeCompare(b.region)).map((s) => (
-                      <span key={s.id} className="rounded-lg bg-paper px-2 py-1 text-[12px]">{fmtDate(s.starts_at)} {s.region} <b>{s.application_slots.length}</b>/{s.max_tables}</span>
-                    ))}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mb-3 mt-8 flex flex-wrap items-end justify-between gap-3">
-        <h2 className="text-[17px] font-bold">식당 재고</h2>
-        <RoundPicker rounds={picker} current={cur?.id} />
-      </div>
-      <div className="shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
-        <table className="w-full min-w-[760px] text-[14px]">
-          <thead className="border-b border-line"><tr>{["일정", "식당", "받을 수 있는 테이블", "배정된 테이블"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-line">
-            {curSlots.flatMap((s) =>
-              (venues ?? []).filter((v) => v.region === s.region && v.active).map((v) => {
-                const n = cap.get(`${v.id}:${s.id}`) ?? 0;
-                const u = tablesUsed(v.id, s.id);
-                return (
-                  <tr key={`${v.id}:${s.id}`}>
-                    <td className={td}>{fmtDate(s.starts_at)} {fmtTime(s.starts_at)} {s.region}</td>
-                    <td className={td}>{v.name}</td>
-                    <td className={td}>
-                      <form action={setCapacity} className="flex items-center gap-2">
-                        <input type="hidden" name="venue_id" value={v.id} />
-                        <input type="hidden" name="slot_id" value={s.id} />
-                        <input name="tables" type="number" min={0} max={20} defaultValue={n} className={`${ctl} w-20`} />
-                        <button className="text-[13px] font-semibold text-accent">저장</button>
-                      </form>
-                    </td>
-                    <td className={td}>{u >= n && n > 0 ? <Badge v={[`${u} (가득)`, "candle"]} /> : u}</td>
+      <div className="mt-6 grid items-start gap-4 xl:grid-cols-[1fr_400px]">
+        <div className="space-y-4">
+          <Panel title="회차 목록">
+            <table className="w-full text-[14px]">
+              <thead><tr>{["회차 이름", "상태", "마감 시각", "자동 매칭", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {(rounds ?? []).map((x) => (
+                  <tr key={x.id} className={x.id === cur?.id ? "bg-accent-soft/50" : ""}>
+                    <td className={`${td} font-semibold text-ink`}><Link href={`/admin/rounds?r=${x.id}`} className="hover:underline">{x.title}</Link></td>
+                    <td className={td}><Badge v={ROUND_STATUS[x.status] ?? [x.status, "muted"]} /></td>
+                    <td className={`${td} tabular-nums text-muted`}>{fmtDateTime(x.apply_deadline)}</td>
+                    <td className={`${td} tabular-nums text-muted`}>{fmtDateTime(x.match_at)}</td>
+                    <td className={`${td} text-right`}><Link href={`/admin/rounds?r=${x.id}`} aria-label={`${x.title} 선택`}>{x.id === cur?.id ? <ChevronDown size={18} className="inline text-accent" /> : <ChevronRight size={18} className="inline text-muted" />}</Link></td>
                   </tr>
-                );
-              }),
+                ))}
+              </tbody>
+            </table>
+            {selected && (
+              <div className="mt-4 rounded-2xl bg-field p-4">
+                <p className="text-[14px] font-semibold text-ink">{selected.title} · 일정별 모집 현황</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {curSlots.map((sl) => {
+                    const full = (selected.slots.find((x) => x.id === sl.id)?.application_slots.length ?? 0);
+                    return (
+                      <div key={sl.id} className="flex items-center gap-3 rounded-xl bg-card p-3">
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><CalendarDays size={20} /></span>
+                        <span>
+                          <span className="block text-[12px] text-muted">{fmtDay(sl.starts_at)} {fmtTime(sl.starts_at)}</span>
+                          <span className="block text-[16px] font-bold text-ink">{sl.region}</span>
+                          <span className="block text-[12px] text-muted">{full}명 신청 · 최대 {sl.max_tables}테이블</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
-          </tbody>
-        </table>
-        {!curSlots.length && <p className="p-8 text-center text-muted">이 회차에 일정이 없어요.</p>}
-      </div>
+          </Panel>
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-2">
-        <Panel title="새 회차 만들기">
-          <form action={createRound} className="space-y-3 text-[14px]">
-            <input name="title" placeholder="예: 11월 둘째 주 저녁 (필수)" className={`${ctl} w-full`} />
-            <label className="flex items-center justify-between gap-2"><span className="text-muted">신청 마감 (필수)</span><input name="deadline" type="datetime-local" className={ctl} /></label>
-            <label className="flex items-center justify-between gap-2"><span className="text-muted">자동 매칭 실행 <span className="text-[12px]">비우면 마감과 같은 시각</span></span><input name="match_at" type="datetime-local" className={ctl} /></label>
-            <div className="flex items-center justify-between gap-2"><span className="text-muted">모임 날짜 (필수, 1~2개)</span><span className="flex gap-2"><input name="dates" type="date" className={ctl} /><input name="dates" type="date" className={ctl} /></span></div>
-            <label className="flex items-center justify-between gap-2"><span className="text-muted">시작 시각 · 진행 시간(분)</span><span className="flex gap-2"><input name="time" type="time" defaultValue="19:30" className={ctl} /><input name="duration" type="number" defaultValue={150} min={60} className={`${ctl} w-24`} /></span></label>
-            <div className="flex flex-wrap gap-3"><span className="text-muted">동네 (필수)</span>{REGIONS.map((x) => <label key={x} className="flex items-center gap-1"><input type="checkbox" name="regions" value={x} defaultChecked /> {x}</label>)}</div>
-            <label className="flex items-center justify-between gap-2"><span className="text-muted">일정당 최대 테이블 (정원)</span><input name="max_tables" type="number" defaultValue={4} min={1} className={`${ctl} w-24`} /></label>
-            <button className={btnPrimary}>만들기</button>
-          </form>
-        </Panel>
-        <Panel title={`제휴 식당 ${venues?.length ?? 0}곳`}>
-          <ul className="max-h-64 divide-y divide-line overflow-y-auto text-[14px]">
-            {(venues ?? []).map((v) => (
-              <li key={v.id} className="flex items-center justify-between gap-3 py-2">
-                <span><b>{v.name}</b> <span className="text-muted">{v.region}</span></span>
-                <span className="truncate text-[13px] text-muted">{v.price_range ?? ""} {v.address}</span>
-              </li>
-            ))}
-          </ul>
-          <form action={addVenue} className="mt-4 grid grid-cols-2 gap-2">
-            <select name="region" className={ctl}>{REGIONS.map((x) => <option key={x}>{x}</option>)}</select>
-            <input name="name" placeholder="식당 이름 (필수)" className={ctl} />
-            <input name="address" placeholder="주소 (필수)" className={`${ctl} col-span-2`} />
-            <input name="price" placeholder="가격대 (예: 3만 원대)" className={ctl} />
-            <button className={btnPrimary}>식당 추가</button>
+          <Panel title="식당 재고" action={<RoundPicker rounds={picker} current={cur?.id} />}>
+            <table className="w-full text-[14px]">
+              <thead><tr>{["일정", "식당", "받을 수 있는 테이블", "배정된 테이블"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-line">
+                {curSlots.flatMap((sl) =>
+                  (venues ?? []).filter((v) => v.region === sl.region && v.active).map((v) => {
+                    const n = cap.get(`${v.id}:${sl.id}`) ?? 0;
+                    const u = tablesUsed(v.id, sl.id);
+                    return (
+                      <tr key={`${v.id}:${sl.id}`}>
+                        <td className={td}>{fmtDay(sl.starts_at)} {fmtTime(sl.starts_at)} {sl.region}</td>
+                        <td className={`${td} font-medium text-ink`}>{v.name}</td>
+                        <td className={td}>
+                          <form action={setCapacity} className="flex items-center gap-2">
+                            <input type="hidden" name="venue_id" value={v.id} />
+                            <input type="hidden" name="slot_id" value={sl.id} />
+                            <input name="tables" type="number" min={0} max={20} defaultValue={n} className={`${ctl} w-20`} />
+                            <button className="text-[13px] font-semibold text-accent">저장</button>
+                          </form>
+                        </td>
+                        <td className={td}>{u >= n && n > 0 ? <Badge v={[`${u} (가득)`, "candle"]} /> : u}</td>
+                      </tr>
+                    );
+                  }),
+                )}
+              </tbody>
+            </table>
+            {!curSlots.length && <p className="p-8 text-center text-muted">이 회차에 일정이 없어요.</p>}
+          </Panel>
+
+          <Panel title={`제휴 식당 ${venues?.length ?? 0}곳`}>
+            <div className="max-h-72 overflow-y-auto">
+              <table className="w-full text-[14px]">
+                <thead><tr>{["지역", "식당", "주소", "가격대"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+                <tbody className="divide-y divide-line">
+                  {(venues ?? []).map((v) => (
+                    <tr key={v.id}>
+                      <td className={`${td} text-muted`}>{v.region}</td>
+                      <td className={`${td} font-semibold text-ink`}>{v.name}</td>
+                      <td className={`${td} text-[#4c5368]`}>{v.address}</td>
+                      <td className={`${td} text-muted`}>{v.price_range ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-5 text-[15px] font-bold text-ink">식당 추가</p>
+            <form action={addVenue} className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-[110px_1fr_1.4fr_120px_auto]">
+              <select name="region" className={ctl} aria-label="지역">{REGIONS.map((x) => <option key={x}>{x}</option>)}</select>
+              <input name="name" placeholder="식당 이름 (필수)" className={ctl} />
+              <input name="address" placeholder="주소 (필수)" className={ctl} />
+              <input name="price" placeholder="가격대 (선택)" className={ctl} />
+              <button className={btnPrimary}>식당 추가</button>
+            </form>
+          </Panel>
+        </div>
+
+        <Panel title="새 회차 만들기" className="xl:sticky xl:top-6">
+          <form action={createRound} className="space-y-5 text-[14px]">
+            <label className="block"><span className={lbl}>이름<Required /></span><input name="title" placeholder="11월 둘째 주 저녁" className={`${ctl} mt-2 w-full`} /><span className={help}>참가자에게 보이는 회차 이름이에요.</span></label>
+            <label className="block"><span className={lbl}>신청 마감<Required /></span><input name="deadline" type="datetime-local" className={`${ctl} mt-2 w-full`} /><span className={help}>이 시각에 모집이 마감돼요.</span></label>
+            <label className="block"><span className={lbl}>자동 매칭 실행<Optional /></span><input name="match_at" type="datetime-local" className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 마감과 같은 시각에 매칭이 진행돼요.</span></label>
+            <div><span className={lbl}>날짜<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="dates" type="date" className={ctl} aria-label="첫째 날" /><input name="dates" type="date" className={ctl} aria-label="둘째 날" /></span><span className={help}>이번 회차에 진행할 저녁 날짜를 1~2개 골라 주세요.</span></div>
+            <div><span className={lbl}>시작 시각 · 진행 시간<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="time" type="time" defaultValue="19:30" className={ctl} aria-label="시작 시각" /><span className="flex items-center gap-2"><input name="duration" type="number" defaultValue={150} min={60} className={`${ctl} w-full`} aria-label="진행 시간" /><span className="shrink-0 text-muted">분</span></span></span><span className={help}>모든 식당에 같은 시각에 시작해요.</span></div>
+            <div>
+              <span className={lbl}>동네<Required /></span>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {REGIONS.map((x) => (
+                  <label key={x} className="cursor-pointer">
+                    <input type="checkbox" name="regions" value={x} defaultChecked className="peer sr-only" />
+                    <span className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-line text-[14px] text-ink transition peer-checked:border-accent peer-checked:bg-accent-soft/60 peer-checked:font-semibold peer-checked:text-accent [&>svg]:hidden peer-checked:[&>svg]:block"><Check size={16} strokeWidth={2.8} />{x}</span>
+                  </label>
+                ))}
+              </div>
+              <span className={help}>여러 개 고를 수 있어요.</span>
+            </div>
+            <label className="block"><span className={lbl}>일정당 최대 테이블 수<Required /></span><input name="max_tables" type="number" defaultValue={4} min={1} className={`${ctl} mt-2 w-28`} /><span className={help}>한 동네·날짜에 운영할 최대 테이블 수예요.</span></label>
+            <button className={`${btnPrimary} h-12 w-full text-[15px]`}>회차 만들기</button>
           </form>
         </Panel>
       </div>

@@ -44,6 +44,16 @@ export const APP_STATUS: Record<string, [string, Tone]> = {
   CANCELED: ["취소", "muted"],
 };
 
+export const TABLE: Record<string, [string, Tone]> = {
+  DRAFT: ["구성 중", "muted"],
+  CONFIRMED: ["자동 확정", "accent"],
+  VENUE_ASSIGNED: ["식당 배정", "accent"],
+  READY: ["안내 완료", "leaf"],
+  IN_PROGRESS: ["모임 중", "accent"],
+  DONE: ["모임 끝", "muted"],
+  DISSOLVED: ["해제", "danger"],
+};
+
 export const FIELD: Record<string, string> = {
   application_status: "신청",
   payment_status: "결제",
