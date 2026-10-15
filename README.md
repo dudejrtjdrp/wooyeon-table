@@ -14,6 +14,7 @@ Next.js 15 (App Router) · Supabase (Postgres) · Vercel
 
 - [01. 상태 흐름](docs/01-state-flow.md)
 - [02. 매칭 규칙](docs/02-matching-rules.md)
+- [PRD 평가 기준 (파트별)](docs/prd/README.md) — 심사기준 7개 파트별 요구사항·합격 기준, 평가 에이전트는 `.claude/agents/`
 - DB 스키마: `supabase/migrations/`
 
 ## 로컬 실행
