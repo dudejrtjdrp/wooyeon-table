@@ -40,7 +40,7 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
   const jobs = new Map(mems.map((m) => [m.user_id, m.users.profiles?.job ?? ""]));
   const n = await now();
   const sameDay = fmtDay(n.toISOString()) === fmtDay(t.slots.starts_at);
-  const timeOf = (iso: string) => new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+  const timeOf = fmtClock;
   const chatOpen = Boolean(mine) && t.status !== "DONE";
   const dayOf = (iso: string) => fmtDay(iso).replace(/\((.)\)$/, " $1요일");
   let lastDay = "";
@@ -53,9 +53,9 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
         <span className="min-w-0 flex-1 text-[13px] leading-[1.45] text-ink2">
           <b className="text-ink">{fmtClock(t.slots.starts_at)}{t.venues ? ` · ${t.venues.name}` : ""}</b>
           <br />
-          {sameDay ? "오늘은 취소와 단체방 나가기가 안 돼요." : n >= refundCutoff(t.slots.starts_at) ? "환불 마감이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 전액 환불돼요."}
+          {t.status === "DONE" ? "모임이 끝났어요. 모임 정보에서 후기를 남길 수 있어요." : sameDay ? "오늘은 취소와 단체방 나가기가 안 돼요." : n >= refundCutoff(t.slots.starts_at) ? "환불 마감이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 전액 환불돼요."}
         </span>
-        <span className="shrink-0 text-[13px] font-bold text-accent">모임 정보</span>
+        <span className="flex h-11 shrink-0 items-center text-[13px] font-bold text-accent">모임 정보</span>
       </Link>
       <div className="mt-2"><ErrorText msg={e} /></div>
       <section className={`mt-3 ${chatOpen ? "pb-24" : ""}`}>

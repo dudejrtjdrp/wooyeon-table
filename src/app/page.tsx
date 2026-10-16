@@ -9,7 +9,7 @@ import { RoundTable } from "@/components/brand";
 import { Card, LinkButton, List, Pill, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { dday, ddayLabel, fmtDateTime, fmtDayClock, fmtSlot } from "@/lib/format";
+import { dday, ddayLabel, fmtDayClock, fmtSlot } from "@/lib/format";
 import { areasLabel } from "@/lib/regions";
 import { maybeTick } from "@/lib/pipeline";
 import { headline } from "@/lib/status";
@@ -83,6 +83,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
           </Card>
         ) : active && !finished ? (
           <StatusCard a={active} t={t} />
+        ) : next ? (
+          // 신청을 마친 사람에게는 맞춤 추천 하나만 주 버튼으로 보여준다 (일반 '신청하기'와 경쟁하지 않게)
+          <Card>
+            <p className="text-[14px] text-muted">{me.name}님, 다음 테이블 추천</p>
+            <h1 className="mt-1.5 text-[23px] font-black leading-[1.4]">{next.why}</h1>
+            <div className="my-5 flex justify-center"><RoundTable size={200} filled={1} /></div>
+            <p className="mb-3 text-center text-[14px] text-muted">{next.roundTitle} · {fmtSlot(next.deadline)} 마감</p>
+            <LinkButton href={`/apply/${next.roundId}`}>이 일정 신청하기</LinkButton>
+          </Card>
         ) : (
           <Card>
             <p className="text-[14px] text-muted">{me.name}님</p>
@@ -94,18 +103,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
         {active && (
           <List>
-            {!finished && !["PENDING", "FAILED"].includes(active.payment_status) && <Row href={`/applications/${active.id}`} right={<ChevronRight size={18} className="text-[#b5c0ba]" />}><span className="text-[15px]">결제 완료 · 영수증과 환불 규정</span></Row>}
+            {!finished && !["PENDING", "FAILED"].includes(active.payment_status) && <Row href={`/applications/${active.id}`} right={<ChevronRight size={18} className="text-muted" />}><span className="text-[15px]">결제 완료 · 영수증과 환불 규정</span></Row>}
             {finished && <Row href={`/applications/${active.id}`} right={<Pill tone={headline(active).tone}>{headline(active).label}</Pill>}><span className="text-[15px]">{active.rounds.title}</span></Row>}
           </List>
-        )}
-
-        {next && (
-          <Card>
-            <p className="text-[13px] font-bold text-accent">다음 테이블 추천</p>
-            <p className="mt-1.5 text-[18px] font-extrabold leading-snug">{next.why}</p>
-            <p className="mt-1 text-[14px] text-muted">{next.roundTitle} · {fmtDateTime(next.deadline)} 마감</p>
-            <LinkButton href={`/apply/${next.roundId}`} className="mt-4">이 일정 신청하기</LinkButton>
-          </Card>
         )}
 
         {me.hasProfile && <InstallCard />}
@@ -152,7 +152,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   );
 }
 
-const STEPS = ["신청", "결제", "매칭 중", "확정"] as const;
+// 지금 단계 이름은 status.ts headline과 같은 말을 쓴다 (매칭 대기·재배치 중·확인 중 등)
+const STEPS = ["신청", "결제", "매칭", "확정"] as const;
 
 /** E10 매칭 대기 / 확정 카드: 원형 테이블 + 진행 막대 */
 function StatusCard({ a, t }: { a: ActiveRow; t: Date }) {
@@ -162,12 +163,13 @@ function StatusCard({ a, t }: { a: ActiveRow; t: Date }) {
   const paid = !["PENDING", "FAILED"].includes(a.payment_status);
   const failed = a.match_status === "ALTERNATIVE_OFFERED";
   const waiting = failed && a.resolution === "wait";
-  const realloc = a.match_status === "REALLOCATING" || a.match_status === "EXCEPTION";
+  const realloc = a.match_status === "REALLOCATING";
+  const checking = a.match_status === "EXCEPTION";
   const at = confirmed ? 4 : paid ? 3 : 2;
   const dates = (a.dates ?? []).map((d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일`);
   const where = `${dates.length > 1 ? `${dates[0]} 또는 ${dates.slice(1).map((x) => x.replace(/^\d+월 /, "")).join(", ")}` : dates[0] ?? a.rounds.title} · ${areasLabel(a.areas ?? [])}`;
-  const title = confirmed ? "테이블이 정해졌어요" : failed ? (a.resolution === "wait" ? "자리가 나길 기다리고 있어요" : "이번엔 테이블을 못 만들었어요") : !paid ? "결제를 마치면 매칭에 들어가요" : realloc ? "다른 테이블을 찾고 있어요" : "같이 앉을 사람을 찾고 있어요";
-  const cta = confirmed ? ["테이블과 단체방 보기", `/tables/${a.table_id}`] : failed ? [a.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["진행 상황 보기", `/applications/${a.id}`];
+  const title = confirmed ? "테이블이 정해졌어요" : failed ? (a.resolution === "wait" ? "자리가 나길 기다리고 있어요" : "이번엔 테이블을 못 만들었어요") : !paid ? "결제를 마치면 매칭에 들어가요" : realloc ? "다른 테이블을 찾고 있어요" : checking ? "운영팀이 확인하고 있어요" : a.match_status === "MATCHING" ? "같이 앉을 사람을 찾고 있어요" : "매칭 시각을 기다리고 있어요";
+  const cta = confirmed ? ["테이블과 단체방 보기", `/tables/${a.table_id}`] : failed ? [a.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["신청 내용 보기", `/applications/${a.id}`];
   return (
     <section className="animate-rise rounded-[24px] bg-card px-[22px] pb-[22px] pt-6" aria-label="내 신청">
       <p className="text-[14px] text-muted">{confirmed ? `${fmtSlot(slot!.starts_at)} · ${slot!.region}` : where}</p>
@@ -184,9 +186,9 @@ function StatusCard({ a, t }: { a: ActiveRow; t: Date }) {
         {STEPS.map((s, i) => <span key={s} className={`h-1 flex-1 rounded-full ${i + 1 < at ? "bg-accent" : i + 1 === at ? (waiting ? "bg-[#F4C542]" : failed ? "bg-danger" : "bg-seat") : "bg-line"}`} />)}
       </div>
       <ol className="mt-2 flex text-[12px] text-faint">
-        {STEPS.map((s, i) => <li key={s} aria-current={i + 1 === at ? "step" : undefined} className={`flex-1 ${i + 1 === at ? `font-extrabold ${waiting ? "text-[#6b5410]" : failed ? "text-danger" : "text-accent"}` : ""}`}>{i + 1 === at && waiting ? "자리 기다리는 중" : i + 1 === at && failed ? "매칭 실패" : realloc && i + 1 === at ? "재배치 중" : s}</li>)}
+        {STEPS.map((s, i) => <li key={s} aria-current={i + 1 === at ? "step" : undefined} className={`flex-1 ${i + 1 === at ? `font-extrabold ${waiting ? "text-[#6b5410]" : failed ? "text-danger" : "text-accent"}` : ""}`}>{i + 1 === at ? h.label : s}</li>)}
       </ol>
-      {(failed || !paid || realloc) && <p className="mt-4 text-[14px] leading-relaxed text-muted">{h.desc}</p>}
+      {(failed || !paid || realloc || checking) && <p className="mt-4 text-[14px] leading-relaxed text-muted">{h.desc}</p>}
       <LinkButton href={cta[1]} tone={confirmed || failed || !paid ? "accent" : "outline"} className="mt-5">{cta[0]}</LinkButton>
     </section>
   );

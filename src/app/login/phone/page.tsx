@@ -17,18 +17,18 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <input type="hidden" name="next" value={next ?? "/"} />
         <label className="block rounded-[20px] bg-field px-5 pb-3 pt-4">
           <span className="text-[13px] font-semibold text-muted">휴대폰 번호<Required /></span>
-          <input name="login_id" inputMode="tel" autoComplete="username" placeholder="010-1234-5678" className="mt-1 h-10 w-full bg-transparent text-[18px] text-ink outline-none placeholder:text-muted/50" />
+          <input name="login_id" type="tel" required inputMode="tel" autoComplete="username" placeholder="010-1234-5678" className="mt-1 h-11 w-full bg-transparent text-[18px] text-ink outline-none placeholder:text-faint" />
         </label>
         <label className="block rounded-[20px] bg-field px-5 pb-3 pt-4">
           <span className="text-[13px] font-semibold text-muted">비밀번호<Required /></span>
-          <PasswordInput name="password" autoComplete="current-password" placeholder="비밀번호" className="mt-1 h-10 w-full bg-transparent text-[18px] text-ink outline-none placeholder:text-muted/50" />
+          <PasswordInput name="password" required autoComplete="current-password" placeholder="비밀번호" className="mt-1 h-11 w-full bg-transparent text-[18px] text-ink outline-none placeholder:text-faint" />
         </label>
         <ErrorText msg={e} />
         <div className="pt-3"><PrimaryButton type="submit" pendingText="로그인하는 중">로그인</PrimaryButton></div>
       </form>
       <p className="mt-7 text-center text-[15px] text-muted">
         처음이에요?{" "}
-        <Link href="/signup" className="font-semibold text-accent">가입하기</Link>
+        <Link href={next?.startsWith("/") && next !== "/" ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="inline-flex h-11 items-center px-1 font-semibold text-accent">가입하기</Link>
       </p>
     </Screen>
   );

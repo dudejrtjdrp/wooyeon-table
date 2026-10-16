@@ -2,20 +2,23 @@ import Link from "next/link";
 import { LogOut } from "lucide-react";
 import Image from "next/image";
 import { IMG } from "@/components/ui";
-import { getMe } from "@/lib/auth";
+import { Suspense } from "react";
+import { ADMIN_LEVEL_LABEL, adminLevelOf, getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDateTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { logout } from "../login/actions";
+import { Flash } from "./flash";
 import { AdminNav } from "./nav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const me = await getMe();
   if (!me || me.role !== "admin") return <div className="min-h-dvh bg-paper">{children}</div>;
-  const [{ count }, { data: clock }, t] = await Promise.all([
+  const [{ count }, { data: clock }, t, level] = await Promise.all([
     db().from("exceptions").select("id", { count: "exact", head: true }).eq("status", "open"),
     db().from("app_clock").select("offset_seconds").eq("id", 1).single(),
     now(),
+    adminLevelOf(me.id),
   ]);
   const virtual = Number(clock?.offset_seconds) !== 0;
   return (
@@ -34,7 +37,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <p className="font-semibold">{virtual ? "시연용 가상 시각" : "현재 시각"}</p>
             <p className="mt-0.5 tabular-nums">{fmtDateTime(t.toISOString())}</p>
           </div>
-          <p className="px-3 text-[13px] text-muted">운영자 {me.name}</p>
+          <p className="px-3 text-[13px] text-muted">운영자 {me.name} · <span className={level === "viewer" ? "font-semibold text-warn" : ""}>{ADMIN_LEVEL_LABEL[level]}</span></p>
           <form action={logout} className="px-3"><button className="flex items-center gap-2 text-[14px] text-muted hover:text-ink"><LogOut size={17} />로그아웃</button></form>
           <Link href="/guide" className="block px-3 text-[12px] text-muted/70 hover:text-ink">심사위원 안내 보기</Link>
         </div>
@@ -47,7 +50,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
           <AdminNav exCount={count ?? 0} mobile />
         </div>
-        <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-9">{children}</main>
+        <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-9">
+          {level === "viewer" && (
+            <p className="mb-5 rounded-xl bg-warn-soft px-4 py-2.5 text-[13px] font-medium text-warn">조회 전용 계정이에요. 화면은 모두 볼 수 있지만 환불·제한·긴급 수정·설정 변경은 할 수 없어요.</p>
+          )}
+          {children}
+        </main>
+        <Suspense fallback={null}><Flash /></Suspense>
       </div>
     </div>
   );

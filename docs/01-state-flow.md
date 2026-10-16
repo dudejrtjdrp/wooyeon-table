@@ -49,7 +49,7 @@ DRAFT ──제출──▶ SUBMITTED ──참가자 취소──▶ CANCELED
 | `REFUND_REQUESTED` | 참가자가 환불을 고름 |
 | `REFUND_PROCESSING` | 자동 환불 처리 중 |
 | `REFUNDED` | 환불 완료 |
-| `REFUND_FAILED` | 자동 환불 실패, 운영자 확인 필요 |
+| `REFUND_FAILED` | 자동 환불 실패. 10분 간격으로 세 번까지 자동으로 다시 시도하고, 세 번째도 실패하면 운영자 확인 |
 
 ```
 PENDING ──결제──▶ PAID
@@ -60,7 +60,7 @@ PENDING ──결제──▶ PAID
                     │            (PAID 유지)                REFUND_PROCESSING
                     │                                        │        │
                     └─매칭 전 취소(화요일 24:00 전)─▶ REFUND_REQUESTED   ▼        ▼
-                                                    REFUNDED  REFUND_FAILED ─▶ 예외 큐
+                                                    REFUNDED  REFUND_FAILED ─10분 뒤 재시도(3번까지)─▶ 3번째 실패만 예외 큐
 ```
 
 - 해커톤에서는 모의 결제다. "결제하기"를 누르면 `PAID`, 테스트용으로 실패를 일으키는 버튼을 어드민 시연 패널에 둔다.
@@ -148,7 +148,7 @@ PRD에는 따로 없지만 매칭 엔진과 안내 자동화에 필요해서 둔
 DRAFT ─검증 통과─▶ CONFIRMED ─식당 배정─▶ VENUE_ASSIGNED ─단체방·공지─▶ READY
   │                   │ 식당 없음                                   │ 시작 시각
   │                   ▼                                           ▼
-  │              예외 큐 (식당 부족)                           IN_PROGRESS ─종료─▶ DONE
+  │      같은 지역 다른 식당 → 모두 안 되면 예외 큐          IN_PROGRESS ─종료─▶ DONE
   └─4명 미만─▶ DISSOLVED
 ```
 
@@ -186,3 +186,33 @@ PRD 18장 12단계를 상태 변화로 옮기면 이렇다. 데모와 테스트�
 | 시각 | `2026-10-24T18:00:00+09:00` |
 
 참가자 화면의 "왜 이렇게 됐는지" 설명과 어드민의 매칭 모니터가 이 기록을 그대로 읽어서 보여준다.
+
+## 8. Attendance·MatchResolution을 별도 테이블로 두지 않은 이유
+
+PRD 13장은 `Attendance`와 `MatchResolution`을 엔티티로 적었다. 우리는 이 둘을 `applications`의 컬럼으로 두었다. 상태를 합친 게 아니라, 갈래별 컬럼은 그대로 나누고 담는 행만 신청 한 줄로 모았다.
+
+| PRD 엔티티 | 우리 저장 위치 | 핵심 필드 |
+|---|---|---|
+| Attendance | `applications.attendance_status` | `SCHEDULED / ATTENDED / CANCELED_EARLY / CANCELED_LATE / NO_SHOW` (PRD 12장 값 그대로) |
+| MatchResolution | `applications.resolution`, `wait_until`, `match_reason`, `realloc_count`, `transferred_from` | 고른 방법(이동·보관·환불·기다리기), 기다리기 마감, 사유, 자동 재배치 횟수, 옮겨 온 원래 신청 |
+
+**이렇게 둔 이유**
+
+1. **한 신청에 한 번씩만 생긴다.** 참석은 확정된 신청 한 건당 하나, 매칭 실패 뒤 고르는 방법도 실패한 신청 한 건당 하나다. 1:1 관계를 따로 떼면 조인만 늘고, 행이 없을 때(아직 확정 전, 아직 안 고름)를 따로 처리해야 한다.
+2. **같은 행을 조건부로 바꿔야 중복이 안 생긴다.** 참석 취소는 `attendance_status = 'SCHEDULED'`일 때만, 빈자리 합류·보관은 `match_status = 'ALTERNATIVE_OFFERED'`일 때만 바꾼다. 매칭 상태·결제 상태·참석 상태·선택이 한 행에 있으니 `update ... where` 한 번으로 "두 번 눌러도 한 번만"이 지켜진다(멱등성). 테이블이 둘이면 트랜잭션이나 잠금이 따로 필요하다.
+3. **화면과 엔진이 같은 한 줄을 읽는다.** 참가자 상태 문구(`lib/status.ts`), 어드민 목록, 매칭 러너, tick이 모두 신청 한 줄만 보고 판단한다.
+4. **이력은 `status_events`에 따로 남는다.** 컬럼에는 지금 값만 있고, 언제·누가·왜·이전 값은 상태 기록에 한 줄씩 남긴다. 여러 번 바뀐 이력이 필요한 곳(예: 재배치를 두 번 거절)도 여기서 본다. 일정 이동은 기존 신청을 `TRANSFERRED`로 닫고 새 신청을 만들어(`transferred_from`) 두 줄로 남긴다.
+
+**별도 테이블로 뺄 때:** 한 신청에 참석 기록이 여러 번 생기거나(여러 회차를 묶은 상품), 매칭 실패 뒤 여러 단계 협상(제안 → 역제안)이 필요해지면 그때 `attendances`·`match_resolutions`로 나눈다. 빈자리 제안처럼 이미 여러 건이 생기는 것은 처음부터 `seat_offers` 테이블로 따로 두었다.
+
+### 이름을 PRD와 맞춘 뷰 (마이그레이션 0011, 아직 적용 전)
+
+저장은 위처럼 신청 한 줄에 두고, PRD 13장 이름으로 바로 조회할 수 있게 `applications` 위에 읽기 전용 뷰를 둔다. 뷰는 원본을 그대로 비추기만 해서 값이 두 곳에 갈라질 일이 없다.
+
+| 뷰 | 한 줄 | 주요 컬럼 |
+|---|---|---|
+| `attendances` | 참석 상태가 있는(확정된 적 있는) 신청 한 건 | `application_id`, `user_id`, `table_id`, `slot_id`, `starts_at`·`ends_at`, `attendance_status`, `checked_in_at`, `no_show_candidate`(끝났는데 체크인 없음, 확정은 운영자), `feedback_submitted` |
+| `match_resolutions` | 매칭 실패 안내를 받은 신청 한 건 | `application_id`, `match_status`, `payment_status`, `resolution`(이동·보관·환불·기다리기, 비면 아직 안 고름), `wait_until`, `failed_reason`, `failed_at`(status_events에서 처음 실패한 시각), `transferred_to`(옮겨 간 새 신청) |
+
+함께 `applications.checked_in_at`(체크인 시각, 비어도 됨)을 더한다. 지금은 체크인 시각을 `status_events`(attendance_status → ATTENDED)에서 읽고, 0011을 적용할 때 이미 체크인한 신청은 그 기록에서 시각을 옮겨 채운다. 적용 전이라 지금 코드는 이 컬럼과 뷰를 쓰지 않는다. 적용한 뒤 체크인 액션이 `checked_in_at`을 같이 채우도록 바꾼다.
+

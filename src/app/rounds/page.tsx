@@ -51,7 +51,7 @@ export default async function Rounds() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-[20px] font-black">{r.title}</h2>
-                  <p className="mt-1 text-[14px] text-muted">{fmtSlot(r.apply_deadline)} 마감 · 바로 자동 매칭</p>
+                  <p className="mt-1 text-[14px] text-muted">{fmtSlot(r.apply_deadline)} 마감 · 마감하면 바로 테이블을 꾸려요</p>
                 </div>
                 {appId ? <Pill tone="accent">신청했어요</Pill> : <Pill tone="muted">{ddayLabel(dday(times[0] ?? r.apply_deadline, t))}</Pill>}
               </div>

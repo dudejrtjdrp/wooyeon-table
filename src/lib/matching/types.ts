@@ -1,7 +1,7 @@
 // 매칭 엔진 입력·출력 타입. DB와 분리된 순수 계산 모듈이라 테스트로 바로 검증할 수 있다.
 // 규칙 문서: docs/02-matching-rules.md
 
-export const ALGORITHM_VERSION = "2026.10.16-1";
+export const ALGORITHM_VERSION = "2026.10.16-3";
 
 export type Gender = "M" | "F";
 
@@ -38,6 +38,18 @@ export interface Relations {
   met: Set<string>;
   /** 서로 다시 만나고 싶다고 한 쌍 (한쪽만이어도 포함) */
   again: Set<string>;
+  /**
+   * 지난번 같은 테이블에서 둘 중 한 사람이라도 분위기·대화 점수를 낮게(평균 2점 이하) 준 쌍.
+   * 제외는 아니지만 다시 같은 테이블에 앉으면 점수를 깎는다 (피드백 루프, F11)
+   */
+  cool?: Set<string>;
+  /** cool 쌍별 감점 비율(0.5~1). 후기를 남긴 사람의 참석이 많을수록 1에 가깝다. 없으면 1 */
+  coolWeight?: Map<string, number>;
+  /**
+   * 참석 이력. 참석 횟수, 지금까지 후기 평균으로 본 만족 여부, 후기 신뢰도(0~1, 참석 3번이면 1) (피드백 루프, F11).
+   * trust가 없으면 참석 횟수로 계산한다
+   */
+  history?: Map<string, { attended: number; happy: boolean; trust?: number }>;
 }
 
 export interface Weights {
@@ -70,6 +82,11 @@ export interface ScoreDetail {
   parts: Record<keyof Weights, number>;
   /** 다시 만나고 싶은 쌍 가산점 */
   bonus: number;
+  /** 지난 모임을 즐겁게 보낸 재참가자가 첫 참가자와 함께 앉으면 주는 가산점 (총점에만, 확정 판정에는 안 씀) */
+  guideBonus: number;
+  /** 만족도가 낮았던 조합이 다시 앉은 쌍 수와 감점 (총점에만, 확정 판정에는 안 씀) */
+  coolPairs: number;
+  penalty: number;
   /** 0~100 (+가산점) */
   total: number;
   /** 최소 점수 비교용. 성비를 못 맞춘 감점은 빼고 센다(성비는 선호 조건이라 그것만으로 테이블을 막지 않음) */

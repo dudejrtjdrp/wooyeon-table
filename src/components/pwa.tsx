@@ -105,14 +105,14 @@ export function InstallCard() {
   };
 
   return (
-    <div className="relative mt-4 overflow-hidden rounded-3xl bg-ink p-5 text-white">
-      <button onClick={close} aria-label="닫기" className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full text-white/50"><X size={18} /></button>
+    <div className="relative mt-4 overflow-hidden rounded-[22px] bg-card p-5 text-ink">
+      <button onClick={close} aria-label="닫기" className="absolute right-1.5 top-1.5 flex size-11 items-center justify-center rounded-full text-muted"><X size={18} /></button>
       <div className="flex items-start gap-3.5 pr-6">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon-192.png" alt="" className="size-12 shrink-0 rounded-[14px]" />
         <div>
           <p className="text-[16px] font-bold">앱으로 설치하고 알림 받기</p>
-          <p className="mt-1 text-[13px] leading-relaxed text-white/65">
+          <p className="mt-1 text-[13px] leading-relaxed text-muted">
             {platform === "android"
               ? "홈 화면에 설치하면 매칭 결과와 모임 안내가 바로 와요."
               : "아이폰은 홈 화면에 추가해야 알림을 받을 수 있어요."}
@@ -120,11 +120,11 @@ export function InstallCard() {
         </div>
       </div>
       {platform === "android" && canPrompt ? (
-        <button onClick={prompt} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white text-[15px] font-semibold text-ink">
+        <button onClick={prompt} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent-soft text-[15px] font-bold text-accent-text">
           <Download size={18} /> 설치하기
         </button>
       ) : (
-        <Link href="/install" className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white text-[15px] font-semibold text-ink">
+        <Link href="/install" className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent-soft text-[15px] font-bold text-accent-text">
           {platform === "android" ? <Download size={18} /> : <SquarePlus size={18} />} 설치 방법 보기
         </Link>
       )}
@@ -170,7 +170,7 @@ export function InstallGuide() {
     <>
       <div className="mt-4 grid grid-cols-2 gap-1 rounded-2xl bg-card p-1">
         {(["ios", "android"] as const).map((k) => (
-          <button key={k} onClick={() => setTab(k)} className={`h-10 rounded-xl text-[14px] font-semibold ${tab === k ? "bg-ink text-white" : "text-muted"}`}>
+          <button key={k} onClick={() => setTab(k)} className={`h-11 rounded-xl text-[14px] font-semibold ${tab === k ? "bg-accent text-white" : "text-muted"}`}>
             {k === "ios" ? "아이폰" : "안드로이드"}
           </button>
         ))}

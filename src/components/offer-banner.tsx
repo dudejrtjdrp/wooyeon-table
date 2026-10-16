@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { now } from "@/lib/clock";
-import { fmtDate, fmtTime } from "@/lib/format";
+import { fmtDay, fmtSlot } from "@/lib/format";
 import { db } from "@/lib/supabase";
 
 /** 답을 기다리는 빈자리 제안이 있으면 맨 위에 띄운다 (STA-07) */
@@ -27,9 +27,9 @@ export async function OfferBanner({ userId, applicationId }: { userId: string; a
         <span className="size-3 rounded-full bg-candle" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] text-white/60">{fmtTime(o.expires_at)}까지 답해 주세요</span>
+        <span className="block text-[13px] text-white/75">{fmtSlot(o.expires_at)}까지 답해 주세요</span>
         <span className="mt-0.5 block text-[16px] font-bold leading-snug">
-          {fmtDate(s.starts_at)} {s.region} 테이블에 자리가 났어요
+          {fmtDay(s.starts_at)} {s.region} 테이블에 자리가 났어요
         </span>
       </span>
       <ChevronRight className="size-5 shrink-0 text-white/50" />

@@ -2,6 +2,7 @@
 // 멤버십은 기간 안에 횟수 제한이 없어 돌려줄 횟수가 없고, 매칭에 실패하면 기간을 늘려 준다.
 import { MEMBERSHIP_EXTEND_DAYS, isMembership } from "./constants";
 import { logStatus } from "./events";
+import { fmtDay } from "./format";
 import { notify } from "./notify";
 import { refundPayment } from "./payments";
 import { db } from "./supabase";
@@ -33,7 +34,8 @@ export async function releaseUse(appId: string, actor: string, reason: string): 
     return "쓴 이용권 1회를 돌려드렸어요. 다음 일정에 그대로 쓸 수 있어요.";
   }
   // 1회권: 원결제수단으로 전액 환불 (토스 결제면 토스 취소 API)
-  const r = await refundPayment(p.id, appId, actor, reason);
+  // 취소 안내(attendance_canceled)에 결과를 담으니 환불 접수·완료 알림은 따로 안 보낸다. 실패해 재시도로 끝나면 그때 알린다
+  const r = await refundPayment(p.id, appId, actor, reason, { notifyUser: false });
   if (r.ok && p.pass_id) await db().from("passes").update({ remaining: 0 }).eq("id", p.pass_id);
   return r.message;
 }
@@ -66,7 +68,7 @@ export async function extendMembershipFor(appId: string, actor: string): Promise
   await db().from("passes").update({ expires_at: next.toISOString() }).eq("id", passId);
   await logStatus({ entityType: "application", entityId: appId, field: "membership_extend", from: base.toISOString(), to: next.toISOString(), actor, reason: `매칭 실패로 멤버십 ${MEMBERSHIP_EXTEND_DAYS}일 연장` });
   await logStatus({ entityType: "pass", entityId: passId, field: "expires_at", from: base.toISOString(), to: next.toISOString(), actor, reason: `신청 ${appId.slice(0, 8)} 매칭 실패` });
-  const ymd = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" }).format(next);
+  const ymd = fmtDay(next.toISOString());
   await notify({ userId: app.user_id, template: "membership_extended", title: `멤버십 기간을 ${MEMBERSHIP_EXTEND_DAYS}일 늘렸어요`, body: `이번에 테이블을 못 만들어서 ${ymd}까지로 늘려 드렸어요.`, link: "/me", dedupeKey: `membership_extend:${appId}` });
   return true;
 }

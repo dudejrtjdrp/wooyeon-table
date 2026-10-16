@@ -81,7 +81,7 @@ export function TabBar({ unread = 0 }: { unread?: number }) {
               <Link
                 href={href}
                 aria-current={on ? "page" : undefined}
-                className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] ${on ? "font-extrabold text-accent" : "font-medium text-[#5f6d66]"}`}
+                className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] ${on ? "font-extrabold text-accent" : "font-medium text-muted"}`}
               >
                 <Icon size={24} strokeWidth={on ? 2.3 : 1.8} />
                 {label}
@@ -167,6 +167,38 @@ export function ConfirmSheet({
   );
 }
 
+/**
+ * 입력값이 있는 폼에서 되돌리기 어려운 제출(신고 등)을 한 번 더 확인한다.
+ * 처음 누르면 확인 문구와 두 버튼으로 바뀌고, 두 번째에 실제로 보낸다. 폼 값은 그대로 남는다.
+ */
+export function ConfirmSubmit({ label, question, confirmLabel, tone = "danger-soft" }: { label: string; question: ReactNode; confirmLabel: string; tone?: "danger" | "danger-soft" | "accent" }) {
+  const [ask, setAsk] = useState(false);
+  if (!ask) {
+    return (
+      <PrimaryButton
+        type="button"
+        tone={tone}
+        onClick={(e) => {
+          const f = e.currentTarget.form;
+          if (f && !f.reportValidity()) return;
+          setAsk(true);
+        }}
+      >
+        {label}
+      </PrimaryButton>
+    );
+  }
+  return (
+    <div role="alertdialog" aria-label={confirmLabel} className="rounded-[16px] bg-field p-4">
+      <p className="text-[15px] leading-relaxed text-ink2">{question}</p>
+      <div className="mt-3 space-y-2">
+        <PrimaryButton type="submit" tone={tone === "danger-soft" ? "danger" : tone} pendingText="보내는 중">{confirmLabel}</PrimaryButton>
+        <button type="button" onClick={() => setAsk(false)} className="h-11 w-full text-[15px] font-medium text-muted">다시 볼게요</button>
+      </div>
+    </div>
+  );
+}
+
 /** 비밀번호 입력: 눈 모양 버튼으로 보이기·숨기기 */
 export function PasswordInput({ className = "", ...rest }: React.InputHTMLAttributes<HTMLInputElement>) {
   const [show, setShow] = useState(false);
@@ -177,7 +209,7 @@ export function PasswordInput({ className = "", ...rest }: React.InputHTMLAttrib
         type="button"
         onClick={() => setShow((v) => !v)}
         aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"}
-        className="absolute right-2 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full text-muted"
+        className="absolute right-1.5 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full text-muted"
       >
         {show ? <EyeOff size={21} /> : <Eye size={21} />}
       </button>
@@ -192,9 +224,9 @@ export function StarRating({ name, label, value }: { name: string; label: string
     <div className="flex items-center justify-between gap-3 py-3.5">
       <span className="text-[16px] text-ink">{label}</span>
       <input type="hidden" name={name} value={v || ""} />
-      <span className="flex gap-1" role="radiogroup" aria-label={label}>
+      <span className="-mr-[7px] flex" role="radiogroup" aria-label={label}>
         {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} type="button" role="radio" aria-checked={v === n} aria-label={`${n}점`} onClick={() => setV(n)} className="p-0.5 transition active:scale-90">
+          <button key={n} type="button" role="radio" aria-checked={v === n} aria-label={`${n}점`} onClick={() => setV(n)} className="p-[7px] transition active:scale-90">
             <Star size={30} strokeWidth={0} className={n <= v ? "fill-accent" : "fill-dot"} />
           </button>
         ))}
@@ -211,5 +243,19 @@ export function CountedTextarea({ max, className = "", defaultValue, ...rest }: 
       <textarea {...rest} defaultValue={defaultValue} maxLength={max} onChange={(e) => setN(e.target.value.length)} className={`${className} pb-8`} />
       <span className="pointer-events-none absolute bottom-3 right-4 text-[12px] tabular-nums text-muted">{n}/{max}</span>
     </div>
+  );
+}
+
+/**
+ * 동시에 다른 처리가 먼저 끝나 생긴 오류 밑에 다음 행동을 붙인다.
+ * 새로고침은 ?e= 없이 같은 화면을 다시 불러오고, 내 신청 보기는 일정 탭의 내 신청 목록으로 간다.
+ */
+export function StaleActions() {
+  const path = usePathname();
+  return (
+    <span className="mt-1.5 flex flex-wrap gap-x-4 font-bold">
+      <a href={path} className="inline-flex h-11 items-center underline underline-offset-4">새로고침</a>
+      <Link href="/rounds" className="inline-flex h-11 items-center underline underline-offset-4">내 신청 보기</Link>
+    </span>
   );
 }

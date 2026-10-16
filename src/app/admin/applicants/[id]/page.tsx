@@ -3,24 +3,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Panel, btnLight, ctl, th } from "@/components/admin-ui";
-import { IMG, Optional, Required } from "@/components/ui";
+import { IMG, Required } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDate, fmtDateTime, fmtSlot } from "@/lib/format";
-import { ACCOUNT, APP_STATUS, ATTEND, FIELD, MATCH, PAYMENT, label } from "@/lib/labels";
+import { ACCOUNT, ATTEND, MATCH, PAYMENT, actorLabel, eventText, label } from "@/lib/labels";
 import { db } from "@/lib/supabase";
+import { ConfirmButton } from "../../confirm-button";
 import { setAccountStatus } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-const VALUE_MAPS: Record<string, Record<string, [string, "muted" | "accent" | "leaf" | "ink" | "candle" | "danger"]>> = {
-  payment_status: PAYMENT,
-  match_status: MATCH,
-  attendance_status: ATTEND,
-  account_status: ACCOUNT,
-  application_status: APP_STATUS,
-};
-const val = (field: string, v: string | null) => (v ? VALUE_MAPS[field]?.[v]?.[0] ?? v : "없음");
-const actorName = (a: string) => (a === "system" ? "자동" : a.startsWith("admin:") ? "운영자" : a.startsWith("user:") ? "참가자" : a);
 
 type App = {
   id: string; user_id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null;
@@ -32,7 +24,7 @@ type App = {
 };
 
 export default async function ApplicantDetail({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin();
+  const me = await requireAdmin();
   const { id } = await params;
   const { data } = await db()
     .from("applications")
@@ -44,14 +36,20 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
   const u = a.users;
 
   const [{ data: events }, { data: userEvents }, { data: notes }, { data: history }, { data: ids }, { data: reportsAgainst }] = await Promise.all([
-    db().from("status_events").select("id,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "application").eq("entity_id", id).order("created_at"),
-    db().from("status_events").select("id,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "user").eq("entity_id", u.id).order("created_at"),
+    db().from("status_events").select("id,entity_type,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "application").eq("entity_id", id).order("created_at"),
+    db().from("status_events").select("id,entity_type,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "user").eq("entity_id", u.id).order("created_at"),
     db().from("notifications").select("id,title,status,scheduled_at,sent_at,read_at").eq("user_id", u.id).order("scheduled_at", { ascending: false }).limit(15),
     db().from("applications").select("id,match_status,attendance_status,rounds(title)").eq("user_id", u.id).neq("id", id).order("created_at", { ascending: false }),
     db().from("user_identities").select("provider").eq("user_id", u.id),
     db().from("safety_reports").select("id,reason,created_at").eq("reported_id", u.id),
   ]);
   const timeline = [...(events ?? []), ...(userEvents ?? [])].sort((x, y) => x.created_at.localeCompare(y.created_at));
+  const adminIds = [...new Set(timeline.filter((e) => e.actor.startsWith("admin:")).map((e) => e.actor.slice(6)))];
+  const { data: admins } = adminIds.length ? await db().from("users").select("id,name").in("id", adminIds) : { data: [] };
+  const adminName = new Map((admins ?? []).map((x) => [x.id, x.name]));
+  // Q13: 노쇼 횟수와 멤버십 기한 연장을 한눈에
+  const noShows = (history ?? []).filter((h) => (h as { attendance_status: string | null }).attendance_status === "NO_SHOW").length + (a.attendance_status === "NO_SHOW" ? 1 : 0);
+  const extends_ = timeline.filter((e) => e.field === "membership_extend");
   const p = u.profiles;
 
   const paid = !["PENDING", "FAILED"].includes(a.payment_status);
@@ -105,12 +103,12 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
             {!timeline.length && <p className="text-[14px] text-muted">기록이 없어요.</p>}
             <ol className="space-y-2.5">
               {timeline.map((e) => (
-                <li key={`${e.field}-${e.id}`} className="grid grid-cols-[14px_130px_60px_1fr] items-start gap-3 text-[14px]">
+                <li key={`${e.entity_type}-${e.id}`} className="grid grid-cols-[14px_150px_90px_1fr] items-start gap-3 text-[14px]">
                   <span className={`mt-1.5 size-2.5 rounded-full ${e.actor === "system" ? "bg-accent" : e.actor.startsWith("admin") ? "bg-danger" : "bg-leaf"}`} />
-                  <span className="tabular-nums text-muted">{fmtDateTime(e.created_at).replace(/\(.\) /, "")}</span>
-                  <span className="text-muted">{actorName(e.actor)}</span>
+                  <span className="tabular-nums text-muted">{fmtDateTime(e.created_at)}</span>
+                  <span className="text-muted">{actorLabel(e.actor, adminName)}</span>
                   <span className="text-ink">
-                    {FIELD[e.field] ?? e.field} {val(e.field, e.from_value)} → <b>{val(e.field, e.to_value)}</b>
+                    {eventText(e)}
                     {e.reason && <span className="block text-[12px] text-muted">{e.reason}</span>}
                   </span>
                 </li>
@@ -172,9 +170,14 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
               {!history?.length && <li className="text-muted">이번이 첫 신청이에요.</li>}
             </ul>
             {!!reportsAgainst?.length && <p className="mt-3 rounded-xl bg-danger/10 px-3 py-2 text-[13px] text-danger">신고 {reportsAgainst.length}건 받음</p>}
+            <dl className="mt-3 space-y-1.5 border-t border-line pt-3 text-[13px]">
+              <div className="flex justify-between"><dt className="text-muted">노쇼</dt><dd className={noShows ? "font-semibold text-danger" : "text-ink"}>{noShows ? `${noShows}회` : "없음"}</dd></div>
+              <div className="flex justify-between gap-3"><dt className="shrink-0 text-muted">멤버십 기한 연장</dt><dd className="text-right text-ink">{extends_.length ? `${extends_.length}회, 지금 ${fmtDateTime(extends_[extends_.length - 1].to_value)}까지` : "없음"}</dd></div>
+            </dl>
           </Panel>
 
           <Panel title="계정 조치">
+            {me.level !== "full" ? <p className="text-[13px] text-muted">조회 전용 계정이라 계정 상태를 바꿀 수 없어요.</p> : (
             <form action={setAccountStatus} className="space-y-3">
               <input type="hidden" name="user_id" value={u.id} />
               <input type="hidden" name="app_id" value={a.id} />
@@ -185,11 +188,12 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
                 </select>
               </label>
               <label className="flex items-start gap-3 text-[14px] text-muted">
-                <span className="w-24 shrink-0 pt-2.5">사유<Optional /></span>
-                <textarea name="note" rows={3} placeholder="사유를 입력해 주세요 (상태 이력에 남아요)" className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
+                <span className="w-24 shrink-0 pt-2.5">사유<Required /></span>
+                <textarea name="note" rows={3} required minLength={4} placeholder="사유를 입력해 주세요 (상태 이력에 남아요)" className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
               </label>
-              <button className={`${btnLight} w-full`}>상태 바꾸기</button>
+              <ConfirmButton confirm="계정 상태를 바꾸면 참가 제한·영구 제한은 바로 신청을 막고, 상태 이력에 남아요. 계속할까요?" className={`${btnLight} w-full`}>상태 바꾸기</ConfirmButton>
             </form>
+            )}
           </Panel>
         </div>
       </div>

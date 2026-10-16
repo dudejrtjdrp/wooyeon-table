@@ -1,5 +1,5 @@
 import { Toast } from "@/components/ui";
-import { requireMe } from "@/lib/auth";
+import { requireMe, safeNext } from "@/lib/auth";
 import { FOOD_AVOID, INTEREST_GROUPS, MBTIS, PRICE_RANGES, TRAITS } from "@/lib/constants";
 import { idvEnabled } from "@/lib/identity";
 import { db } from "@/lib/supabase";
@@ -24,7 +24,7 @@ export default async function Onboarding({ searchParams }: { searchParams: Promi
       profile={p}
       name={me.name.endsWith(" 사용자") ? "" : me.name}
       phone={me.phone}
-      next={next?.startsWith("/") ? next : "/"}
+      next={safeNext(next) ?? "/"}
       error={e}
       prefill={{ by: by ? Number(by) : undefined, g }}
       lists={{ groups: INTEREST_GROUPS, traits: TRAITS, mbtis: MBTIS, prices: PRICE_RANGES, avoid: FOOD_AVOID }}

@@ -25,9 +25,17 @@ export default function Help() {
           </details>
         ))}
       </div>
-      <p className="relative z-10 mt-6 text-center text-[14px] text-muted">
-        더 궁금한 점은 <a href="mailto:help@wooyeon-table.app" className="font-semibold text-accent">help@wooyeon-table.app</a>으로 보내 주세요.
-      </p>
+      <section className="relative z-10 mt-8 rounded-[20px] bg-field p-5">
+        <p className="text-[17px] font-bold text-ink">찾는 답이 없나요?</p>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-muted">신청이나 결제가 이상하거나, 상태가 오래 그대로면 알려 주세요. 누르면 메일 앱이 열려요(받는 곳 help@wooyeon-table.app).</p>
+        <a
+          href={`mailto:help@wooyeon-table.app?subject=${encodeURIComponent("[우연한 식탁] 문의")}`}
+          className="mt-4 flex h-[52px] w-full items-center justify-center rounded-[14px] bg-accent text-[16px] font-extrabold text-white active:scale-[.985]"
+        >
+          문의하기
+        </a>
+        <p className="mt-3 text-[13px] leading-relaxed text-muted">모임에서 불편한 일이 있었다면 테이블 화면 아래 &lsquo;신고하기&rsquo;가 더 빨라요.</p>
+      </section>
     </Screen>
   );
 }

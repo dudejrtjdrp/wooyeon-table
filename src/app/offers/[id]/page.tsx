@@ -3,7 +3,7 @@ import { RoundTable } from "@/components/brand";
 import { ErrorText, LinkButton, List, Pill, PrimaryButton, Row, Screen, Toast } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
+import { fmtClock, fmtSlot } from "@/lib/format";
 import { tableMembers } from "@/lib/attendance";
 import { db } from "@/lib/supabase";
 import { answerOffer } from "./actions";
@@ -51,13 +51,13 @@ export default async function Offer({ params, searchParams }: { params: Promise<
         </div>
         <p className="mt-5 text-[13px] text-muted">기다리던 자리가 났어요</p>
         <p className="mt-1 text-[22px] font-bold leading-snug tracking-[-0.02em]">
-          {fmtDate(s.starts_at)} {fmtTime(s.starts_at)}
+          {fmtSlot(s.starts_at)}
           <br />
           {s.region} 테이블에 한 자리가 비었어요
         </p>
         {pending ? (
           <p className="mt-3 text-[14px] leading-relaxed text-muted">
-            <b className="text-ink">{fmtDateTime(o.expires_at)}</b>까지 답해 주세요. 남은 시간 {hours ? `${hours}시간 ` : ""}{mins}분.
+            <b className="text-ink">{fmtSlot(o.expires_at)}</b>까지 답해 주세요. 남은 시간 {hours ? `${hours}시간 ` : ""}{mins}분.
             답이 없으면 다음 분께 자리가 넘어가요.
           </p>
         ) : (
@@ -66,7 +66,7 @@ export default async function Offer({ params, searchParams }: { params: Promise<
       </section>
 
       <List className="mt-3">
-        <Row right={<span className="text-right text-[14px] font-medium">{`${fmtTime(s.starts_at)}~${fmtTime(s.ends_at)}`}</span>}><span className="text-[14px] text-muted">시간</span></Row>
+        <Row right={<span className="text-right text-[14px] font-medium">{`${fmtClock(s.starts_at)}~${fmtClock(s.ends_at)}`}</span>}><span className="text-[14px] text-muted">시간</span></Row>
         <Row right={<span className="text-right text-[14px] font-medium">{s.region}</span>}><span className="text-[14px] text-muted">지역</span></Row>
         <Row right={<span className="text-right text-[14px] font-medium">{o.dining_tables.venues?.name ?? "정해지는 대로 알려드려요"}</span>}><span className="text-[14px] text-muted">식당</span></Row>
         {o.dining_tables.venues?.price_range ? <Row right={<span className="text-right text-[14px] font-medium">{o.dining_tables.venues.price_range}</span>}><span className="text-[14px] text-muted">가격대</span></Row> : null}

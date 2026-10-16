@@ -5,7 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
-import { cancelAttendance } from "@/lib/attendance";
+import { cancelAttendance, declineReallocation } from "@/lib/attendance";
 import { releaseUse } from "@/lib/billing";
 import { roundCutoff } from "@/lib/policy";
 import { db } from "@/lib/supabase";
@@ -43,7 +43,7 @@ export async function cancelApplication(form: FormData) {
     .eq("id", appId)
     .eq("match_status", "WAITING")
     .select("id");
-  if (!up?.length) back("이미 처리된 신청이에요. 화면을 새로 고쳐 주세요");
+  if (!up?.length) back("이미 처리된 신청이에요");
   await logStatus({ entityType: "application", entityId: appId, field: "application_status", from: "SUBMITTED", to: "CANCELED", actor: `user:${me.id}`, reason: "매칭 전 취소" });
 
   await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
@@ -59,4 +59,13 @@ export async function cancelAttendanceAction(form: FormData) {
   const back = String(form.get("back") ?? `/applications/${appId}`);
   const r = await cancelAttendance(appId, me.id);
   redirect(r.ok ? `/applications/${appId}?m=${encodeURIComponent("참석을 취소했어요")}` : `${back}?e=${encodeURIComponent(r.message)}`);
+}
+
+/** 자동으로 옮겨진 테이블이 싫을 때: 매칭 실패 상태로 돌려 다른 방법(이동·기다리기·보관·환불)을 고르게 한다 */
+export async function declineReallocationAction(form: FormData) {
+  const me = await requireProfile();
+  const appId = String(form.get("app_id"));
+  const r = await declineReallocation(appId, me.id);
+  if (!r.ok) redirect(`/applications/${appId}?e=${encodeURIComponent(r.message)}`);
+  redirect(`/applications/${appId}/resolve`);
 }

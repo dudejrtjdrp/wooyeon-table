@@ -94,7 +94,7 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
           <p className="text-[15px] font-bold">휴대폰 알림을 켜 두세요</p>
           <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{desc[state]}</p>
           {state === "off" && (
-            <button onClick={turnOn} disabled={busy} className="mt-3 h-10 rounded-xl bg-accent px-4 text-[14px] font-semibold text-white disabled:opacity-50">
+            <button onClick={turnOn} disabled={busy} className="mt-3 h-11 rounded-xl bg-accent-soft px-4 text-[14px] font-bold text-accent-text disabled:opacity-50">
               {busy ? "켜는 중" : "알림 켜기"}
             </button>
           )}
@@ -108,9 +108,9 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
       <div className="min-w-0">
         <p className="flex items-center gap-3.5 text-[16px] font-medium text-ink"><span className="flex size-10 items-center justify-center rounded-full bg-accent-soft text-accent"><BellRing size={20} /></span>휴대폰 알림</p>
         {state !== "loading" && state !== "on" && state !== "off" && <p className="mt-1 pl-[54px] text-[13px] leading-relaxed text-muted">{desc[state]}</p>}
-        {state === "needs-install" && <Link href="/install" className="mt-1.5 inline-block pl-[54px] text-[13px] font-semibold text-accent">설치 방법 보기</Link>}
+        {state === "needs-install" && <Link href="/install" className="ml-[54px] inline-flex h-11 items-center text-[13px] font-semibold text-accent">설치 방법 보기</Link>}
         {state === "on" && (
-          <button onClick={test} className="mt-1 pl-[54px] text-left text-[13px] font-semibold text-accent">{tested ?? "시험 알림 보내기"}</button>
+          <button onClick={test} className="ml-[54px] flex min-h-11 items-center text-left text-[13px] font-semibold text-accent">{tested ?? "시험 알림 보내기"}</button>
         )}
       </div>
       {(state === "on" || state === "off") && (
@@ -120,9 +120,11 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
           aria-label="휴대폰 알림"
           disabled={busy}
           onClick={state === "on" ? turnOff : turnOn}
-          className={`relative h-8 w-[54px] shrink-0 rounded-full transition ${state === "on" ? "bg-accent" : "bg-line"}`}
+          className="-mr-2 flex h-11 w-[66px] shrink-0 items-center justify-center"
         >
-          <span className={`absolute top-1 size-6 rounded-full bg-white shadow transition-all ${state === "on" ? "left-[26px]" : "left-1"}`} />
+          <span className={`relative h-8 w-[54px] rounded-full transition ${state === "on" ? "bg-accent" : "bg-line"}`}>
+            <span className={`absolute top-1 size-6 rounded-full bg-white shadow transition-all ${state === "on" ? "left-[26px]" : "left-1"}`} />
+          </span>
         </button>
       )}
     </div>

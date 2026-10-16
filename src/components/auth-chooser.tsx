@@ -25,6 +25,7 @@ const GoogleIcon = () => (
 export function AuthChooser({ next = "/", error, notice }: { next?: string; error?: string; notice?: string }) {
   const on = enabledProviders();
   const q = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
+  const social = on.kakao || on.naver || on.google;
   const btn = "flex h-[56px] w-full items-center justify-center gap-2 rounded-[14px] text-[16px] font-extrabold transition active:scale-[.985]";
   return (
     <main className="pb-safe mx-auto flex min-h-dvh max-w-md flex-col bg-paper">
@@ -53,30 +54,45 @@ export function AuthChooser({ next = "/", error, notice }: { next?: string; erro
         </div>
       </section>
 
-      <div className="flex flex-1 flex-col gap-2.5 px-6 pb-8 pt-6">
+      <div className="flex flex-1 flex-col gap-2.5 px-6 pb-6 pt-6">
         {notice && <p className="rounded-[12px] bg-accent-soft px-4 py-3 text-center text-[14px] font-bold text-accent-text">{notice}</p>}
         <ErrorText msg={error} />
-        <a href={`/api/auth/kakao${q}`} className={`${btn} bg-[#FEE500] text-[#191919]`}>
-          <KakaoIcon />카카오로 계속하기
-        </a>
-        <a href={`/api/auth/naver${q}`} className={`${btn} bg-[#03C75A] text-white`}>
-          <NaverIcon />네이버로 계속하기
-        </a>
-        {!(on.kakao || on.naver || on.google) && (
-          <p className="text-center text-[12px] text-muted">소셜 로그인은 곧 열려요. 지금은 휴대폰 번호로 쓸 수 있어요.</p>
+        {on.kakao && (
+          <a href={`/api/auth/kakao${q}`} className={`${btn} bg-[#FEE500] text-[#191919]`}>
+            <KakaoIcon />카카오로 계속하기
+          </a>
         )}
-        <nav aria-label="다른 방법" className="mt-2 flex items-center justify-center gap-1 text-[14px] text-[#4a5a51]">
-          <a href={`/api/auth/google${q}`} className="flex h-11 items-center gap-1.5 px-2"><GoogleIcon />구글</a>
-          <span aria-hidden="true" className="text-[#d5ddd8]">|</span>
-          <Link href={`/login/phone${q}`} className="flex h-11 items-center px-2">휴대폰 번호</Link>
-          <span aria-hidden="true" className="text-[#d5ddd8]">|</span>
-          <Link href="/rounds" className="flex h-11 items-center px-2">둘러보기</Link>
-        </nav>
-        <p className="mt-auto pt-4 text-center text-[12px] leading-relaxed text-faint">
-          계속하면 <Link href="/terms" className="underline underline-offset-2">이용약관</Link>과{" "}
-          <Link href="/privacy" className="underline underline-offset-2">개인정보 처리방침</Link>에 동의하게 돼요. ·{" "}
-          <Link href="/guide" className="underline underline-offset-2">심사위원 안내</Link>
+        {on.naver && (
+          <a href={`/api/auth/naver${q}`} className={`${btn} bg-[#03C75A] text-white`}>
+            <NaverIcon />네이버로 계속하기
+          </a>
+        )}
+        {on.google && (
+          <a href={`/api/auth/google${q}`} className={`${btn} bg-field text-ink`}>
+            <GoogleIcon />구글로 계속하기
+          </a>
+        )}
+        {/* 소셜 로그인이 하나도 안 열려 있으면 휴대폰 번호가 주 버튼이 된다. 누를 수 없는 버튼은 보여 주지 않는다 */}
+        <Link href={`/signup${q}`} className={`${btn} ${social ? "bg-field text-ink" : "bg-accent text-white"}`}>
+          휴대폰 번호로 시작하기
+        </Link>
+        <p className="flex items-center justify-center text-[15px] text-muted">
+          이미 가입했어요
+          <Link href={`/login/phone${q}`} className="flex h-11 items-center px-2 font-bold text-accent">로그인</Link>
         </p>
+        {!social && <p className="text-center text-[13px] text-muted">카카오·네이버 로그인은 준비 중이에요.</p>}
+        <Link href="/rounds" className="mx-auto flex h-11 items-center px-3 text-[14px] text-ink2 underline underline-offset-4">가입 전에 일정 둘러보기</Link>
+
+        <div className="mt-auto pt-4 text-center text-[12px] leading-relaxed text-muted">
+          <p>계속하면 이용약관과 개인정보 처리방침에 동의하게 돼요.</p>
+          <nav aria-label="약관과 안내" className="flex items-center justify-center">
+            <Link href="/terms" className="flex h-11 items-center px-2.5 underline underline-offset-2">이용약관</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/privacy" className="flex h-11 items-center px-2.5 underline underline-offset-2">개인정보 처리방침</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/guide" className="flex h-11 items-center px-2.5 underline underline-offset-2">심사위원 안내</Link>
+          </nav>
+        </div>
       </div>
     </main>
   );

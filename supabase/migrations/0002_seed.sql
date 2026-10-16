@@ -1,7 +1,12 @@
 -- 이용권 종류를 결제 건에 저장
 alter table payments add column if not exists pass_type text check (pass_type in ('single','subscription'));
 
--- 매칭 설정 (docs/02-matching-rules.md 3장)
+-- 시연용 기본 데이터.
+-- 운영 지역은 운영사 Q&A(2026-10-16, docs/prd/08-qna.md)의 서울 4곳(홍대·잠실·강남·을지로)을 동네 묶음 이름으로 쓴다.
+-- PRD·Q&A에 없는 숫자(요일·시각, 일정당 테이블 수, 식당 수용 테이블 수, 식당 이름·가격대, 마감 시각)는 모두 '시연용 가정'이다.
+-- 잠실·을지로 식당과 평점·예약 채널은 0010_qna_policies.sql에서 채운다(컬럼이 거기서 생긴다).
+
+-- 매칭 설정 (docs/02-matching-rules.md 3장). 가중치·최소 점수는 시연용 가정(어드민에서 바꿀 수 있다)
 insert into settings (key, value) values
   ('matching.weights', '{"age":25,"gender":22,"mbti":18,"interests":15,"wanted":12,"fresh":8}'),
   ('matching.min_score', '50')
@@ -19,6 +24,8 @@ from users where login_id = '01000000001'
 on conflict (user_id) do nothing;
 
 -- 모집 차수와 일정 (심사 기간에도 신청할 수 있게 세 차수를 연다)
+-- 시연용 가정: 금요일 저녁 7:30·토요일 저녁 7:00, 2시간 30분, 일정당 테이블 4개까지.
+-- 마감 시각(수요일 낮 12시)은 0010에서 Q&A 기준 '모임 주 화요일 밤 12시'로 다시 맞춘다.
 with r as (
   insert into rounds (title, apply_deadline, match_at) values
     ('10월 넷째 주 저녁', '2026-10-21T12:00:00+09:00', '2026-10-21T12:00:00+09:00'),
@@ -37,19 +44,16 @@ join (values
   ('11월 첫째 주 저녁', '2026-11-06T19:30:00+09:00'::timestamptz),
   ('11월 첫째 주 저녁', '2026-11-07T19:00:00+09:00'::timestamptz)
 ) as d(title, starts_at) on d.title = r.title
-cross join (values ('성수'), ('강남'), ('홍대'), ('여의도')) as reg(region);
+cross join (values ('홍대·합정·연남'), ('잠실·송파'), ('강남·역삼·선릉'), ('을지로·종로·광화문')) as reg(region);
 
--- 제휴 식당 (시연용 가상 식당)
+-- 제휴 식당 (시연용 가상 식당·주소·가격대). 잠실·을지로 식당은 0010에서 넣는다
 insert into venues (name, region, address, map_url, price_range, seats_per_table) values
-  ('성수 나무식탁', '성수', '서울 성동구 성수동 (시연용 가상 주소)', null, '2만 원대', 6),
-  ('성수 작은부엌', '성수', '서울 성동구 성수동 (시연용 가상 주소)', null, '3만 원대', 6),
-  ('강남 오늘의밥상', '강남', '서울 강남구 역삼동 (시연용 가상 주소)', null, '2만 원대', 6),
-  ('강남 저녁마당', '강남', '서울 강남구 논현동 (시연용 가상 주소)', null, '3만 원대', 6),
-  ('홍대 골목주방', '홍대', '서울 마포구 서교동 (시연용 가상 주소)', null, '1만 원대', 6),
-  ('홍대 둥근식탁', '홍대', '서울 마포구 동교동 (시연용 가상 주소)', null, '2만 원대', 6),
-  ('여의도 강변식당', '여의도', '서울 영등포구 여의도동 (시연용 가상 주소)', null, '3만 원대', 6),
-  ('여의도 점심말고저녁', '여의도', '서울 영등포구 여의도동 (시연용 가상 주소)', null, '2만 원대', 6);
+  ('강남 오늘의밥상', '강남·역삼·선릉', '서울 강남구 역삼동 (시연용 가상 주소)', null, '2만 원대', 6),
+  ('강남 저녁마당', '강남·역삼·선릉', '서울 강남구 논현동 (시연용 가상 주소)', null, '3만 원대', 6),
+  ('홍대 골목주방', '홍대·합정·연남', '서울 마포구 서교동 (시연용 가상 주소)', null, '1만 원대', 6),
+  ('홍대 둥근식탁', '홍대·합정·연남', '서울 마포구 동교동 (시연용 가상 주소)', null, '2만 원대', 6);
 
+-- 시연용 가정: 식당마다 일정당 테이블 2개까지 받는다
 insert into venue_slots (venue_id, slot_id, tables_available)
 select v.id, s.id, 2 from venues v join slots s on s.region = v.region;
 

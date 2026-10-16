@@ -1,18 +1,27 @@
 const TZ = "Asia/Seoul";
 
+/*
+ * 날짜·시각 표기는 한 가지로 쓴다(참가자 화면·알림·어드민 공통).
+ *   날짜: 11월 6일(금)            → fmtDay
+ *   시각: 저녁 7:30 / 낮 12시     → fmtClock
+ *   둘 다: 11월 6일(금) 저녁 7:30 → fmtSlot (정확히 0시는 전날 '밤 12시')
+ * fmtDate·fmtTime·fmtDateTime은 예전 이름이라 남겨 두고, 출력은 위 표기와 같다.
+ */
+
+/** 11월 6일(금). opts를 주면 예전처럼 Intl 표기를 그대로 쓴다 */
 export function fmtDate(iso: string, opts: Intl.DateTimeFormatOptions = {}) {
+  if (Object.keys(opts).length === 0) return fmtDay(iso);
   return new Intl.DateTimeFormat("ko-KR", { timeZone: TZ, month: "long", day: "numeric", weekday: "short", ...opts }).format(new Date(iso));
 }
 
+/** 저녁 7:30 (fmtClock과 같다) */
 export function fmtTime(iso: string) {
-  return new Intl.DateTimeFormat("ko-KR", { timeZone: TZ, hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+  return fmtClock(iso);
 }
 
+/** 11월 6일(금) 저녁 7:30. 정확히 0시는 전날 '밤 12시' (fmtSlot과 같다) */
 export function fmtDateTime(iso: string) {
-  // 정확히 0시(마감 시각)는 전날 '밤 12시'로 쓴다
-  const hm = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
-  if (hm === "00:00") return `${fmtDate(new Date(new Date(iso).getTime() - 60_000).toISOString())} 밤 12시`;
-  return `${fmtDate(iso)} ${fmtTime(iso)}`;
+  return fmtSlot(iso);
 }
 
 /** 같은 날짜끼리 묶을 때 쓰는 키 (서울 기준) */

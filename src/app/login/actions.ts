@@ -2,6 +2,8 @@
 
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/auth";
+import { idvEnabled } from "@/lib/identity";
 import { db } from "@/lib/supabase";
 import { clearSession, setSession } from "@/lib/session";
 
@@ -11,7 +13,8 @@ export async function login(form: FormData) {
   const id = normalize(String(form.get("login_id") ?? ""));
   const pw = String(form.get("password") ?? "");
   const next = String(form.get("next") ?? "/");
-  if (!id || !pw) redirect(`/login/phone?e=${encodeURIComponent("아이디와 비밀번호를 입력해 주세요")}`);
+  const nq = safeNext(next) && next !== "/" ? `&next=${encodeURIComponent(next)}` : "";
+  if (!id || !pw) redirect(`/login/phone?e=${encodeURIComponent("휴대폰 번호와 비밀번호를 입력해 주세요")}${nq}`);
 
   const { data: user } = await db()
     .from("users")
@@ -19,20 +22,23 @@ export async function login(form: FormData) {
     .eq("login_id", id)
     .maybeSingle();
   if (!user || !user.password_hash || !(await bcrypt.compare(pw, user.password_hash))) {
-    redirect(`/login/phone?e=${encodeURIComponent("아이디나 비밀번호가 맞지 않아요")}`);
+    redirect(`/login/phone?e=${encodeURIComponent("휴대폰 번호나 비밀번호가 맞지 않아요. 다시 확인해 주세요")}${nq}`);
   }
   if (user.account_status === "banned") {
-    redirect(`/login/phone?e=${encodeURIComponent("이용이 제한된 계정이에요. 운영팀에 문의해 주세요")}`);
+    redirect(`/login/phone?e=${encodeURIComponent("이용이 제한된 계정이에요. help@wooyeon-table.app으로 문의해 주세요")}`);
   }
   await setSession({ uid: user.id, role: user.role });
-  redirect(user.role === "admin" ? "/admin" : next.startsWith("/") ? next : "/");
+  redirect(user.role === "admin" ? "/admin" : safeNext(next) ?? "/");
 }
 
 export async function signup(form: FormData) {
   const name = String(form.get("name") ?? "").trim();
   const phone = normalize(String(form.get("phone") ?? ""));
   const pw = String(form.get("password") ?? "");
-  const back = (m: string) => redirect(`/signup?e=${encodeURIComponent(m)}`);
+  const nextRaw = String(form.get("next") ?? "");
+  const next = safeNext(nextRaw) ?? "";
+  const nq = next ? `&next=${encodeURIComponent(next)}` : "";
+  const back = (m: string) => redirect(`/signup?e=${encodeURIComponent(m)}${nq}`);
 
   if (name.length < 2) back("이름을 두 글자 이상 적어 주세요");
   if (!/^01\d{8,9}$/.test(phone)) back("휴대폰 번호를 다시 확인해 주세요");
@@ -48,7 +54,11 @@ export async function signup(form: FormData) {
     .single();
   if (error || !user) back("가입 중 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요");
   await setSession({ uid: user!.id, role: user!.role });
-  redirect("/onboarding");
+  // 가입에 쓴 번호로 바로 인증번호를 보낸다. 인증을 마치면 온보딩으로 가고, 온보딩 첫 단계에서는 '인증했어요'로만 보인다.
+  // 가입 전에 보던 일정이 있으면 프로필을 만든 뒤 그 신청 화면으로 이어 간다
+  const onboarding = next ? `/onboarding?next=${encodeURIComponent(next)}` : "/onboarding";
+  // PASS 본인인증이 켜진 환경에서는 온보딩에서 PASS로 번호까지 확인하므로 문자 인증을 건너뛴다
+  redirect(idvEnabled() ? onboarding : `/verify/phone?auto=1&next=${encodeURIComponent(onboarding)}`);
 }
 
 export async function logout() {

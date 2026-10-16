@@ -84,7 +84,7 @@ export function ApplyFlow({
 
   const next = () => {
     if (step === 1 && !picked.length) return setMsg("동네를 하나 이상 골라주세요");
-    if (step === 1 && !mineSlots.length) return setMsg("고른 동네에 이번 회차 테이블이 없어요. 다른 동네를 골라주세요");
+    if (step === 1 && !mineSlots.length) return setMsg("고른 동네에는 이번 일정 테이블이 없어요. 다른 동네를 더 골라 주세요");
     if (step === 2 && !days.length) return setMsg("갈 수 있는 날을 하나 이상 골라주세요");
     setMsg(null);
     setStep(step + 1);

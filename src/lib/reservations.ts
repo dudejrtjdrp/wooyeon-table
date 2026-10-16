@@ -3,17 +3,19 @@
 // 테이블이 확정되고 식당이 정해지면 예약 요청을 만들고, 식당의 예약 채널 어댑터로 보낸다.
 // 네이버 예약·캐치테이블은 누구나 쓰는 공개 예약 API가 없어(제휴·POS 연동 방식) 지금은 모의(mock) 어댑터가 응답한다.
 // 제휴 키가 생기면 해당 채널의 live 어댑터만 채우면 되고, 나머지 흐름(재시도·예외·화면)은 그대로 쓴다.
-// 3번 실패하면 예외 큐(reservation)로 넘기고, 운영자는 예약 페이지를 열어 직접 예약한 뒤 '예약 완료'로 표시한다.
+// 3번 실패하면(전화 예약 식당은 자동으로 못 해서 바로) 그 식당을 빼고 같은 지역·일정의 다른 식당으로 다시 배정한다(pipeline.ts reassignVenue).
+// 후보 식당이 모두 안 될 때만 예외 큐(reservation)로 넘기고, 운영자는 예약 페이지를 열어 직접 예약한 뒤 '예약 완료'로 표시한다.
 import { now } from "./clock";
 import { logStatus } from "./events";
-import { fmtDate, fmtTime } from "./format";
+import { fmtSlot } from "./format";
 import { db } from "./supabase";
+import { GOOD_RATING as RATING } from "./venue-pick";
 
 export type Channel = "naver" | "catchtable" | "phone";
 export const CHANNEL_LABEL: Record<Channel, string> = { naver: "네이버 예약", catchtable: "캐치테이블", phone: "전화 예약" };
 export const MAX_ATTEMPTS = 3;
-/** 배정할 때 먼저 고르는 평점 */
-export const GOOD_RATING = 4.3;
+/** 배정할 때 먼저 고르는 평점 (venue-pick.ts와 같은 값) */
+export const GOOD_RATING = RATING;
 
 export type ReservationRequest = { channel: Channel; venueName: string; venueAddress: string; bookingUrl: string | null; reservedFor: string; partySize: number; name: string };
 export type BookResult = { ok: true; externalRef: string } | { ok: false; error: string };
@@ -51,7 +53,7 @@ export function adapterFor(channel: Channel): BookingAdapter {
   return { mode: "mock", book: async () => ({ ok: false, error: "전화 예약 식당이라 운영팀이 직접 예약해야 해요" }) };
 }
 
-type Row = { id: string; table_id: string; status: string; attempts: number; channel: Channel; party_size: number; reserved_for: string; reservation_name: string };
+type Row = { id: string; table_id: string; venue_id: string; status: string; attempts: number; channel: Channel; party_size: number; reserved_for: string; reservation_name: string };
 
 /** 식당이 정해진 테이블에 예약 요청을 만들고 한 번 시도한다 (두 번 불러도 한 건만) */
 export async function requestReservation(tableId: string): Promise<void> {
@@ -84,11 +86,14 @@ export async function requestReservation(tableId: string): Promise<void> {
   await attemptReservation(tableId);
 }
 
-/** 한 번 시도한다. 성공하면 CONFIRMED, 실패가 3번 쌓이면 FAILED + 예외 큐 */
+/**
+ * 한 번 시도한다. 성공하면 CONFIRMED.
+ * 실패가 3번 쌓이면(전화 예약은 바로) FAILED로 두고 다른 식당으로 바꿔 다시 시도한다. 바꿀 식당이 없을 때만 예외 큐.
+ */
 export async function attemptReservation(tableId: string, adapter?: BookingAdapter): Promise<string> {
   const { data } = await db()
     .from("reservations")
-    .select("id,table_id,status,attempts,channel,party_size,reserved_for,reservation_name,venues(name,address,booking_url)")
+    .select("id,table_id,venue_id,status,attempts,channel,party_size,reserved_for,reservation_name,venues(name,address,booking_url)")
     .eq("table_id", tableId)
     .maybeSingle();
   const r = data as unknown as (Row & { venues: { name: string; address: string; booking_url: string | null } }) | null;
@@ -101,13 +106,22 @@ export async function attemptReservation(tableId: string, adapter?: BookingAdapt
     await logStatus({ entityType: "reservation", entityId: r.id, field: "status", from: "REQUESTED", to: "CONFIRMED", actor: "system", reason: `${CHANNEL_LABEL[r.channel]} 예약 확정 ${res.externalRef}${a.mode === "mock" ? " (모의)" : ""}` });
     return "CONFIRMED";
   }
-  const failed = attempts >= MAX_ATTEMPTS;
+  // 전화 예약은 다시 시도해도 결과가 같아서 바로 다음 식당으로 넘어간다
+  const failed = attempts >= MAX_ATTEMPTS || r.channel === "phone";
   await db().from("reservations").update({ status: failed ? "FAILED" : "REQUESTED", attempts, last_error: res.error, updated_at: new Date().toISOString() }).eq("id", r.id);
   await logStatus({ entityType: "reservation", entityId: r.id, field: "attempt", from: String(r.attempts), to: String(attempts), actor: "system", reason: res.error });
   if (failed) {
-    await logStatus({ entityType: "reservation", entityId: r.id, field: "status", from: "REQUESTED", to: "FAILED", actor: "system", reason: `${MAX_ATTEMPTS}번 실패` });
+    await logStatus({ entityType: "reservation", entityId: r.id, field: "status", from: "REQUESTED", to: "FAILED", actor: "system", reason: r.channel === "phone" ? "전화 예약 식당이라 자동 예약 불가" : `${MAX_ATTEMPTS}번 실패` });
+    // 같은 지역·일정의 다른 식당으로 (PRD 15장). 바꿨으면 새 식당의 예약 결과를 돌려준다
+    const { reassignVenue } = await import("./pipeline");
+    const next = await reassignVenue(tableId, r.venue_id, `${r.venues.name} ${CHANNEL_LABEL[r.channel]} 예약 안 됨: ${res.error}`).catch((e) => {
+      console.error("[reservations] 다른 식당 배정 실패", tableId, e);
+      return null;
+    });
+    if (next) return next;
+    const { count: tried } = await db().from("status_events").select("id", { count: "exact", head: true }).eq("entity_type", "dining_table").eq("entity_id", tableId).eq("field", "venue_failed");
     await db().from("exceptions").upsert(
-      { kind: "reservation", ref_type: "dining_table", ref_id: tableId, reason: `${r.venues.name} ${fmtDate(r.reserved_for)} ${fmtTime(r.reserved_for)} ${r.party_size}명 예약이 ${MAX_ATTEMPTS}번 실패했어요: ${res.error}`, dedupe_key: `reservation:${tableId}` },
+      { kind: "reservation", ref_type: "dining_table", ref_id: tableId, reason: `${fmtSlot(r.reserved_for)} ${r.party_size}명 예약을 후보 식당 ${tried ?? 1}곳에서 모두 못 잡았어요. 마지막 식당 ${r.venues.name}: ${res.error}`, dedupe_key: `reservation:${tableId}` },
       { onConflict: "dedupe_key", ignoreDuplicates: true },
     );
   }

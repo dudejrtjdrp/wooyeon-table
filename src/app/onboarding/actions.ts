@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireMe } from "@/lib/auth";
+import { requireMe, safeNext } from "@/lib/auth";
 import { INTERESTS, MBTIS, PRICE_RANGES, TRAITS } from "@/lib/constants";
 import { db } from "@/lib/supabase";
 
@@ -67,5 +67,5 @@ export async function saveProfile(form: FormData) {
   });
   if (error) back("저장하지 못했어요. 다시 시도해 주세요");
   const next = String(form.get("next") ?? "/");
-  redirect(next.startsWith("/") ? next : "/");
+  redirect(safeNext(next) ?? "/");
 }

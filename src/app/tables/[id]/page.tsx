@@ -119,7 +119,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
           <InfoRows
             rows={[
               ["식당", t.venues ? t.venues.name : "정하고 있어요"],
-              ...(t.venues ? ([["주소", mapUrl ? <a key="m" href={mapUrl} target="_blank" rel="noreferrer" className="text-accent">{t.venues.address} · 지도</a> : t.venues.address]] as [string, React.ReactNode][]) : []),
+              ...(t.venues ? ([["주소", mapUrl ? <a key="m" href={mapUrl} target="_blank" rel="noreferrer" className="-my-3 inline-flex min-h-11 items-center text-accent underline underline-offset-4">{t.venues.address} · 지도</a> : t.venues.address]] as [string, React.ReactNode][]) : []),
               ...(t.reservation_name ? ([["예약 이름", t.reservation_name]] as [string, string][]) : []),
               ...(resv ? ([["예약", resv.status === "CONFIRMED" ? <span key="r">{CHANNEL_LABEL[resv.channel as Channel]} 예약 확정{resv.external_ref ? ` · ${resv.external_ref}` : ""}</span> : "운영팀이 예약하고 있어요"]] as [string, React.ReactNode][]) : []),
               ...(t.venues?.price_range ? ([["1인 가격대", t.venues.price_range]] as [string, string][]) : []),

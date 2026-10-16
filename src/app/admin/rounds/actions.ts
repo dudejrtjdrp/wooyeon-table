@@ -2,15 +2,32 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminWrite } from "@/lib/auth";
 import { REGIONS } from "@/lib/constants";
 import { notify } from "@/lib/notify";
 import { roundCutoff } from "@/lib/policy";
 import { sidoOf } from "@/lib/regions";
 import { db } from "@/lib/supabase";
+import { logStatus } from "@/lib/events";
+import { fmtSlot } from "@/lib/format";
+
+/** 검증에 걸리면 고친 값을 그대로 돌려준다(f=JSON). 다시 처음부터 채우지 않게 */
+function failRound(form: FormData, msg: string): never {
+  const keep = {
+    title: String(form.get("title") ?? ""),
+    deadline: String(form.get("deadline") ?? ""),
+    match_at: String(form.get("match_at") ?? ""),
+    dates: form.getAll("dates").map(String),
+    time: String(form.get("time") ?? ""),
+    duration: String(form.get("duration") ?? ""),
+    regions: form.getAll("regions").map(String),
+    max_tables: String(form.get("max_tables") ?? ""),
+  };
+  redirect(`/admin/rounds?e=${encodeURIComponent(msg)}&f=${encodeURIComponent(JSON.stringify(keep))}#new-round`);
+}
 
 export async function createRound(form: FormData) {
-  await requireAdmin();
+  await requireAdminWrite("/admin/rounds");
   const title = String(form.get("title") ?? "").trim();
   const dates0 = form.getAll("dates").map(String).filter(Boolean);
   const time0 = String(form.get("time") ?? "19:30");
@@ -24,8 +41,10 @@ export async function createRound(form: FormData) {
   const time = String(form.get("time") ?? "19:30");
   const regions = form.getAll("regions").map(String).filter((r) => REGIONS.includes(r));
   const maxTables = Number(form.get("max_tables") ?? 4);
-  if (matchAtRaw < deadline) redirect(`/admin/rounds?e=${encodeURIComponent("자동 매칭은 신청 마감과 같거나 뒤여야 해요")}`);
-  if (!title || !deadline || !dates.length || !regions.length) redirect(`/admin/rounds?e=${encodeURIComponent("이름, 날짜, 동네를 모두 채워 주세요")}`);
+  if (!title || !dates.length || !regions.length) failRound(form, `${[!title && "이름", !dates.length && "날짜", !regions.length && "동네"].filter(Boolean).join(", ")}을(를) 채워 주세요`);
+  if (!deadline) failRound(form, "신청 마감을 정하지 못했어요. 날짜를 다시 확인하거나 마감 시각을 직접 넣어 주세요");
+  if (matchAtRaw < deadline) failRound(form, "자동 매칭은 신청 마감과 같거나 뒤여야 해요");
+  if (!(maxTables >= 1)) failRound(form, "일정당 최대 테이블 수는 1 이상이어야 해요");
 
   const kst = (d: string, t: string) => new Date(`${d}T${t}:00+09:00`).toISOString();
   const { data: round } = await db()
@@ -50,11 +69,12 @@ export async function createRound(form: FormData) {
     await db().from("region_demands").update({ notified_at: new Date().toISOString() }).eq("id", w.id);
   }
   revalidatePath("/admin/rounds");
-  redirect("/admin/rounds");
+  const when = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(kst(matchAtRaw.slice(0, 10), matchAtRaw.slice(11, 16))));
+  redirect(`/admin/rounds?r=${round!.id}&m=${encodeURIComponent(`'${title}' 회차를 만들었어요. 일정 ${rows.length}개, 식당 재고 ${vs.length}칸이 잡혔고 ${when}에 매칭이 자동으로 돌아요. 결과는 자동 매칭 모니터에서 볼 수 있어요`)}`);
 }
 
 export async function addVenue(form: FormData) {
-  await requireAdmin();
+  const me = await requireAdminWrite("/admin/rounds");
   const name = String(form.get("name") ?? "").trim();
   const region = String(form.get("region"));
   const address = String(form.get("address") ?? "").trim();
@@ -74,15 +94,27 @@ export async function addVenue(form: FormData) {
     .single();
   const { data: slots } = await db().from("slots").select("id,rounds!inner(status)").eq("region", region).eq("rounds.status", "open");
   if (slots?.length) await db().from("venue_slots").insert(slots.map((s) => ({ venue_id: v!.id, slot_id: s.id, tables_available: 2 })));
+  await logStatus({ entityType: "venue", entityId: v!.id, field: "status", to: "created", actor: `admin:${me.id}`, reason: `식당 추가: ${region} ${name}${slots?.length ? ` (모집 중인 일정 ${slots.length}곳에 2테이블씩)` : ""}` });
   revalidatePath("/admin/rounds");
+  redirect(`/admin/rounds?m=${encodeURIComponent(`${name}을(를) 추가했어요${slots?.length ? `. 모집 중인 일정 ${slots.length}곳에 2테이블씩 잡았어요` : ""}`)}`);
 }
 
 /** 식당 재고: 일정별로 이 식당이 받을 수 있는 테이블 수 */
 export async function setCapacity(form: FormData) {
-  await requireAdmin();
+  const me = await requireAdminWrite("/admin/rounds");
   const venueId = String(form.get("venue_id"));
   const slotId = String(form.get("slot_id"));
   const n = Math.max(0, Math.min(20, Number(form.get("tables") ?? 0)));
+  const [{ data: prev }, { data: v }, { data: sl }] = await Promise.all([
+    db().from("venue_slots").select("tables_available").eq("venue_id", venueId).eq("slot_id", slotId).maybeSingle(),
+    db().from("venues").select("name").eq("id", venueId).maybeSingle(),
+    db().from("slots").select("starts_at,region").eq("id", slotId).maybeSingle(),
+  ]);
   await db().from("venue_slots").upsert({ venue_id: venueId, slot_id: slotId, tables_available: n });
+  // 식당 재고도 누가·언제·얼마로 바꿨는지 남긴다 (배정 결과가 달라지는 변경이라서)
+  if ((prev?.tables_available ?? 0) !== n)
+    await logStatus({ entityType: "venue", entityId: venueId, field: "tables_available", from: String(prev?.tables_available ?? 0), to: String(n), actor: `admin:${me.id}`, reason: `식당 재고: ${v?.name ?? "식당"}${sl ? ` · ${fmtSlot(sl.starts_at)} ${sl.region}` : ""} 받을 수 있는 테이블 ${prev?.tables_available ?? 0} → ${n}` });
   revalidatePath("/admin/rounds");
+  const r = String(form.get("r") ?? "");
+  redirect(`/admin/rounds?${r ? `r=${r}&` : ""}m=${encodeURIComponent(`받을 수 있는 테이블을 ${n}개로 바꿨어요. 다음 식당 배정부터 반영돼요`)}`);
 }

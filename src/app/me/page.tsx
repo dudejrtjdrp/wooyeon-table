@@ -57,7 +57,7 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
               {via.length ? `${via.join(", ")}로 로그인` : me.phone ? me.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3") : me.email ?? ""}
             </p>
           </div>
-          <ChevronRight size={22} className="text-[#b5c0ba]" />
+          <ChevronRight size={22} className="text-muted" />
         </Link>
         <div className="mx-5 mt-5 grid grid-cols-2 border-t border-line py-4">
           <Link href="/my-tables" className="text-center">
@@ -87,7 +87,7 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
 
       <div className="mt-8 text-center">
         <ConfirmSheet
-          trigger={<button className="text-[15px] font-semibold text-danger">로그아웃</button>}
+          trigger={<button className="inline-flex h-11 items-center px-4 text-[15px] font-semibold text-ink2">로그아웃</button>}
           title="로그아웃할까요?"
           body="다시 들어올 때는 같은 방법으로 로그인하면 돼요."
           confirmLabel="로그아웃"
@@ -95,11 +95,11 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
           hidden={{}}
           tone="accent"
         />
-        <p className="mt-1.5 text-[12px] text-muted">앱 버전 1.0.0</p>
+        <p className="text-[12px] text-muted">앱 버전 1.0.0</p>
       </div>
-      <div className="mt-6 text-center">
+      <div className="mt-4 text-center">
         <ConfirmSheet
-          trigger={<button className="text-[12px] text-muted/80 underline underline-offset-4">회원 탈퇴</button>}
+          trigger={<button className="inline-flex h-11 items-center px-4 text-[13px] text-muted underline underline-offset-4">회원 탈퇴</button>}
           title="정말 탈퇴할까요?"
           body={<>이름, 연락처, 프로필과 매칭 정보는 바로 지워져요. 결제 기록은 법에 따라 5년, 신고 기록은 1년 동안 이름 없이 보관해요. 남은 이용권은 사라져요.</>}
           confirmLabel="탈퇴하기"

@@ -7,9 +7,10 @@ import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
 import { refundPayment } from "@/lib/payments";
 import { joinTable, keepPassFor, startWaiting } from "@/lib/resolve";
-import { isMembership, won } from "@/lib/constants";
-import { fmtDateTime } from "@/lib/format";
+import { isMembership } from "@/lib/constants";
+import { fmtSlot } from "@/lib/format";
 import { kstDay } from "@/lib/regions";
+import { loadTemplates, render } from "@/lib/templates";
 import { db } from "@/lib/supabase";
 
 async function loadOwn(appId: string, userId: string) {
@@ -37,7 +38,7 @@ export async function transfer(form: FormData) {
 
   const { data: slots } = await db().from("slots").select("id,round_id,region,starts_at,rounds(status,apply_deadline,title,match_at)").in("id", slotIds);
   const roundIds = [...new Set((slots ?? []).map((s) => s.round_id))];
-  if (roundIds.length !== 1) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("한 번에 한 차수의 일정만 고를 수 있어요")}`);
+  if (roundIds.length !== 1) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("옮길 일정은 같은 주의 일정 안에서만 고를 수 있어요. 한 주씩 골라 주세요")}`);
   const target = roundIds[0];
   const r = (slots![0] as unknown as { rounds: { status: string; apply_deadline: string; title: string; match_at: string } }).rounds;
   if (r.status !== "open" || new Date(r.apply_deadline) <= (await now())) {
@@ -75,7 +76,8 @@ export async function transfer(form: FormData) {
   await db().from("application_slots").insert(slotIds.map((slot_id) => ({ application_id: next!.id, slot_id })));
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "TRANSFERRED", actor: `user:${me.id}`, reason: `${r.title}로 이동` });
   await logStatus({ entityType: "application", entityId: next!.id, field: "match_status", to: "WAITING", actor: `user:${me.id}`, reason: "이전 신청에서 일정 이동, 결제 유지" });
-  await notify({ userId: me.id, template: "transferred", title: "일정을 옮겼어요", body: `${r.title}로 옮겼어요. 결제는 그대로 유지되고, ${fmtDateTime(r.match_at)}에 자동으로 테이블을 꾸려요.`, link: `/applications/${next!.id}`, dedupeKey: `transferred:${appId}` });
+  const tm = render("transferred", { round: r.title, match_at: fmtSlot(r.match_at) }, await loadTemplates());
+  await notify({ userId: me.id, template: "transferred", title: tm.title, body: tm.body, link: `/applications/${next!.id}`, dedupeKey: `transferred:${appId}` });
   redirect(`/applications/${next!.id}`);
 }
 
@@ -122,9 +124,7 @@ export async function refund(form: FormData) {
   const r = await refundPayment(app.payment_id, appId, "system", "매칭 실패 후 환불 선택");
   if (r.ok) {
     if (app.payments.pass_id) await db().from("passes").update({ remaining: 0 }).eq("id", app.payments.pass_id);
-    await notify({ userId: me.id, template: "refunded", title: "환불이 끝났어요", body: `${won(app.payments.amount)}을 결제하신 수단으로 돌려드렸어요. 카드사에 따라 며칠 걸릴 수 있어요.`, link: `/applications/${appId}`, dedupeKey: `refunded:${appId}` });
-  } else {
-    await notify({ userId: me.id, template: "refund_failed", title: "환불을 다시 처리하고 있어요", body: r.message, link: `/applications/${appId}`, dedupeKey: `refund_failed:${appId}` });
   }
+  // 환불 결과 알림(완료·다시 시도 중)은 refundPayment가 보낸다
   redirect(`/applications/${appId}`);
 }

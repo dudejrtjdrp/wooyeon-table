@@ -4,6 +4,7 @@
 //  2회: 30일 동안 신청 제한 (자동)
 //  3회 이상: 영구 제한을 운영자가 검토 (예외 처리함)
 import { logStatus } from "./events";
+import { fmtDay, fmtSlot } from "./format";
 import { notify } from "./notify";
 import { db } from "./supabase";
 
@@ -38,7 +39,7 @@ export async function applyNoShowPolicy(userId: string, appId: string, actor: st
     const until = new Date(at.getTime() + RESTRICT_DAYS * 86400_000).toISOString();
     await db().from("users").update({ account_status: "restricted", restricted_until: until }).eq("id", userId).neq("account_status", "banned");
     await logStatus({ entityType: "user", entityId: userId, field: "account_status", to: "restricted", actor, reason: `노쇼 ${count}회(최근 ${NOSHOW_WINDOW_DAYS}일): ${RESTRICT_DAYS}일 신청 제한` });
-    await notify({ userId, template: "noshow_restrict", title: `${RESTRICT_DAYS}일 동안 신청이 막혔어요`, body: `최근 ${NOSHOW_WINDOW_DAYS}일 안에 두 번 연락 없이 오지 않으셨어요. ${new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" }).format(new Date(until))}부터 다시 신청할 수 있어요.`, link: "/help", dedupeKey: `noshow:${appId}` });
+    await notify({ userId, template: "noshow_restrict", title: `${RESTRICT_DAYS}일 동안 신청이 막혔어요`, body: `최근 ${NOSHOW_WINDOW_DAYS}일 안에 두 번 연락 없이 오지 않으셨어요. ${fmtDay(until)}부터 다시 신청할 수 있어요.`, link: "/help", dedupeKey: `noshow:${appId}` });
   } else {
     await db().from("exceptions").upsert(
       { kind: "no_show", ref_type: "user", ref_id: userId, reason: `최근 ${NOSHOW_WINDOW_DAYS}일 노쇼 ${count}회: 영구 제한을 검토해 주세요`, dedupe_key: `noshow-review:${userId}:${count}` },
@@ -62,8 +63,7 @@ export async function applyBlock(userId: string, at = new Date()): Promise<strin
       return null;
     }
     if (u.restricted_until) {
-      const d = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" }).format(new Date(u.restricted_until));
-      return `${d}까지 신청이 막혀 있어요`;
+      return `${fmtSlot(u.restricted_until)}까지 신청이 막혀 있어요`;
     }
     return "운영팀 확인 전까지 신청이 막혀 있어요. 문의로 연락 주세요";
   }

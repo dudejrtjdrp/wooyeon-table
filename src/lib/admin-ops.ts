@@ -1,23 +1,62 @@
 // 운영자 긴급 수정 (MAT-14). 확정 뒤 취소·안전 문제 같은 예외 상황에서만 쓴다.
-// 참가자 이동, 테이블 분리·병합·해제. 사유를 반드시 받고, 모든 변경은 status_events에 운영자 이름으로 남긴다.
-import { fillOrReflow, tableMembers } from "./attendance";
+// 참가자 이동, 테이블 분리·병합·해제. 사유를 반드시 받고(비면 거부), 모든 변경은 status_events에 운영자 이름으로 남긴다.
+// 이 수정으로 풀린 예외(같은 신청·테이블에 걸린 조건 충돌·식당 부족·예약 실패 등)는 함께 닫는다.
+import { type Member, fillOrReflow, tableMembers } from "./attendance";
 import { extendMembershipFor, releaseUse } from "./billing";
 import { logStatus } from "./events";
 import { fmtDate, fmtTime } from "./format";
 import { canJoin } from "./matching/constraints";
 import { loadRelations, loadSettings } from "./matching/runner";
-import type { Candidate } from "./matching/types";
+import type { Candidate, MatchSettings, Relations } from "./matching/types";
 import { notify } from "./notify";
 import { afterConfirm, ensureRoom } from "./pipeline";
 import { db } from "./supabase";
 import { postSystem } from "./delivery";
+import { loadTemplates, render } from "./templates";
 
 export const ACTIVE = ["CONFIRMED", "VENUE_ASSIGNED", "READY"];
 type Result = { ok: boolean; message: string };
-type Tb = { id: string; status: string; round_id: string; slot_id: string; match_run_id: string | null; slots: { starts_at: string; region: string } };
+type Tb = { id: string; status: string; round_id: string; slot_id: string; match_run_id: string | null; reservation_name: string | null; slots: { starts_at: string; region: string }; venues: { name: string } | null };
+
+/** 사유는 비울 수 없다. 참가자 이력과 테이블 이력에 그대로 남는다 */
+export const MIN_REASON = 4;
+export function checkReason(reason: string | null | undefined): Result | null {
+  const r = (reason ?? "").trim();
+  if (!r) return { ok: false, message: "사유를 적어 주세요. 변경 이력과 참가자 이력에 그대로 남아요" };
+  if (r.length < MIN_REASON) return { ok: false, message: `사유를 ${MIN_REASON}자 이상 적어 주세요` };
+  return null;
+}
+
+/**
+ * 긴급 수정으로 풀린 열린 예외를 닫는다. exceptionId는 예외 처리함에서 넘어온 그 건.
+ * 신청에 걸린 조건 충돌·데이터 누락은 그 사람을 옮기거나 빼면 풀린다.
+ * 테이블에 걸린 예외는 기본으로 조건 충돌만 닫고, 테이블이 없어지는 해제·병합 때는 식당 부족·예약 실패·공지 실패까지 닫는다.
+ */
+const APP_KINDS = ["condition_conflict", "data_missing"];
+export const TABLE_GONE_KINDS = ["condition_conflict", "venue_shortage", "reservation", "data_missing", "notification"];
+export async function closeLinked(o: { adminId: string; resolution: string; exceptionId?: string | null; appIds?: string[]; tableIds?: string[]; tableKinds?: string[] }): Promise<number> {
+  const ids = new Set<string>();
+  if (o.exceptionId) ids.add(o.exceptionId);
+  if (o.appIds?.length) {
+    const { data } = await db().from("exceptions").select("id").eq("status", "open").eq("ref_type", "application").in("ref_id", o.appIds).in("kind", APP_KINDS);
+    for (const x of data ?? []) ids.add(x.id);
+  }
+  if (o.tableIds?.length) {
+    const refs = [...o.tableIds];
+    const { data: rooms } = await db().from("chat_rooms").select("id").in("table_id", o.tableIds);
+    refs.push(...(rooms ?? []).map((r) => r.id));
+    const { data } = await db().from("exceptions").select("id").eq("status", "open").in("ref_type", ["dining_table", "chat_room"]).in("ref_id", refs).in("kind", o.tableKinds ?? ["condition_conflict"]);
+    for (const x of data ?? []) ids.add(x.id);
+  }
+  if (!ids.size) return 0;
+  const at = new Date().toISOString();
+  const { data: closed } = await db().from("exceptions").update({ status: "resolved", resolution: `긴급 수정: ${o.resolution}`, resolved_by: o.adminId, resolved_at: at }).in("id", [...ids]).eq("status", "open").select("id");
+  for (const x of closed ?? []) await logStatus({ entityType: "exception", entityId: x.id, field: "status", from: "open", to: "resolved", actor: `admin:${o.adminId}`, reason: tag(o.resolution) });
+  return closed?.length ?? 0;
+}
 
 async function table(id: string) {
-  const { data } = await db().from("dining_tables").select("id,status,round_id,slot_id,match_run_id,slots(starts_at,region)").eq("id", id).maybeSingle();
+  const { data } = await db().from("dining_tables").select("id,status,round_id,slot_id,match_run_id,reservation_name,slots(starts_at,region),venues(name)").eq("id", id).maybeSingle();
   return data as unknown as Tb | null;
 }
 
@@ -38,7 +77,9 @@ async function rescheduleFor(appId: string, userId: string, from: string, to: Tb
   await db().from("notifications").delete().eq("dedupe_key", `remind:${appId}`).eq("status", "pending");
   const at = new Date(new Date(to.slots.starts_at).getTime() - 24 * 3600_000);
   if (at > new Date()) {
-    await notify({ userId, template: "reminder", title: "내일 식탁에서 만나요", body: `${fmtDate(to.slots.starts_at)} ${fmtTime(to.slots.starts_at)} ${to.slots.region}. 단체방에서 장소와 예약명을 확인해 주세요.`, link: `/tables/${to.id}`, dedupeKey: `remind:${appId}:${to.id}`, scheduledAt: at });
+    // 운영자가 '자동 메시지'에서 고친 하루 전 안내 문구를 그대로 쓴다
+    const msg = render("reminder", { date: fmtDate(to.slots.starts_at), time: fmtTime(to.slots.starts_at), region: to.slots.region, venue: to.venues?.name ?? "", reservation: to.reservation_name ?? "" }, await loadTemplates());
+    await notify({ userId, template: "reminder", title: msg.title, body: msg.body, link: `/tables/${to.id}`, dedupeKey: `remind:${appId}:${to.id}`, scheduledAt: at });
   }
 }
 
@@ -54,7 +95,10 @@ export async function siblingTables(tableId: string) {
 }
 
 /** 참가자 한 명을 다른 테이블로 옮긴다 */
-export async function moveMember(appId: string, targetId: string, reason: string, adminId: string, allowOtherSlot: boolean): Promise<Result> {
+export async function moveMember(appId: string, targetId: string, reason: string, adminId: string, allowOtherSlot: boolean, exceptionId?: string | null): Promise<Result> {
+  const bad = checkReason(reason);
+  if (bad) return bad;
+  reason = reason.trim();
   const actor = `admin:${adminId}`;
   const { data: a } = await db().from("applications").select("id,user_id,table_id,match_status,attendance_status").eq("id", appId).single();
   if (!a?.table_id || a.match_status !== "CONFIRMED" || a.attendance_status !== "SCHEDULED") return { ok: false, message: "확정된 참가자만 옮길 수 있어요" };
@@ -77,11 +121,15 @@ export async function moveMember(appId: string, targetId: string, reason: string
   await rescheduleFor(appId, me.user_id, from.id, to);
   await notify({ userId: me.user_id, template: "reallocated", title: "테이블이 바뀌었어요", body: `운영팀이 ${fmtDate(to.slots.starts_at)} ${fmtTime(to.slots.starts_at)} ${to.slots.region} 테이블로 옮겨 드렸어요. 새 단체방을 확인해 주세요.`, link: `/tables/${targetId}`, dedupeKey: `admin-move:${appId}:${targetId}` });
   await fillOrReflow(from.id, actor);
-  return { ok: true, message: `${me.name}님을 옮겼어요` };
+  const n = await closeLinked({ adminId, resolution: `${me.name}님 이동 (${reason})`, exceptionId, appIds: [appId], tableIds: [from.id] });
+  return { ok: true, message: `${me.name}님을 옮겼어요${n ? `. 관련 예외 ${n}건도 처리 완료로 닫았어요` : ""}` };
 }
 
 /** 참가자를 테이블에서 뺀다. 환불을 고르면 바로 환불하고, 아니면 다른 일정·보관·환불을 직접 고르게 한다 */
-export async function removeMember(appId: string, reason: string, adminId: string, refund: boolean): Promise<Result> {
+export async function removeMember(appId: string, reason: string, adminId: string, refund: boolean, exceptionId?: string | null): Promise<Result> {
+  const bad = checkReason(reason);
+  if (bad) return bad;
+  reason = reason.trim();
   const actor = `admin:${adminId}`;
   const { data: a } = await db().from("applications").select("id,user_id,table_id,match_status,attendance_status,payment_status,users(name)").eq("id", appId).single();
   const app = a as unknown as { id: string; user_id: string; table_id: string | null; match_status: string; attendance_status: string | null; payment_status: string; users: { name: string } } | null;
@@ -103,11 +151,15 @@ export async function removeMember(appId: string, reason: string, adminId: strin
   }
   await say(tableId, "한 분이 사정이 생겨 함께하지 못하게 됐어요.");
   await fillOrReflow(tableId, actor);
-  return { ok: true, message: `${app.users.name}님을 테이블에서 뺐어요` };
+  const n = await closeLinked({ adminId, resolution: `${app.users.name}님 제외 (${reason})`, exceptionId, appIds: [appId] });
+  return { ok: true, message: `${app.users.name}님을 테이블에서 뺐어요${refund ? " (환불 진행)" : ""}${n ? `. 관련 예외 ${n}건도 닫았어요` : ""}` };
 }
 
 /** 테이블을 해제한다. 참가자 전원에게 다른 일정·보관·환불을 안내한다 */
-export async function dissolveTable(tableId: string, reason: string, adminId: string): Promise<Result> {
+export async function dissolveTable(tableId: string, reason: string, adminId: string, exceptionId?: string | null): Promise<Result> {
+  const bad = checkReason(reason);
+  if (bad) return bad;
+  reason = reason.trim();
   const actor = `admin:${adminId}`;
   const tb = await table(tableId);
   if (!tb || !ACTIVE.includes(tb.status)) return { ok: false, message: "이미 끝났거나 해제된 테이블이에요" };
@@ -123,11 +175,15 @@ export async function dissolveTable(tableId: string, reason: string, adminId: st
     await notify({ userId: m.user_id, template: "alternative", title: "모임이 취소됐어요", body: "운영팀 사정으로 이번 테이블이 열리지 못하게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 전액 환불받을 수 있어요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", link: `/applications/${m.id}/resolve`, dedupeKey: `admin-dissolve:${m.id}:${tableId}` });
   }
   await say(tableId, "운영팀 사정으로 이번 모임이 취소됐어요. 알림에서 다음 방법을 골라 주세요. 불편을 드려 죄송해요.");
-  return { ok: true, message: `테이블을 해제하고 ${ms.length}명에게 안내했어요` };
+  const n = await closeLinked({ adminId, resolution: `테이블 해제 (${reason})`, exceptionId, tableIds: [tableId], tableKinds: TABLE_GONE_KINDS });
+  return { ok: true, message: `테이블을 해제하고 ${ms.length}명에게 안내했어요${n ? `. 관련 예외 ${n}건도 닫았어요` : ""}` };
 }
 
 /** 이 테이블 사람들을 다른 테이블로 합친다 */
-export async function mergeInto(sourceId: string, targetId: string, reason: string, adminId: string): Promise<Result> {
+export async function mergeInto(sourceId: string, targetId: string, reason: string, adminId: string, exceptionId?: string | null): Promise<Result> {
+  const bad = checkReason(reason);
+  if (bad) return bad;
+  reason = reason.trim();
   const actor = `admin:${adminId}`;
   const [src, dst, settings] = await Promise.all([table(sourceId), table(targetId), loadSettings()]);
   if (!src || !dst || !ACTIVE.includes(src.status) || !ACTIVE.includes(dst.status)) return { ok: false, message: "열려 있는 테이블끼리만 합칠 수 있어요" };
@@ -153,11 +209,15 @@ export async function mergeInto(sourceId: string, targetId: string, reason: stri
   await say(sourceId, "이 테이블은 같은 시간 다른 테이블과 합쳐졌어요. 새 단체방으로 옮겨 주세요.");
   await say(targetId, `같은 시간 테이블과 합쳐 ${a.map((m) => m.name).join(", ")}님이 합류했어요. 반가워요!`);
   for (const m of b) await notify({ userId: m.user_id, template: "reallocated", title: "새로운 분들이 합류했어요", body: `같은 시간 테이블과 합쳐 ${a.length}명이 더 함께해요.`, link: `/tables/${targetId}`, dedupeKey: `admin-merge-in:${m.id}:${sourceId}` });
-  return { ok: true, message: `${a.length}명을 합쳤어요` };
+  const n = await closeLinked({ adminId, resolution: `테이블 병합 (${reason})`, exceptionId, tableIds: [sourceId], tableKinds: TABLE_GONE_KINDS });
+  return { ok: true, message: `${a.length}명을 합쳤어요${n ? `. 관련 예외 ${n}건도 닫았어요` : ""}` };
 }
 
 /** 고른 사람들을 같은 일정의 새 테이블로 나눈다. 나눈 뒤 두 테이블 모두 최소 인원 이상이어야 한다 */
-export async function splitTable(tableId: string, appIds: string[], reason: string, adminId: string): Promise<Result> {
+export async function splitTable(tableId: string, appIds: string[], reason: string, adminId: string, exceptionId?: string | null): Promise<Result> {
+  const bad = checkReason(reason);
+  if (bad) return bad;
+  reason = reason.trim();
   const actor = `admin:${adminId}`;
   const [tb, settings] = await Promise.all([table(tableId), loadSettings()]);
   if (!tb || !ACTIVE.includes(tb.status)) return { ok: false, message: "열려 있는 테이블만 나눌 수 있어요" };
@@ -181,5 +241,60 @@ export async function splitTable(tableId: string, appIds: string[], reason: stri
   await logStatus({ entityType: "dining_table", entityId: tableId, field: "split_to", to: nt!.id, actor, reason: tag(`${out.length}명 분리: ${reason}`) });
   await say(tableId, `운영팀 조정으로 ${out.length}분이 같은 시간 다른 테이블로 옮겼어요.`);
   await afterConfirm(nt!.id); // 식당 배정, 단체방, 첫 공지, 리마인드
-  return { ok: true, message: `${out.length}명을 새 테이블로 나눴어요` };
+  const n = await closeLinked({ adminId, resolution: `테이블 분리 (${reason})`, exceptionId, tableIds: [tableId] });
+  return { ok: true, message: `${out.length}명을 새 테이블로 나눴어요${n ? `. 관련 예외 ${n}건도 닫았어요` : ""}` };
+}
+
+/** 조건 충돌 예외에 붙이는 '이 사람을 이 테이블로 옮기기' 추천 */
+export type MoveSuggestion = { appId: string; name: string; targetId: string; target: string; count: number };
+type Sib = { id: string; slot_id: string; members: Member[] };
+
+/**
+ * 순수 계산. 충돌한 테이블에서 옮길 사람과, 그 사람을 받아 줄 첫 테이블을 고른다.
+ * preferAppId가 있으면 그 사람만 본다. 없으면 필수 조건(나이 차·차단·신고·비선호)을 깨는 사람을 나이가 가운데서 먼 순으로 본다.
+ * 받는 테이블은 인원이 남고, 그 사람이 고른 일정이고, canJoin을 통과해야 한다. moveMember도 같은 검사를 한 번 더 한다.
+ */
+export function pickMove(members: Member[], siblings: Sib[], rel: Relations, settings: MatchSettings, preferAppId?: string | null): { mover: Member; target: Sib } | null {
+  let movers: Member[];
+  if (preferAppId) movers = members.filter((m) => m.id === preferAppId);
+  else {
+    const years = members.map((m) => m.birth_year).sort((a, b) => a - b);
+    const mid = years[Math.floor(years.length / 2)] ?? 0;
+    movers = members
+      .filter((m) => !canJoin(members.filter((o) => o.id !== m.id).map(cand), cand(m), rel, settings))
+      .sort((a, b) => Math.abs(b.birth_year - mid) - Math.abs(a.birth_year - mid));
+  }
+  for (const mover of movers)
+    for (const t of siblings) {
+      if (t.members.length >= settings.maxSize || !mover.slotIds.includes(t.slot_id)) continue;
+      if (canJoin(t.members.map(cand), cand(mover), rel, settings)) return { mover, target: t };
+    }
+  return null;
+}
+
+/** 조건 충돌 예외(신청 또는 테이블 기준)에서 바로 누를 수 있는 이동 추천. 받아 줄 테이블이 없으면 null */
+export async function suggestMove(ex: { ref_type: string; ref_id: string }): Promise<MoveSuggestion | null> {
+  let tableId: string | null = null;
+  let prefer: string | null = null;
+  if (ex.ref_type === "application") {
+    const { data } = await db().from("applications").select("table_id,match_status").eq("id", ex.ref_id).maybeSingle();
+    if (!data?.table_id || data.match_status !== "CONFIRMED") return null;
+    tableId = data.table_id;
+    prefer = ex.ref_id;
+  } else if (ex.ref_type === "dining_table") tableId = ex.ref_id;
+  if (!tableId) return null;
+  const tb = await table(tableId);
+  if (!tb || !ACTIVE.includes(tb.status)) return null;
+  const { data: rows } = await db().from("dining_tables").select("id,status,slot_id,slots(starts_at,region),venues(name)").eq("round_id", tb.round_id).neq("id", tableId).in("status", ACTIVE);
+  const others = ((rows ?? []) as unknown as { id: string; slot_id: string; slots: { starts_at: string; region: string }; venues: { name: string } | null }[]).sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at));
+  const [members, settings, ...groups] = await Promise.all([tableMembers(tableId), loadSettings(), ...others.map((o) => tableMembers(o.id))]);
+  const siblings: Sib[] = others.map((o, i) => ({ id: o.id, slot_id: o.slot_id, members: groups[i] }));
+  const rel = await loadRelations([...new Set([...members, ...siblings.flatMap((s) => s.members)].map((m) => m.user_id))]);
+  const pick = pickMove(members, siblings, rel, settings, prefer);
+  if (!pick) return null;
+  const o = others.find((x) => x.id === pick.target.id)!;
+  return {
+    appId: pick.mover.id, name: pick.mover.name, targetId: o.id, count: pick.target.members.length,
+    target: `${fmtDate(o.slots.starts_at)} ${fmtTime(o.slots.starts_at)} ${o.slots.region}${o.venues ? ` ${o.venues.name}` : ""}`,
+  };
 }

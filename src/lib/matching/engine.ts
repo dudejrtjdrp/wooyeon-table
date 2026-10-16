@@ -1,5 +1,6 @@
 import { canJoin, validateTable } from "./constraints";
 import { reasonsFor, scoreGroup } from "./score";
+import { reallocTier } from "./tiers";
 import {
   ALGORITHM_VERSION,
   type Candidate,
@@ -18,8 +19,6 @@ interface WorkTable {
   origin: "initial" | "merged";
   dissolved: boolean;
 }
-
-const dateOf = (s: Slot) => s.startsAt.slice(0, 10);
 
 /**
  * 한 차수의 자동 매칭을 실행한다. 같은 입력이면 항상 같은 결과가 나온다.
@@ -311,6 +310,18 @@ export function runMatching(
   }
 
   // ── 6. 재검증과 확정 ────────────────────────────────────────────────
+  // 후기 신호(cool)가 실제로 자리를 나눴는지: 이 테이블 사람과 만족도가 낮았던 상대가 같은 일정을 골랐는데 다른 테이블로 갔으면 true
+  const coolPartners = new Map<string, Set<string>>();
+  for (const k of rel.cool ?? []) {
+    const [a, b] = k.split("|");
+    coolPartners.set(a, (coolPartners.get(a) ?? new Set()).add(b));
+    coolPartners.set(b, (coolPartners.get(b) ?? new Set()).add(a));
+  }
+  const slotsOfUser = new Map(candidates.map((c) => [c.userId, consent.get(c.applicationId) ?? new Set<string>()]));
+  const separatedBy = (t: WorkTable) => {
+    const here = new Set(t.members.map((m) => m.userId));
+    return t.members.some((m) => [...(coolPartners.get(m.userId) ?? [])].some((p) => !here.has(p) && slotsOfUser.get(p)?.has(t.slotId)));
+  };
   const finalTables: TableResult[] = [];
   const outcomes: Record<string, Outcome> = {};
   for (const t of tables) {
@@ -332,7 +343,7 @@ export function runMatching(
       slotId: t.slotId,
       applicationIds: t.members.map((m) => m.applicationId).sort(),
       score,
-      reasons: reasonsFor(score, settings),
+      reasons: reasonsFor(score, settings, { separated: separatedBy(t) }),
       origin: t.origin,
     });
     for (const m of t.members) {
@@ -537,15 +548,8 @@ function findReallocTarget(
   settings: MatchSettings,
 ): { table: WorkTable; tierLabel: string } | null {
   const home = homeSlotId ? slots.get(homeSlotId) : undefined;
-  const tierOf = (s: Slot): { tier: number; label: string } => {
-    if (!home) return { tier: 4, label: "고르신 다른 일정" };
-    const sameDate = dateOf(s) === dateOf(home);
-    const sameRegion = s.region === home.region;
-    if (sameDate && sameRegion) return { tier: 1, label: "같은 날짜·같은 지역의 다른 테이블" };
-    if (sameDate) return { tier: 2, label: `같은 날 ${s.region} 테이블` };
-    if (sameRegion) return { tier: 3, label: `${s.region}의 다른 날짜 테이블` };
-    return { tier: 4, label: `고르신 다른 일정(${s.region})` };
-  };
+  // 7.4 순서는 확정 뒤 재배치(reflow-rules.ts)와 같은 함수로 계산한다
+  const tierOf = (s: Slot) => reallocTier(home, s);
 
   let best: { table: WorkTable; tier: number; score: number; label: string } | null = null;
   for (const t of tables) {

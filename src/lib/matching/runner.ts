@@ -1,11 +1,12 @@
 import { logStatus } from "../events";
-import { fmtDate, fmtTime } from "../format";
-import { afterConfirm } from "../pipeline";
+import { fmtDay, fmtSlot } from "../format";
+import { afterConfirm, notifyConfirmed } from "../pipeline";
 import { pushNotifications } from "../push";
 import { loadTemplates, render } from "../templates";
 import { db } from "../supabase";
 import { nearSlotsFor } from "../regions";
 import { runMatching } from "./engine";
+import { type FeedbackRow, feedbackSignals } from "./feedback";
 import {
   ALGORITHM_VERSION,
   type Candidate,
@@ -62,10 +63,28 @@ export async function loadRelations(userIds: string[]): Promise<Relations> {
     else rel.again.add(pairKey(p.from_user, p.to_user));
   }
   for (const e of enc.data ?? []) rel.met.add(pairKey(e.user_id, e.met_user_id));
+
+  // 피드백 루프 (F11): 후기 점수와 참석 횟수를 다음 매칭에 넣는다. 못 읽어도 매칭은 그대로 돈다
+  // 같은 상대와 여러 번 앉았으면 그 테이블들의 후기를 평균하고, 참석이 많은 사람의 후기를 더 믿는다(feedback.ts)
+  const [fb, att] = await Promise.all([
+    db().from("feedbacks").select("user_id,table_id,mood_score,talk_score,rejoin_intent,created_at").in("user_id", userIds),
+    db().from("applications").select("user_id").in("user_id", userIds).eq("attendance_status", "ATTENDED"),
+  ]);
+  const feedbacks = (fb.data ?? []) as FeedbackRow[];
+  const attended = new Map<string, number>();
+  for (const a of att.data ?? []) attended.set(a.user_id, (attended.get(a.user_id) ?? 0) + 1);
+  const fbTables = [...new Set(feedbacks.map((f) => f.table_id))];
+  const { data: seats } = fbTables.length
+    ? await db().from("applications").select("user_id,table_id").in("table_id", fbTables).eq("attendance_status", "ATTENDED")
+    : { data: [] as { user_id: string; table_id: string }[] };
+  const sig = feedbackSignals(feedbacks, seats ?? [], attended);
+  rel.cool = sig.cool;
+  rel.coolWeight = sig.coolWeight;
+  rel.history = sig.history;
   return rel;
 }
 
-const slotLabel = (s: Slot) => `${fmtDate(s.startsAt)} ${s.region}`;
+const slotLabel = (s: Slot) => `${fmtSlot(s.startsAt)} ${s.region}`;
 
 export interface RunOutcome {
   runId: string;
@@ -76,16 +95,30 @@ export interface RunOutcome {
 /**
  * 한 차수의 자동 매칭을 실행하고 결과를 저장한다.
  * match_runs.round_id가 unique라 같은 차수를 두 번 돌려도 두 번째는 기존 결과를 돌려준다.
+ * resumeFailed: 실패로 끝난 실행을 같은 기록으로 다시 돌린다. 테이블이 하나도 안 만들어졌을 때만 쓴다(lib/pipeline.ts recoverMatchRuns)
  */
-export async function runRound(roundId: string, actor = "system"): Promise<RunOutcome> {
+export async function runRound(roundId: string, actor = "system", opts: { resumeFailed?: boolean } = {}): Promise<RunOutcome> {
   const settings = await loadSettings();
 
   // 1. 실행 기록을 먼저 잡는다. 이미 있으면 중복 실행이므로 멈춘다
-  const { data: run, error: runErr } = await db()
+  let { data: run, error: runErr } = await db()
     .from("match_runs")
     .insert({ round_id: roundId, algorithm_version: ALGORITHM_VERSION, status: "running" })
     .select("id")
     .single();
+  if ((runErr || !run) && opts.resumeFailed) {
+    // 실패한 기록을 다시 '실행 중'으로 바꾼 한 곳만 이어서 돈다 (동시에 두 번 돌지 않게)
+    const { data: claimed } = await db()
+      .from("match_runs")
+      .update({ status: "running", algorithm_version: ALGORITHM_VERSION, started_at: new Date().toISOString(), finished_at: null })
+      .eq("round_id", roundId)
+      .eq("status", "failed")
+      .select("id");
+    if (claimed?.length) {
+      run = { id: claimed[0].id };
+      runErr = null;
+    }
+  }
   if (runErr || !run) {
     const { data: existing } = await db().from("match_runs").select("id,summary").eq("round_id", roundId).single();
     // 이미 실행된 차수가 모집 중으로 남아 있으면 스케줄러가 계속 부르니 상태를 맞춰 둔다
@@ -206,16 +239,8 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
       for (const appId of t.applicationIds) {
         const o = result.outcomes[appId];
         ev(appId, "match_status", o && o.reallocCount > 0 ? "REALLOCATING" : "MATCHING", "CONFIRMED", o?.message ?? "자동 확정");
-        const cm = render("confirmed", { date: fmtDate(slot.startsAt), time: fmtTime(slot.startsAt), region: slot.region }, tpl);
-        nt(
-          byApp.get(appId)!.userId,
-          "confirmed",
-          cm.title,
-          cm.body,
-          `/tables/${table.id}`,
-          `confirmed:${appId}`,
-        );
       }
+      // 확정 알림은 여기서 보내지 않는다. 식당 배정·단체방 개설 뒤 afterConfirm이 식당명과 함께 보낸다(6단계)
     }
 
     // 5. 실패자: 대체 일정·이용권 보관·환불 선택으로 넘긴다 (MAT-11, STA-04)
@@ -223,7 +248,7 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
     const { data: openRounds } = await db().from("rounds").select("title,slots(starts_at,region)").eq("status", "open").neq("id", roundId).order("match_at").limit(2);
     const alt = (openRounds ?? [])
       .map((r) => {
-        const days = [...new Set((r.slots ?? []).map((x: { starts_at: string }) => fmtDate(x.starts_at)))].join("·");
+        const days = [...new Set((r.slots ?? []).map((x: { starts_at: string }) => fmtDay(x.starts_at)))].join("·");
         const regions = [...new Set((r.slots ?? []).map((x: { region: string }) => x.region))].join("·");
         return `${r.title}(${days}, ${regions})`;
       })
@@ -258,7 +283,17 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
     await db().from("rounds").update({ status: "matched" }).eq("id", roundId);
 
     // 6. 확정 뒤 자동 안내 (식당 배정, 단체방, 공지, 리마인드 예약)
-    for (const id of tableIds) await afterConfirm(id);
+    // 한 테이블이 실패해도 나머지는 계속한다. 첫 공지가 없는 테이블은 tick이 다시 돌린다(pipeline.ts resumeAfterConfirm)
+    for (const id of tableIds) {
+      try {
+        await afterConfirm(id);
+      } catch (e) {
+        console.error("[runner] 확정 뒤 안내 실패", id, e);
+        await logStatus({ entityType: "dining_table", entityId: id, field: "after_confirm", to: "FAILED", actor: "system", reason: `확정 뒤 안내 실패, 다음 자동 실행 때 다시 해요: ${String(e).slice(0, 200)}`, matchRunId: run.id }).catch(() => null);
+        // 식당·단체방이 늦어져도 확정 사실은 바로 알린다 (INF-01). 식당은 정해지면 '식당이 정해졌어요'로 따로 간다
+        await notifyConfirmed(id).catch(() => null);
+      }
+    }
 
     return { runId: run.id, alreadyRan: false, summary };
   } catch (e) {

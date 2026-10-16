@@ -5,7 +5,7 @@
 import { ACTIVE_TABLE, offerSeat, tableInfo, tableMembers, tableMembersOf, toCand } from "./attendance";
 import { now } from "./clock";
 import { logStatus } from "./events";
-import { fmtDate, fmtSlot } from "./format";
+import { fmtSlot } from "./format";
 import { canJoin } from "./matching/constraints";
 import { scoreGroup } from "./matching/score";
 import { loadRelations, loadSettings } from "./matching/runner";
@@ -14,7 +14,7 @@ import { ensureRoom } from "./pipeline";
 import { kstDay, neighborsOf } from "./regions";
 import { isMembership } from "./constants";
 import { db } from "./supabase";
-import { loadTemplates, render } from "./templates";
+import { loadTemplates, render, slotVars } from "./templates";
 
 import { AUTO_KEEP_AFTER, TAG_RANK, WAIT_CUTOFF, countFrom, moveTag, noAnswerStep, waitDeadline as deadlineOf, type MoveTag } from "./resolve-rules";
 import { postSystem } from "./delivery";
@@ -145,7 +145,7 @@ export async function joinTable(appId: string, tableId: string, actor: string): 
   const option = (await joinOptions(app)).find((o) => o.tableId === tableId);
   if (!option) return { ok: false, message: "그사이 자리가 차서 합류할 수 없게 됐어요. 다른 방법을 골라 주세요" };
   const tb = (await tableInfo(tableId))!;
-  const reason = `빈자리에 바로 합류했어요. ${fmtDate(tb.slots.starts_at)} ${tb.slots.region} 테이블이에요.`;
+  const reason = `빈자리에 바로 합류했어요. ${fmtSlot(tb.slots.starts_at)} ${tb.slots.region} 테이블이에요.`;
   let targetApp = appId;
 
   if (option.roundId === app.round_id) {
@@ -213,8 +213,7 @@ export async function joinTable(appId: string, tableId: string, actor: string): 
   await notify({
     userId: app.user_id,
     template: "confirmed",
-    title: "테이블에 합류했어요",
-    body: `${fmtSlot(tb.slots.starts_at)} ${tb.slots.region}${tb.venues ? ` ${tb.venues.name}` : ""}에서 만나요. 단체방에서 인사를 나눠 보세요.`,
+    ...render("joined", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "" }, await loadTemplates()),
     link: `/tables/${tableId}`,
     dedupeKey: `join:${appId}:${tableId}`,
   });

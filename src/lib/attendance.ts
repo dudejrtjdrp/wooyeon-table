@@ -2,7 +2,7 @@
 import { extendMembershipFor, releaseUse } from "./billing";
 import { now } from "./clock";
 import { logStatus } from "./events";
-import { fmtDate, fmtTime } from "./format";
+import { fmtClock, fmtSlot } from "./format";
 import { canJoin } from "./matching/constraints";
 import { loadRelations, loadSettings } from "./matching/runner";
 import type { Candidate } from "./matching/types";
@@ -12,8 +12,11 @@ import { refundCutoff } from "./policy";
 import { neighborsOf } from "./regions";
 import { db } from "./supabase";
 import { postSystem } from "./delivery";
+import { type ReflowMember, planReflow } from "./reflow-rules";
+import { loadTemplates, render, slotVars } from "./templates";
 
 const KST = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+const sameDay = (iso: string, at: Date) => KST(new Date(iso)) === KST(at);
 
 export type CancelRule = { kind: "early" | "late" | "blocked"; message: string };
 
@@ -26,18 +29,35 @@ export function cancelRule(startsAt: string, at: Date): CancelRule {
   return { kind: "late", message: "환불 마감(모임 주 화요일 밤 12시)이 지나 환불 없이 취소돼요" };
 }
 
-export type Member = { id: string; user_id: string; birth_year: number; slotIds: string[]; name: string };
+export type Member = {
+  id: string;
+  user_id: string;
+  birth_year: number;
+  slotIds: string[];
+  name: string;
+  /** 재배치 점수 재검사용 (reflow-rules.ts) */
+  profile?: { gender: "M" | "F"; mbti: string | null; interests: string[]; my_traits: string[]; wanted_traits: string[] };
+};
+
+type ProfileCols = { birth_year: number; gender?: "M" | "F"; mbti?: string | null; interests?: string[] | null; my_traits?: string[] | null; wanted_traits?: string[] | null };
 
 export async function tableMembers(tableId: string): Promise<Member[]> {
   const { data } = await db()
     .from("applications")
-    .select("id,user_id,users(name,profiles(birth_year)),application_slots(slot_id)")
+    .select("id,user_id,users(name,profiles(birth_year,gender,mbti,interests,my_traits,wanted_traits)),application_slots(slot_id)")
     .eq("table_id", tableId)
     .eq("match_status", "CONFIRMED")
     .eq("attendance_status", "SCHEDULED");
-  return ((data ?? []) as unknown as { id: string; user_id: string; users: { name: string; profiles: { birth_year: number } | { birth_year: number }[] | null }; application_slots: { slot_id: string }[] }[]).map((a) => {
+  return ((data ?? []) as unknown as { id: string; user_id: string; users: { name: string; profiles: ProfileCols | ProfileCols[] | null }; application_slots: { slot_id: string }[] }[]).map((a) => {
     const p = Array.isArray(a.users.profiles) ? a.users.profiles[0] : a.users.profiles;
-    return { id: a.id, user_id: a.user_id, birth_year: p?.birth_year ?? 0, slotIds: a.application_slots.map((s) => s.slot_id), name: a.users.name };
+    return {
+      id: a.id,
+      user_id: a.user_id,
+      birth_year: p?.birth_year ?? 0,
+      slotIds: a.application_slots.map((s) => s.slot_id),
+      name: a.users.name,
+      profile: p?.gender ? { gender: p.gender, mbti: p.mbti ?? null, interests: p.interests ?? [], my_traits: p.my_traits ?? [], wanted_traits: p.wanted_traits ?? [] } : undefined,
+    };
   });
 }
 
@@ -82,15 +102,17 @@ export async function cancelAttendance(appId: string, userId: string): Promise<{
 
 /**
  * 인원이 4명 아래로 줄어든 테이블을 정리한다.
- * 남은 사람을 같은 회차에서 본인이 고른 일정의 다른 확정 테이블로 옮기고(나이·제외 조건은 그대로 지킴),
+ * 남은 사람을 같은 회차에서 본인이 고른 일정의 다른 확정 테이블로 옮기고(나이·제외 조건은 그대로 지킴, reflow-rules.ts planReflow),
  * 옮길 곳이 없는 사람에게는 매칭 실패와 같은 선택지(다른 일정·보관·환불)를 준다.
+ * 자동으로 옮겨진 사람도 그 테이블이 싫으면 '다른 방법 고르기'(declineReallocation)로 매칭 실패 화면에 갈 수 있다.
  */
 export async function reflowTable(tableId: string, actor: string) {
   const settings = await loadSettings();
   const members = await tableMembers(tableId);
   if (members.length >= settings.minSize) return { moved: 0, offered: 0 };
 
-  const { data: tb } = await db().from("dining_tables").select("id,round_id,slot_id").eq("id", tableId).single();
+  const { data: tbRaw } = await db().from("dining_tables").select("id,round_id,slot_id,slots(starts_at,region)").eq("id", tableId).single();
+  const tb = tbRaw as unknown as { id: string; round_id: string; slot_id: string; slots: { starts_at: string; region: string } } | null;
   const t = await now();
   const { data: others } = await db()
     .from("dining_tables")
@@ -98,37 +120,47 @@ export async function reflowTable(tableId: string, actor: string) {
     .eq("round_id", tb!.round_id)
     .neq("id", tableId)
     .in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY"]);
-  const targets = ((others ?? []) as unknown as { id: string; slot_id: string; slots: { starts_at: string; region: string } }[]).filter(
-    (o) => new Date(o.slots.starts_at).getTime() - t.getTime() > 24 * 3600_000,
-  );
-  const rel = await loadRelations(members.map((m) => m.user_id));
+  const targetRows = (others ?? []) as unknown as { id: string; slot_id: string; slots: { starts_at: string; region: string } }[];
   const groups = new Map<string, Member[]>();
-  for (const o of targets) groups.set(o.id, await tableMembers(o.id));
+  for (const o of targetRows) groups.set(o.id, await tableMembers(o.id));
+  const rel = await loadRelations([...members, ...[...groups.values()].flat()].map((m) => m.user_id));
+  const asRule = (m: Member): ReflowMember => ({
+    id: m.id, userId: m.user_id, birthYear: m.birth_year, slotIds: m.slotIds,
+    gender: m.profile?.gender, mbti: m.profile?.mbti, interests: m.profile?.interests, myTraits: m.profile?.my_traits, wantedTraits: m.profile?.wanted_traits,
+  });
+  const plan = planReflow(
+    members.map(asRule),
+    targetRows.map((o) => ({ id: o.id, slotId: o.slot_id, startsAt: o.slots.starts_at, region: o.slots.region, members: groups.get(o.id)!.map(asRule) })),
+    rel,
+    settings,
+    { region: tb!.slots.region, startsAt: tb!.slots.starts_at },
+    t,
+  );
+  const tpl = await loadTemplates();
 
   let moved = 0;
   let offered = 0;
-  // 같은 일정 테이블을 먼저 본다 (7.4 재배치 순서)
-  targets.sort((x, y) => Number(y.slot_id === tb!.slot_id) - Number(x.slot_id === tb!.slot_id));
-  for (const m of members) {
-    const target = targets.find((o) => {
-      const g = groups.get(o.id)!;
-      return m.slotIds.includes(o.slot_id) && g.length < settings.maxSize && canJoin(g.map(toCand), toCand(m), rel, settings);
-    });
+  for (const step of plan) {
+    const m = members.find((x) => x.id === step.appId)!;
+    const target = targetRows.find((o) => o.id === step.targetId);
     if (target) {
-      await db().from("applications").update({ table_id: target.id, match_reason: `함께하기로 한 분이 취소해 ${fmtDate(target.slots.starts_at)} ${target.slots.region} 테이블로 옮겼어요.` }).eq("id", m.id);
+      await db().from("applications").update({ table_id: target.id, match_reason: `함께하기로 한 분이 빠져 ${fmtSlot(target.slots.starts_at)} ${target.slots.region} 테이블로 옮겼어요.` }).eq("id", m.id);
       const { data: cur } = await db().from("applications").select("realloc_count").eq("id", m.id).single();
       await db().from("applications").update({ realloc_count: (cur?.realloc_count ?? 0) + 1 }).eq("id", m.id);
       await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "CONFIRMED", actor, reason: `인원 부족으로 다른 테이블 재배치 (${tableId.slice(0, 8)} → ${target.id.slice(0, 8)})` });
-      groups.get(target.id)!.push(m);
+      // 예전 테이블 안내(하루 전 리마인드 등)는 보내는 순간 새 테이블로 다시 쓰이고, 남은 예전 링크 알림은 지운다
+      await db().from("notifications").delete().eq("user_id", m.user_id).eq("status", "pending").eq("link", `/tables/${tableId}`).not("dedupe_key", "like", "remind:%");
       const room = await ensureRoom(target.id);
       await postSystem(room, `새로운 분이 합류했어요. ${m.name}님 반가워요!`);
-      await notify({ userId: m.user_id, template: "reallocated", title: "테이블이 바뀌었어요", body: `함께하기로 한 분이 취소해 ${fmtDate(target.slots.starts_at)} ${fmtTime(target.slots.starts_at)} ${target.slots.region} 테이블로 옮겼어요. 새 단체방을 확인해 주세요.`, link: `/tables/${target.id}`, dedupeKey: `reflow:${m.id}:${target.id}` });
+      const msg = render("reallocated", { ...slotVars(target.slots.starts_at), region: target.slots.region }, tpl);
+      // 링크는 신청 내역: 새 테이블로 가는 버튼과 '다른 방법 고르기'가 함께 있다
+      await notify({ userId: m.user_id, template: "reallocated", title: msg.title, body: msg.body, link: `/applications/${m.id}`, dedupeKey: `reflow:${m.id}:${target.id}` });
       moved++;
     } else {
-      await db().from("applications").update({ table_id: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "함께하기로 한 분이 취소해 테이블 인원이 모자라요. 조건에 맞는 다른 테이블도 없었어요." }).eq("id", m.id).eq("payment_status", "PAID");
+      await db().from("applications").update({ table_id: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "함께하기로 한 분이 빠져 테이블 인원이 모자라요. 고르신 일정 안에서 조건에 맞는 다른 테이블도 없었어요." }).eq("id", m.id).eq("payment_status", "PAID");
       await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: "확정 후 취소로 인원 부족, 옮길 테이블 없음" });
       await extendMembershipFor(m.id, actor);
-      await notify({ userId: m.user_id, template: "alternative", title: "테이블 인원이 모자라졌어요", body: "함께하기로 한 분이 취소해 모임을 열 수 없게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", link: `/applications/${m.id}/resolve`, dedupeKey: `reflow-alt:${m.id}` });
+      await notify({ userId: m.user_id, template: "alternative", title: "테이블 인원이 모자라졌어요", body: "함께하기로 한 분이 빠져 모임을 열 수 없게 됐어요. 빈자리에 앉거나, 다른 일정으로 옮기거나, 이용권 보관·환불 중에 골라 주세요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", link: `/applications/${m.id}/resolve`, dedupeKey: `reflow-alt:${m.id}` });
       offered++;
     }
   }
@@ -136,6 +168,47 @@ export async function reflowTable(tableId: string, actor: string) {
   await db().from("seat_offers").update({ status: "void" }).eq("table_id", tableId).eq("status", "pending");
   await logStatus({ entityType: "dining_table", entityId: tableId, field: "status", to: "DISSOLVED", actor, reason: `인원 부족 해제: ${moved}명 재배치, ${offered}명 대안 안내` });
   return { moved, offered };
+}
+
+/** 자동으로 옮겨진 테이블인지 (재배치 알림이 이 테이블로 나갔는지) */
+export async function wasReallocatedTo(appId: string, tableId: string): Promise<boolean> {
+  const { data } = await db().from("notifications").select("id").eq("dedupe_key", `reflow:${appId}:${tableId}`).maybeSingle();
+  return Boolean(data);
+}
+
+/**
+ * 시스템이 옮겨 준 테이블이 마음에 들지 않을 때: 그 테이블에서 빠지고 매칭 실패와 같은 선택지(빈자리·다른 일정·기다리기·보관·환불)로 간다.
+ * 본인이 고른 게 아니라서 환불 마감이 지났어도 고를 수 있다. 모임이 시작되면 안 된다.
+ * 성공하면 resolve 화면으로 보내면 된다(/applications/[id]/resolve).
+ */
+export async function declineReallocation(appId: string, userId: string): Promise<{ ok: boolean; message: string }> {
+  const { data } = await db().from("applications").select("id,user_id,table_id,match_status,attendance_status,payment_status").eq("id", appId).maybeSingle();
+  if (!data || data.user_id !== userId) return { ok: false, message: "찾을 수 없는 신청이에요" };
+  if (data.match_status !== "CONFIRMED" || data.attendance_status !== "SCHEDULED" || !data.table_id) return { ok: false, message: "이미 처리된 신청이에요" };
+  const tableId: string = data.table_id;
+  if (!(await wasReallocatedTo(appId, tableId))) return { ok: false, message: "직접 고른 테이블은 신청 취소로 처리해 주세요" };
+  const tb = await tableInfo(tableId);
+  const t = await now();
+  if (!tb || t >= new Date(tb.slots.starts_at)) return { ok: false, message: "모임이 이미 시작됐어요" };
+
+  const { data: up } = await db()
+    .from("applications")
+    .update({ table_id: null, attendance_status: null, match_status: "ALTERNATIVE_OFFERED", payment_status: data.payment_status === "PAID" ? "REFUND_AVAILABLE" : data.payment_status, match_reason: "옮겨 드린 테이블 대신 다른 방법을 고르기로 했어요." })
+    .eq("id", appId)
+    .eq("match_status", "CONFIRMED")
+    .eq("attendance_status", "SCHEDULED")
+    .select("id");
+  if (!up?.length) return { ok: false, message: "이미 처리된 신청이에요" };
+  const actor = `user:${userId}`;
+  await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: `자동 재배치된 테이블(${tableId.slice(0, 8)}) 대신 다른 방법 고르기` });
+  if (data.payment_status === "PAID") await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "PAID", to: "REFUND_AVAILABLE", actor, reason: "자동 재배치 거절로 환불 선택 가능" });
+  await extendMembershipFor(appId, "system");
+  await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").like("dedupe_key", `remind:${appId}%`);
+  const room = await ensureRoom(tableId);
+  await postSystem(room, "한 분이 사정이 생겨 함께하지 못하게 됐어요.");
+  // 빠진 자리는 대기자에게 먼저 묻고, 인원이 모자라지면 정리한다
+  await fillOrReflow(tableId, actor);
+  return { ok: true, message: "다른 방법을 골라 주세요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요." };
 }
 
 // ─────────────────────────────────────────────
@@ -210,13 +283,13 @@ export async function offerSeat(tableId: string, actor: string): Promise<boolean
       .select("id")
       .single();
     if (error || !offer) continue; // 동시에 다른 제안이 들어갔으면 건너뛴다
-    await logStatus({ entityType: "application", entityId: w.id, field: "seat_offer", from: "ALTERNATIVE_OFFERED", to: "OFFERED", actor, reason: `빈자리 제안 (테이블 ${tableId.slice(0, 8)}, ${fmtDate(tb.slots.starts_at)} ${tb.slots.region})` });
-    await logStatus({ entityType: "dining_table", entityId: tableId, field: "seat_offer", to: "OFFERED", actor, reason: `대기자 ${w.name}님에게 빈자리 제안, 기한 ${fmtDate(new Date(expires).toISOString())} ${fmtTime(new Date(expires).toISOString())}` });
+    await logStatus({ entityType: "application", entityId: w.id, field: "seat_offer", from: "ALTERNATIVE_OFFERED", to: "OFFERED", actor, reason: `빈자리 제안 (테이블 ${tableId.slice(0, 8)}, ${fmtSlot(tb.slots.starts_at)} ${tb.slots.region})` });
+    await logStatus({ entityType: "dining_table", entityId: tableId, field: "seat_offer", to: "OFFERED", actor, reason: `대기자 ${w.name}님에게 빈자리 제안, 기한 ${fmtSlot(new Date(expires).toISOString())}` });
     await notify({
       userId: w.user_id,
       template: "seat_offer",
       title: "기다리던 자리가 났어요",
-      body: `${fmtDate(tb.slots.starts_at)} ${fmtTime(tb.slots.starts_at)} ${tb.slots.region} 테이블에 한 자리가 비었어요. ${fmtTime(new Date(expires).toISOString())}까지 참가 여부를 알려 주세요.`,
+      body: `${fmtSlot(tb.slots.starts_at)} ${tb.slots.region} 테이블에 한 자리가 비었어요. ${sameDay(new Date(expires).toISOString(), t) ? `오늘 ${fmtClock(new Date(expires).toISOString())}` : fmtSlot(new Date(expires).toISOString())}까지 참가 여부를 알려 주세요.`,
       link: `/offers/${offer.id}`,
       dedupeKey: `seat_offer:${offer.id}`,
     });
@@ -228,7 +301,17 @@ export async function offerSeat(tableId: string, actor: string): Promise<boolean
 /** 빈자리를 대기자로 채우고, 채울 사람이 없을 때만 인원 부족 정리를 한다 */
 export async function fillOrReflow(tableId: string, actor: string) {
   const offered = await offerSeat(tableId, actor);
-  if (!offered) await reflowTable(tableId, actor);
+  if (!offered) {
+    await reflowTable(tableId, actor);
+    return;
+  }
+  // 대기자 답을 기다리는 동안 인원이 모자라면 남은 분들께 '다른 자리를 찾는 중'이라고 알린다 (14장 자동 재배치 중)
+  const [settings, group, tb] = await Promise.all([loadSettings(), tableMembers(tableId), tableInfo(tableId)]);
+  if (!tb || group.length >= settings.minSize) return;
+  const msg = render("reallocating", { ...slotVars(tb.slots.starts_at), region: tb.slots.region }, await loadTemplates());
+  for (const m of group) {
+    await notify({ userId: m.user_id, template: "reallocating", title: msg.title, body: msg.body, link: `/applications/${m.id}`, dedupeKey: `reallocating:${tableId}:${m.id}` });
+  }
 }
 
 type OfferRow = { id: string; table_id: string; application_id: string; user_id: string; status: string; expires_at: string };
@@ -279,7 +362,7 @@ export async function respondOffer(offerId: string, userId: string, accept: bool
       attendance_status: "SCHEDULED",
       payment_status: app!.payment_status === "REFUND_AVAILABLE" ? "PAID" : app!.payment_status,
       resolution: null,
-      match_reason: `취소석에 합류했어요. ${fmtDate(tb!.slots.starts_at)} ${tb!.slots.region} 테이블이에요.`,
+      match_reason: `취소석에 합류했어요. ${fmtSlot(tb!.slots.starts_at)} ${tb!.slots.region} 테이블이에요.`,
     })
     .eq("id", o.application_id)
     .eq("match_status", "ALTERNATIVE_OFFERED");
@@ -297,8 +380,7 @@ export async function respondOffer(offerId: string, userId: string, accept: bool
   await notify({
     userId,
     template: "confirmed",
-    title: "테이블에 합류했어요",
-    body: `${fmtDate(tb!.slots.starts_at)} ${fmtTime(tb!.slots.starts_at)} ${tb!.slots.region}${tb!.venues ? ` ${tb!.venues.name}` : ""}에서 만나요. 단체방에서 인사를 나눠 보세요.`,
+    ...render("joined", { ...slotVars(tb!.slots.starts_at), region: tb!.slots.region, venue: tb!.venues?.name ?? "" }, await loadTemplates()),
     link: `/tables/${o.table_id}`,
     dedupeKey: `seat_accept:${o.id}`,
   });

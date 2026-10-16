@@ -5,14 +5,14 @@ import { redirect } from "next/navigation";
 import { ConfirmSheet, ErrorText, List, Pill, Row, Screen, SectionTitle } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { fmtDateTime, fmtSlot } from "@/lib/format";
+import { fmtSlot } from "@/lib/format";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
-import { cancelRule } from "@/lib/attendance";
+import { cancelRule, wasReallocatedTo } from "@/lib/attendance";
 import { REFUND_POLICY } from "@/lib/constants";
 import { Toast } from "@/components/ui";
 import { OfferBanner } from "@/components/offer-banner";
-import { cancelApplication, cancelAttendanceAction } from "./actions";
+import { cancelApplication, cancelAttendanceAction, declineReallocationAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -48,15 +48,25 @@ export default async function ApplicationDetail({ params, searchParams }: { para
 
   const matchDone = !["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status) && paid;
   const steps = [
-    { label: "신청", done: true, when: app.submitted_at ? fmtSlot(app.submitted_at).replace("저녁", "오후") : "", note: "신청이 완료됐어요." },
-    { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at).replace("저녁", "오후") : "", note: paid ? "결제가 완료됐어요." : "결제를 마쳐야 매칭에 들어가요." },
+    { label: "신청", done: true, when: app.submitted_at ? fmtSlot(app.submitted_at) : "", note: "신청이 완료됐어요." },
+    { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : "결제를 마쳐야 매칭에 들어가요." },
     { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: "신청 인원을 모아 테이블을 꾸려요." },
-    { label: "테이블 확정 · 안내", done: matched, when: "", note: "매칭이 완료되면 확정된 식당과 동행한 분들을 알려드려요." },
-    { label: "모임", done: app.attendance_status === "ATTENDED", when: "", note: "선정된 식당에서 즐거운 저녁 식사를 함께해요." },
+    { label: "테이블 확정 · 안내", done: matched, when: "", note: "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
+    { label: "모임", done: app.attendance_status === "ATTENDED", when: "", note: "정해진 식당에서 저녁을 함께 먹어요." },
   ];
   const current = steps.findIndex((x) => !x.done);
-  const ctaHref = app.payment_status === "PENDING" || app.payment_status === "FAILED" ? `/pay/${app.id}` : matched && app.table_id ? `/tables/${app.table_id}` : app.match_status === "ALTERNATIVE_OFFERED" ? `/applications/${app.id}/resolve` : "#progress";
-  const ctaLabel = app.payment_status === "PENDING" || app.payment_status === "FAILED" ? "결제 이어서 하기" : matched && app.table_id ? "테이블과 단체방 보기" : app.match_status === "ALTERNATIVE_OFFERED" ? (app.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기") : "진행 상황 보기";
+  // 인원이 줄어 자동으로 다른 테이블로 옮겨진 사람은 거절하고 다른 방법을 고를 수 있다 (PRD: 이동·환불은 참가자 선택)
+  const moved = matched && app.attendance_status === "SCHEDULED" && app.table_id ? await wasReallocatedTo(app.id, app.table_id) : false;
+  // 매칭을 기다리는 동안에는 참가자가 할 일이 없으므로 주 버튼을 두지 않는다 (같은 화면으로 내려가는 버튼은 할 일이 아님)
+  const unpaid = app.payment_status === "PENDING" || app.payment_status === "FAILED";
+  const cta: [string, string] | null = unpaid
+    ? ["결제 이어서 하기", `/pay/${app.id}`]
+    : matched && app.table_id
+      ? ["테이블과 단체방 보기", `/tables/${app.table_id}`]
+      : app.match_status === "ALTERNATIVE_OFFERED"
+        ? [app.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${app.id}/resolve`]
+        : null;
+  const idle = !cta && paid && ["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status);
 
   return (
     <Screen title="내 신청" back="/rounds">
@@ -74,10 +84,13 @@ export default async function ApplicationDetail({ params, searchParams }: { para
               <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-muted">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>
             </>
           )}
-          {app.application_status !== "CANCELED" && (
-            <Link href={ctaHref} className="mt-6 flex h-[56px] items-center justify-center gap-1 rounded-[14px] bg-accent text-[17px] font-extrabold text-white active:scale-[.985]">
-              {ctaLabel} <ChevronRight size={20} />
+          {app.application_status !== "CANCELED" && cta && (
+            <Link href={cta[1]} className="mt-6 flex h-[56px] items-center justify-center gap-1 rounded-[14px] bg-accent text-[17px] font-extrabold text-white active:scale-[.985]">
+              {cta[0]} <ChevronRight size={20} />
             </Link>
+          )}
+          {app.application_status !== "CANCELED" && idle && (
+            <p className="mt-5 rounded-[14px] bg-card px-4 py-3 text-[14px] leading-relaxed text-ink2">지금은 하실 일이 없어요. 결과가 나오면 알림과 홈 화면으로 바로 알려 드릴게요.</p>
           )}
         </div>
       </section>
@@ -98,7 +111,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
                   {i < steps.length - 1 && <span className={`my-1 w-0.5 flex-1 ${st.done ? "bg-accent" : "border-l-2 border-dashed border-line"}`} />}
                 </div>
                 <div className="pb-6">
-                  <p className={`text-[16px] ${st.done || now_ ? "font-bold text-ink" : "font-semibold text-ink/80"}`}>{st.label}</p>
+                  <p className={`text-[16px] ${st.done || now_ ? "font-bold text-ink" : "font-semibold text-ink2"}`}>{st.label}</p>
                   {st.when && <p className="mt-0.5 text-[13px] text-muted">{st.when}</p>}
                   <p className="mt-0.5 text-[13px] text-muted">{st.note}</p>
                 </div>
@@ -108,6 +121,20 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         </ol>
       </section>
 
+      {moved && (
+        <div className="mt-3 rounded-[20px] bg-field px-4 py-3.5 text-[14px] leading-relaxed text-ink2">
+          <p>처음 테이블 인원이 줄어 같은 조건의 다른 테이블로 옮겨 드렸어요. 이 테이블이 마음에 들지 않으면 다른 방법을 고를 수 있어요.</p>
+          <ConfirmSheet
+            trigger={<button className="mt-1 inline-flex h-11 items-center text-[14px] font-bold text-accent">다른 방법 고르기</button>}
+            title="옮긴 테이블에서 빠질까요?"
+            body={<>이 테이블에서 빠지고 다른 일정으로 옮기기·자리 기다리기·이용권 보관·환불 중에 고를 수 있어요. 결제한 금액은 그대로예요.</>}
+            confirmLabel="빠지고 다른 방법 고르기"
+            action={declineReallocationAction}
+            hidden={{ app_id: app.id }}
+          />
+        </div>
+      )}
+
       {matched && app.attendance_status === "SCHEDULED" && app.dining_tables && (() => {
         const start = app.dining_tables.slots.starts_at;
         const rule = cancelRule(start, t);
@@ -115,12 +142,12 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         return (
           <>
             <p className="mt-3 rounded-[20px] bg-accent-soft px-4 py-3.5 text-[14px] text-accent">
-              다음 안내: {fmtDateTime(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
+              다음 안내: {fmtSlot(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
             </p>
             {rule.kind !== "blocked" && (
               <div className="mt-6 text-center">
                 <ConfirmSheet
-                  trigger={<button className="text-[14px] font-medium text-muted underline underline-offset-4">참석 취소하기</button>}
+                  trigger={<button className="inline-flex h-11 items-center px-4 text-[14px] font-medium text-muted underline underline-offset-4">참석 취소하기</button>}
                   title="참석을 취소할까요?"
                   body={<>{rule.message}. 단체방의 다른 분들께는 이름 없이 알려드려요.</>}
                   confirmLabel={rule.kind === "early" ? "취소하고 환불받기" : "환불 없이 취소하기"}
@@ -136,7 +163,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       <SectionTitle>고른 일정</SectionTitle>
       <List>
         {slots.map((s) => (
-          <Row key={s.id} right={<ChevronRight size={19} className="text-muted" />}>
+          <Row key={s.id}>
             <span className="flex items-center gap-4">
               <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><CalendarDays size={20} /></span>
               <span>
@@ -151,9 +178,11 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
         <div className="mt-8 text-center">
           <ConfirmSheet
-            trigger={<button className="inline-flex h-11 items-center text-[15px] font-semibold text-danger underline underline-offset-4">신청 취소하기</button>}
+            trigger={<button className="inline-flex h-11 items-center px-4 text-[15px] font-semibold text-danger underline underline-offset-4">신청 취소하기</button>}
             title="신청을 취소할까요?"
-            body={<>매칭 시각({fmtDateTime(app.rounds.match_at)}) 전이라 결제한 금액은 전액 돌려드려요. 이용권으로 신청했다면 1회를 다시 쓸 수 있고, 멤버십은 기간 안에 다른 일정을 바로 신청할 수 있어요.</>}
+            body={paid
+              ? <>매칭 시각({fmtSlot(app.rounds.match_at)}) 전이라 결제한 금액은 전액 돌려드려요. 이용권으로 신청했다면 1회를 다시 쓸 수 있고, 멤버십은 기간 안에 다른 일정을 바로 신청할 수 있어요.</>
+              : <>아직 결제 전이라 빠져나간 돈은 없어요. 취소하면 이 신청만 닫히고, 마감 전이면 같은 일정을 다시 신청할 수 있어요.</>}
             confirmLabel="신청 취소하기"
             action={cancelApplication}
             hidden={{ app_id: app.id }}
@@ -170,7 +199,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       </ul>
 
       <p className="mt-8 text-center text-[13px] text-muted">
-        <Link href="/rounds" className="inline-flex h-11 items-center underline underline-offset-4">다른 일정 보기</Link>
+        <Link href="/rounds" className="inline-flex h-11 items-center px-4 underline underline-offset-4">다른 일정 보기</Link>
       </p>
     </Screen>
   );

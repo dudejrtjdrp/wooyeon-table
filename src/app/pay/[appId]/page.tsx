@@ -3,6 +3,7 @@ import { ChevronDown, Clock3, Ticket } from "lucide-react";
 import { ErrorText, PageTitle, Screen } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { PASSES, REFUND_POLICY, type PassType, won } from "@/lib/constants";
+import { fmtSlot } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { tossClientKey, tossLive } from "@/lib/toss";
 import { failPayment, pay } from "./actions";
@@ -14,10 +15,10 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
   const { e } = await searchParams;
   const { data } = await db()
     .from("applications")
-    .select("id,user_id,payment_id,payment_status,rounds(title),payments(amount,pass_type,status)")
+    .select("id,user_id,payment_id,payment_status,rounds(title,match_at),payments(amount,pass_type,status)")
     .eq("id", appId)
     .maybeSingle();
-  const app = data as unknown as { id: string; user_id: string; payment_id: string; payment_status: string; rounds: { title: string }; payments: { amount: number; pass_type: PassType; status: string } } | null;
+  const app = data as unknown as { id: string; user_id: string; payment_id: string; payment_status: string; rounds: { title: string; match_at: string }; payments: { amount: number; pass_type: PassType; status: string } } | null;
   if (!app || app.user_id !== me.id) redirect("/");
   if (app.payments.status === "PAID") redirect(`/applications/${appId}`);
   const passDef = PASSES[app.payments.pass_type] ?? PASSES.single;
@@ -33,7 +34,7 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
             <p className="text-[19px] font-bold tracking-[-0.02em] text-ink">{app.rounds.title}</p>
             <span className="mt-2 inline-flex rounded-full bg-accent-soft px-3 py-1 text-[13px] font-semibold text-accent">{passDef.label}</span>
             <p className="mt-5 flex items-center gap-2 text-[14px] text-ink2"><Ticket size={18} className="text-muted" />이용권 · {passDef.label}</p>
-            <p className="mt-2.5 flex items-start gap-2 text-[13px] leading-snug text-ink2"><Clock3 size={18} className="shrink-0 text-muted" />매칭 · 결제 후 마감 시각에 진행해요</p>
+            <p className="mt-2.5 flex items-start gap-2 text-[13px] leading-snug text-ink2"><Clock3 size={18} className="shrink-0 text-muted" />{fmtSlot(app.rounds.match_at)}에 자동으로 테이블을 꾸려 알려 드려요</p>
           </div>
         </section>
 

@@ -67,11 +67,11 @@ function LineField({ label, children, active }: { label: string; children: React
   return (
     <label className="block">
       <span className={`text-[13px] ${active ? "font-bold text-accent" : "text-muted"}`}>{label}</span>
-      <span className={`flex items-center pb-2.5 pt-2 ${active ? "border-b-2 border-accent" : "border-b border-line"}`}>{children}</span>
+      <span className={`flex items-center pb-1 pt-1 ${active ? "border-b-2 border-accent" : "border-b border-line"}`}>{children}</span>
     </label>
   );
 }
-const lineInput = "min-w-0 flex-1 border-0 bg-transparent p-0 text-[20px] font-bold text-ink outline-none placeholder:font-medium placeholder:text-[#b5c0ba]";
+const lineInput = "h-11 min-w-0 flex-1 border-0 bg-transparent p-0 text-[20px] font-bold text-ink outline-none placeholder:font-medium placeholder:text-[#b5c0ba]";
 
 function DocSheet({ doc, onClose }: { doc: "terms" | "privacy" | null; onClose: () => void }) {
   if (!doc) return null;
@@ -227,7 +227,7 @@ export function OnboardingWizard({
     if (!e) go(step + 1);
   };
 
-  const verifyHref = `/verify/phone?next=${encodeURIComponent(`/onboarding?next=${next}`)}`;
+  const verifyHref = `/verify/phone?next=${encodeURIComponent(`/onboarding?next=${encodeURIComponent(next)}`)}`;
   const hiddenGender = verified?.gender === "M" ? "남성" : verified?.gender === "F" ? "여성" : v.gender;
   const food = v.avoid.includes("없어요")
     ? v.allergy ? `알레르기: ${v.allergy}` : "없어요"
@@ -374,7 +374,7 @@ export function OnboardingWizard({
                   {phoneVerified ? (
                     <div className="flex items-center justify-between border-b border-line pb-2.5 pt-2">
                       <span className="text-[20px] font-bold text-[#4a5a51]">{(phone ?? "").replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3")}</span>
-                      <span className="flex items-center gap-3 text-[13px]"><span className="font-bold text-accent">인증했어요</span><Link href={verifyHref} className="flex h-11 items-center text-faint underline underline-offset-2">바꾸기</Link></span>
+                      <span className="flex items-center gap-3 text-[13px]"><span className="font-bold text-accent">인증했어요</span><Link href={verifyHref} className="-mr-2 flex h-11 items-center px-2 text-faint underline underline-offset-2">바꾸기</Link></span>
                     </div>
                   ) : (
                     <Link href={verifyHref} className="mt-2 flex h-[52px] items-center justify-center rounded-[14px] bg-accent-soft text-[16px] font-extrabold text-accent-text">휴대폰 번호 인증하기</Link>

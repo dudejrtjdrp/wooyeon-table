@@ -23,9 +23,10 @@ function TypeChecks({ value = [] }: { value?: string[] }) {
   );
 }
 
-export default async function Contents({ searchParams }: { searchParams: Promise<{ k?: string; m?: string; e?: string }> }) {
-  await requireAdmin();
-  const { k, m, e } = await searchParams;
+export default async function Contents({ searchParams }: { searchParams: Promise<{ k?: string }> }) {
+  const me = await requireAdmin();
+  const ro = me.level !== "full";
+  const { k } = await searchParams;
   const kind = k === "icebreaker" ? "icebreaker" : "topic";
   const [{ data }, rules, { data: posted }] = await Promise.all([
     db().from("conversation_contents").select("id,kind,body,tags,table_types,priority,active,updated_at").order("active", { ascending: false }).order("priority", { ascending: false }).order("created_at"),
@@ -42,8 +43,6 @@ export default async function Contents({ searchParams }: { searchParams: Promise
         title="대화 콘텐츠"
         desc="모임 시작 시각에 단체방에 자동으로 올라가는 대화 주제와 아이스브레이킹이에요. 테이블의 공통 관심사와 유형에 맞는 것부터 골라요."
       />
-      {m && <p className="mt-4 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-medium text-leaf">{m}</p>}
-      {e && <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-[14px] font-medium text-danger">{e}</p>}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
@@ -56,6 +55,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
             <span className="ml-auto text-[13px] text-muted">지금까지 자동 게시 {posted?.length ?? 0}회</span>
           </div>
 
+          {ro ? <p className="rounded-xl bg-field px-4 py-3 text-[13px] text-muted">조회 전용 계정이라 콘텐츠와 노출 규칙을 볼 수만 있어요.</p> : (
           <Panel title={kind === "topic" ? "새 대화 주제" : "새 아이스브레이킹"}>
             <form action={saveContent} className="space-y-3">
               <input type="hidden" name="kind" value={kind} />
@@ -76,6 +76,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
             </form>
             <datalist id="interest-list">{INTERESTS.map((i) => <option key={i} value={i} />)}</datalist>
           </Panel>
+          )}
 
           <ul className="space-y-2">
             {list.map((c) => (
@@ -91,9 +92,9 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                         {!c.active && <Badge v={["노출 중지", "danger"]} />}
                       </span>
                     </span>
-                    <span className="shrink-0 text-[12px] text-muted">고치기</span>
+                    {!ro && <span className="shrink-0 text-[12px] text-muted">고치기</span>}
                   </summary>
-                  <form action={saveContent} className="mt-3 space-y-3 border-t border-line pt-3">
+                  {!ro && <form action={saveContent} className="mt-3 space-y-3 border-t border-line pt-3">
                     <input type="hidden" name="id" value={c.id} />
                     <input type="hidden" name="kind" value={c.kind} />
                     <textarea name="body" defaultValue={c.body} rows={2} maxLength={200} className={`${ctl} h-auto w-full py-2.5`} />
@@ -105,13 +106,13 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                     <div className="flex gap-2">
                       <button className={btnInk}>저장</button>
                     </div>
-                  </form>
+                  </form>}
                 </details>
-                <form action={toggleContent} className="mt-2">
+                {!ro && <form action={toggleContent} className="mt-2">
                   <input type="hidden" name="id" value={c.id} />
                   <input type="hidden" name="active" value={String(!c.active)} />
                   <button className="text-[12px] font-semibold text-muted hover:text-ink">{c.active ? "노출 멈추기" : "다시 노출하기"}</button>
-                </form>
+                </form>}
               </li>
             ))}
             {!list.length && <li className="shadow-card rounded-[20px] bg-card p-10 text-center text-muted">등록된 콘텐츠가 없어요.</li>}
@@ -125,7 +126,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
               <label className="flex items-center justify-between gap-3">아이스브레이킹 개수 <input name="icebreakerCount" type="number" min={1} max={3} defaultValue={rules.icebreakerCount} className={`${ctl} w-20`} /></label>
               <label className="flex items-center justify-between gap-3">공통 관심사 가중치 <input name="interestWeight" type="number" min={0} max={30} defaultValue={rules.interestWeight} className={`${ctl} w-20`} /></label>
               <label className="flex items-center justify-between gap-3">테이블 유형 가중치 <input name="typeWeight" type="number" min={0} max={30} defaultValue={rules.typeWeight} className={`${ctl} w-20`} /></label>
-              <button className={btnLight}>규칙 저장</button>
+              {ro ? <p className="text-[12px] text-muted">조회 전용 계정이라 규칙을 바꿀 수 없어요.</p> : <button className={btnLight}>규칙 저장</button>}
             </form>
           </Panel>
           <Panel title="이렇게 골라요">

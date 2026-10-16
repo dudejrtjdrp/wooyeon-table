@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { Badge, PageHeader, Panel } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
-import { ATTEND, label } from "@/lib/labels";
+import { ATTEND, actorLabel, ageBand, eventText, label } from "@/lib/labels";
+import { now } from "@/lib/clock";
+import { DEFAULT_SETTINGS } from "@/lib/matching/types";
 import { ACTIVE, siblingTables } from "@/lib/admin-ops";
 import { seatCandidates } from "@/lib/attendance";
 import { TYPE_LABEL } from "@/lib/contents";
@@ -23,10 +25,10 @@ const OFFER: Record<string, [string, "muted" | "accent" | "leaf" | "danger"]> = 
 
 export const dynamic = "force-dynamic";
 
-export default async function TableDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ m?: string; e?: string }> }) {
-  await requireAdmin();
+export default async function TableDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ex?: string }> }) {
+  const me = await requireAdmin();
   const { id } = await params;
-  const { m: okMsg, e: errMsg } = await searchParams;
+  const { ex } = await searchParams;
   const { data } = await db()
     .from("dining_tables")
     .select("id,status,slot_id,score,score_detail,explanation,reservation_name,confirmed_at,slots(starts_at,ends_at,region),venues(name,address,price_range,rating,booking_channel),rounds(title)")
@@ -41,8 +43,12 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
   const [{ data: apps }, { data: room }, { data: events }] = await Promise.all([
     db().from("applications").select("id,user_id,attendance_status,realloc_count,users(name,profiles(birth_year,gender,mbti,job))").eq("table_id", id),
     db().from("chat_rooms").select("id,created_at").eq("table_id", id).maybeSingle(),
-    db().from("status_events").select("id,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "dining_table").eq("entity_id", id).order("created_at"),
+    db().from("status_events").select("id,entity_type,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "dining_table").eq("entity_id", id).order("created_at"),
   ]);
+  const adminIds = [...new Set((events ?? []).filter((e) => e.actor.startsWith("admin:")).map((e) => e.actor.slice(6)))];
+  const { data: admins } = adminIds.length ? await db().from("users").select("id,name").in("id", adminIds) : { data: [] };
+  const adminName = new Map((admins ?? []).map((a) => [a.id, a.name]));
+  const { data: linkedEx } = ex ? await db().from("exceptions").select("id,kind,reason,status").eq("id", ex).maybeSingle() : { data: null };
   const members = (apps ?? []) as unknown as { id: string; user_id: string; attendance_status: string | null; realloc_count: number; users: { name: string; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null } }[];
   const { data: msgs } = room ? await db().from("chat_messages").select("id,kind,body,created_at,meta").eq("room_id", room.id).order("created_at") : { data: [] };
   const { data: notes } = members.length
@@ -56,6 +62,10 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
     pickContents(id),
     active ? seatCandidates(id) : Promise.resolve([]),
   ]);
+  // 생년 전체 대신 연령대와 테이블 나이 차만 보여 준다(8살 규칙 확인용)
+  const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "numeric" }).format(await now()));
+  const years = members.map((m) => m.users.profiles?.birth_year).filter((y): y is number => !!y);
+  const ageGap = years.length ? Math.max(...years) - Math.min(...years) : null;
   const seated = members.filter((m) => m.attendance_status === "SCHEDULED" || m.attendance_status === "ATTENDED");
 
   return (
@@ -64,16 +74,19 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
       <div className="mt-2">
         <PageHeader title={`${fmtDate(t.slots.starts_at)} ${fmtTime(t.slots.starts_at)} ${t.slots.region}`} desc={`${t.rounds.title}, 확정 ${t.confirmed_at ? fmtDateTime(t.confirmed_at) : "-"}, 점수 ${Math.round(Number(t.score))}${typeof t.score_detail?.gate === "number" ? ` (확정 판정 ${Math.round(t.score_detail.gate)}점, 성비 감점 제외)` : ""}`} />
       </div>
-      {okMsg && <p className="mt-4 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-medium text-leaf">{okMsg}</p>}
-      {errMsg && <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-[14px] font-medium text-danger">{errMsg}</p>}
+      {linkedEx?.status === "open" && (
+        <p className="mt-4 rounded-xl bg-warn-soft px-4 py-3 text-[14px] text-warn">
+          <b>예외 처리 중:</b> {linkedEx.reason} · 오른쪽 &lsquo;운영자 긴급 수정&rsquo;으로 고치면 이 예외도 함께 닫혀요. <Link href="/admin/exceptions" className="font-semibold underline underline-offset-2">예외 처리함으로</Link>
+        </p>
+      )}
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
-          <Panel title={`참가자 ${members.length}명`}>
+          <Panel title={`참가자 ${members.length}명`} action={ageGap !== null ? <span className={`text-[13px] font-semibold ${ageGap > DEFAULT_SETTINGS.maxAgeGap ? "text-danger" : "text-muted"}`}>나이 차 {ageGap}살 · {DEFAULT_SETTINGS.maxAgeGap}살 이내 규칙{ageGap > DEFAULT_SETTINGS.maxAgeGap ? " 넘음" : ""}</span> : undefined}>
             <ul className="divide-y divide-line">
               {members.map((m) => (
                 <li key={m.id} className="flex items-center justify-between py-2.5 text-[14px]">
                   <Link href={`/admin/applicants/${m.id}`} className="font-semibold hover:underline">{m.users.name}</Link>
-                  <span className="text-muted">{m.users.profiles ? `${m.users.profiles.birth_year}년생 ${m.users.profiles.gender === "M" ? "남" : "여"} ${m.users.profiles.mbti ?? ""} ${m.users.profiles.job ?? ""}` : ""}{m.realloc_count ? `, 재배치 ${m.realloc_count}` : ""}</span>
+                  <span className="text-muted">{m.users.profiles ? `${ageBand(m.users.profiles.birth_year, year)} ${m.users.profiles.gender === "M" ? "남" : "여"} ${m.users.profiles.mbti ?? ""} ${m.users.profiles.job ?? ""}` : ""}{m.realloc_count ? `, 재배치 ${m.realloc_count}` : ""}</span>
                   <Badge v={label(ATTEND, m.attendance_status)} />
                 </li>
               ))}
@@ -104,7 +117,9 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
         <div className="space-y-4">
           <Panel title="운영자 긴급 수정" className="scroll-mt-6">
             <div id="ops" />
-            <OpsPanel tableId={id} slotId={t.slot_id} active={active} members={seated.map((m) => ({ id: m.id, name: m.users.name }))} siblings={siblings} />
+            {me.level === "full" ? (
+              <OpsPanel tableId={id} slotId={t.slot_id} active={active} exceptionId={linkedEx?.status === "open" ? linkedEx.id : undefined} members={seated.map((m) => ({ id: m.id, name: m.users.name }))} siblings={siblings} />
+            ) : <p className="text-[13px] text-muted">조회 전용 계정이라 긴급 수정을 할 수 없어요.</p>}
           </Panel>
           <Panel title="빈자리 제안 (대기자 자동 전환)">
             <ul className="divide-y divide-line text-[13px]">
@@ -145,7 +160,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
                 {resv.external_ref && <div><span className="text-muted">예약번호 </span><b className="tabular-nums">{resv.external_ref}</b></div>}
                 {resv.last_error && <div className="text-danger">마지막 오류: {resv.last_error} (시도 {resv.attempts}회)</div>}
                 {resv.deep_link && <a href={resv.deep_link} target="_blank" rel="noreferrer" className="inline-block font-semibold text-accent hover:underline">{CHANNEL_LABEL[resv.channel as Channel]}에서 식당 열기</a>}
-                {resv.status !== "CONFIRMED" && (
+                {resv.status !== "CONFIRMED" && me.level === "full" && (
                   <form action={reservationAction} className="flex flex-wrap items-center gap-2 pt-1">
                     <input type="hidden" name="table_id" value={t.id} />
                     <input name="ref" placeholder="직접 예약했다면 예약번호" className="h-10 min-w-40 flex-1 rounded-xl border border-line bg-field px-3 text-[13px]" />
@@ -170,7 +185,13 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
           </Panel>
           <Panel title="테이블 상태 이력">
             <ul className="space-y-1.5 text-[13px]">
-              {(events ?? []).map((e) => <li key={e.id}><span className="text-muted">{fmtDateTime(e.created_at)}</span> {e.from_value ?? "-"} → <b>{e.to_value}</b>{e.reason ? `, ${e.reason}` : ""}</li>)}
+              {(events ?? []).map((e) => (
+                <li key={e.id}>
+                  <span className="text-muted">{fmtDateTime(e.created_at)} · {actorLabel(e.actor, adminName)}</span>
+                  <span className="block text-ink">{eventText(e)}</span>
+                  {e.reason && <span className="block text-[12px] text-muted">{e.reason}</span>}
+                </li>
+              ))}
               {!events?.length && <li className="text-muted">기록이 없어요.</li>}
             </ul>
           </Panel>

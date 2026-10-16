@@ -92,7 +92,7 @@ export function TossCheckout(p: Props) {
         <AlertCircle size={22} className="mt-0.5 shrink-0 text-warn" />
         <div>
           <p className="text-[15px] font-semibold text-warn">{p.live ? "토스페이먼츠로 안전하게 결제돼요" : "지금은 테스트 결제예요"}</p>
-          <p className="mt-0.5 text-[13px] leading-relaxed text-[#8a6a3a]">
+          <p className="mt-0.5 text-[13px] leading-relaxed text-[#6b5410]">
             {p.live ? "카드 정보는 우연한 식탁에 저장되지 않아요." : "토스페이먼츠 테스트 결제창이라 실제로 금액이 청구되지 않아요."}
           </p>
         </div>

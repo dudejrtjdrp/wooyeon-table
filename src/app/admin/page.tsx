@@ -2,35 +2,28 @@ import { BellRing, CalendarDays, ChartColumn, ChartPie, Check, ChevronDown, Chev
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { btnLight, ctl } from "@/components/admin-ui";
+import { btnLight, btnPrimary, ctl } from "@/components/admin-ui";
 import { IMG } from "@/components/ui";
 import { after } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDateTime } from "@/lib/format";
+import { eventText } from "@/lib/labels";
+import { computeMetrics, metricValue } from "@/lib/metrics";
 import { maybeTick } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
+import { ConfirmButton } from "./confirm-button";
 import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants } from "./demo-actions";
+import { loadMetricsInput } from "./metrics/load";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const KIND_LABEL: Record<string, string> = {
-  payment: "결제 오류",
-  refund: "자동 환불 실패",
-  data_missing: "데이터 누락",
-  condition_conflict: "조건 충돌",
-  venue_shortage: "식당 부족",
-  notification: "알림 발송 실패",
-  no_show: "노쇼 후보",
-  safety: "안전 신고",
-};
-
-export default async function AdminHome({ searchParams }: { searchParams: Promise<{ r?: string; m?: string }> }) {
-  await requireAdmin();
+export default async function AdminHome({ searchParams }: { searchParams: Promise<{ r?: string }> }) {
+  const me = await requireAdmin();
   // 밀린 일(마감·리마인드·종료)은 화면을 먼저 보낸 뒤 처리한다
   after(() => maybeTick().catch(() => null));
-  const { r, m } = await searchParams;
+  const { r } = await searchParams;
   const t = await now();
   const { data: clock } = await db().from("app_clock").select("offset_seconds").eq("id", 1).single();
 
@@ -44,7 +37,6 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const list = apps ?? [];
   const paid = list.filter((a) => !["PENDING", "FAILED"].includes(a.payment_status));
   const confirmed = list.filter((a) => a.match_status === "CONFIRMED");
-  const reallocated = confirmed.filter((a) => a.realloc_count > 0);
   const waitingChoice = list.filter((a) => a.match_status === "ALTERNATIVE_OFFERED" && a.resolution !== "wait");
   const attended = list.filter((a) => a.attendance_status === "ATTENDED");
   const ranMatching = round && round.status !== "open";
@@ -57,7 +49,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const { data: ran } = await db().from("settings").select("value").eq("key", "tick.ran").maybeSingle();
   const { count: retrying } = await db().from("notifications").select("id", { count: "exact", head: true }).eq("status", "sent").like("last_error", "푸시 실패%").lt("attempts", 3).gte("sent_at", new Date(Date.now() - 24 * 3600_000).toISOString());
 
-  const { data: ex } = await db().from("exceptions").select("kind").eq("status", "open");
+  // 처리할 예외는 회차와 상관없이 지금 열린 것 전부(예외 처리함과 같은 기준). 아래 '주요 현황'만 고른 회차 기준이다
+  const { data: ex } = await db().from("exceptions").select("kind,ref_type,ref_id").eq("status", "open");
   const exCount = new Map<string, number>();
   for (const e of ex ?? []) exCount.set(e.kind, (exCount.get(e.kind) ?? 0) + 1);
 
@@ -91,8 +84,16 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     ["condition_conflict", "조건 충돌", Shuffle], ["venue_shortage", "식당 부족", Store], ["notification", "알림 실패", BellRing], ["no_show", "노쇼 후보", UserX], ["reservation", "식당 예약 실패", Store],
   ];
   const lateCancel = list.filter((a) => a.attendance_status === "CANCELED_LATE").length;
+  const appIds = new Set(list.map((a) => a.id));
+  const roundNoShow = (ex ?? []).filter((e) => e.kind === "no_show" && e.ref_type === "application" && appIds.has(e.ref_id)).length;
   const attendRate = confirmed.length && attended.length ? Math.round((attended.length / confirmed.length) * 100) : null;
-  const { data: logs } = await db().from("status_events").select("id,created_at,field,to_value,reason").eq("actor", "system").order("created_at", { ascending: false }).limit(6);
+  const { data: logs } = await db().from("status_events").select("id,created_at,entity_type,field,from_value,to_value,reason").eq("actor", "system").order("created_at", { ascending: false }).limit(6);
+  const openTotal = ex?.length ?? 0;
+  // 운영 지표: 이 회차의 재배치 성공률과 핵심 3개(자동 확정률·개입률·처리 시간)
+  const metrics = round ? computeMetrics(await loadMetricsInput(), round.id) : [];
+  const mt = (k: string) => metrics.find((x) => x.key === k);
+  const realloc = mt("realloc_success");
+  const rq = round ? `?r=${round.id}` : "";
 
   return (
     <div className="relative">
@@ -121,10 +122,41 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         </form>
       </div>
 
-      {m && <p className="relative mt-4 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-medium text-leaf">{m}</p>}
+      {!round && (
+        <section className="shadow-card relative mt-6 rounded-[20px] bg-card p-8 text-center">
+          <p className="text-[18px] font-bold text-ink">아직 회차가 없어요</p>
+          <p className="mt-1.5 text-[14px] text-muted">첫 회차를 만들면 신청을 받고, 마감 시각에 매칭이 자동으로 돌아요. 이 화면에서 결과와 처리할 일을 보면 돼요.</p>
+          {me.level === "full" ? <Link href="/admin/rounds" className={`${btnPrimary} mt-5`}>회차 만들기</Link> : <p className="mt-4 text-[13px] text-muted">조회 전용 계정이라 회차는 전체 권한 운영자가 만들어요.</p>}
+        </section>
+      )}
+
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
+        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-ink">
+          지금 처리할 일 <span className={`tabular-nums ${openTotal ? "text-danger" : "text-muted"}`}>{openTotal}건</span>
+          <span className="ml-2 text-[14px] font-medium text-muted">모든 회차 합계</span>
+        </h2>
+        {openTotal > 0 && <Link href="/admin/exceptions" className="text-[14px] font-semibold text-accent hover:underline">예외 처리함에서 오래된 것부터 보기 →</Link>}
+      </div>
+      {!openTotal && (
+        <p className="mt-3 flex items-center gap-2 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-semibold text-leaf"><Check size={18} strokeWidth={2.6} />처리할 예외가 0건이에요. 자동으로 풀리지 않은 일이 생기면 여기에 숫자로 올라와요.</p>
+      )}
+      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {TILES.map(([k, l, I]) => {
+          const n = exCount.get(k) ?? 0;
+          return (
+            <Link key={k} href={`/admin/exceptions?k=${k}`} className={`shadow-card group rounded-[18px] p-4 transition hover:-translate-y-0.5 ${n ? "bg-card ring-1 ring-danger/40" : "bg-card"}`}>
+              <p className={`flex items-center gap-2 text-[14px] font-semibold ${n ? "text-ink" : "text-muted"}`}><I size={18} className={n ? "text-danger" : "text-muted"} />{l}</p>
+              <p className="mt-2 flex items-end justify-between">
+                <span className={`text-[28px] font-bold tabular-nums ${n ? "text-danger" : "text-muted/70"}`}>{n}</span>
+                <ChevronRight size={18} className="mb-1.5 text-muted" />
+              </p>
+            </Link>
+          );
+        })}
+      </div>
 
       {round && (
-        <section className="shadow-card relative mt-6 rounded-[20px] bg-card px-6 py-5">
+        <section className="shadow-card relative mt-8 rounded-[20px] bg-card px-6 py-5">
           <ol className="flex items-start">
             {STAGES.map(({ l, I }, i) => {
               const done = i < stage;
@@ -145,31 +177,35 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         </section>
       )}
 
-      <h2 className="mt-8 text-[20px] font-bold tracking-[-0.02em] text-ink">지금 처리할 일</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {TILES.map(([k, l, I]) => {
-          const n = exCount.get(k) ?? 0;
-          return (
-            <Link key={k} href={`/admin/exceptions?k=${k}`} className={`shadow-card group rounded-[18px] p-4 transition hover:-translate-y-0.5 ${n ? "bg-card ring-1 ring-danger/40" : "bg-card"}`}>
-              <p className={`flex items-center gap-2 text-[14px] font-semibold ${n ? "text-ink" : "text-muted"}`}><I size={18} className={n ? "text-danger" : "text-muted"} />{l}</p>
-              <p className="mt-2 flex items-end justify-between">
-                <span className={`text-[28px] font-bold tabular-nums ${n ? "text-danger" : "text-muted/70"}`}>{n}</span>
-                <ChevronRight size={18} className="mb-1.5 text-muted" />
-              </p>
-            </Link>
-          );
-        })}
-      </div>
-      {!ex?.length && <p className="mt-3 text-[13px] text-muted">지금은 운영자가 볼 일이 없어요. 모두 자동으로 처리됐어요.</p>}
-
       {round && (
         <>
-          <h2 className="mt-8 text-[20px] font-bold tracking-[-0.02em] text-ink">주요 현황</h2>
-          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-            <Kpi I={Users} label="신청" value={`${list.length}명`} sub={`결제 완료 ${paid.length}명`} />
-            <Kpi I={ChartColumn} label="자동 매칭 성공률" value={matchRate === null ? "-" : `${matchRate}%`} sub={`확정 ${confirmed.length}명 · 테이블 ${tableCount ?? 0}개 · 재배치 ${reallocated.length}명`} />
-            <Kpi I={UserRound} label="대안 선택 대기" value={`${waitingChoice.length}명`} sub="다른 일정·보관·환불 선택 전" danger={waitingChoice.length > 0} />
-            <Kpi I={ChartPie} label="참석률" value={attendRate === null ? "-" : `${attendRate}%`} sub={`참석 ${attended.length} · 늦은 취소 ${lateCancel} · 노쇼 후보 ${exCount.get("no_show") ?? 0}`} />
+          <h2 className="mt-8 text-[20px] font-bold tracking-[-0.02em] text-ink">주요 현황 <span className="text-[14px] font-medium text-muted">{round.title} 기준</span></h2>
+          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            <Kpi href={`/admin/applicants${rq}`} I={Users} label="신청" value={`${list.length}명`} sub={`결제 완료 ${paid.length}명`} />
+            <Kpi href={`/admin/matching${rq}`} I={ChartColumn} label="자동 매칭 성공률" value={matchRate === null ? "매칭 전" : `${matchRate}%`} sub={`확정 ${confirmed.length}명 · 테이블 ${tableCount ?? 0}개`} />
+            <Kpi href={`/admin/matching${rq}`} I={Shuffle} label="자동 재배치 성공률" value={realloc ? metricValue(realloc) ?? "대상 없음" : "-"} sub={realloc ? `재배치로 확정 ${realloc.numerator}명 / 대상 ${realloc.denominator}명` : undefined} />
+            <Kpi href={`/admin/applicants${rq}${rq ? "&" : "?"}s=CHOOSING`} I={UserRound} label="대체 일정·환불 선택 대기" value={`${waitingChoice.length}명`} sub="다른 일정·보관·환불을 아직 안 고름 (자리 기다리기를 고른 사람 제외)" danger={waitingChoice.length > 0} />
+            <Kpi href={`/admin/attendance${rq}`} I={ChartPie} label="참석률" value={attendRate === null ? "모임 전" : `${attendRate}%`} sub={`참석 ${attended.length} · 늦은 취소 ${lateCancel} · 노쇼 후보 ${roundNoShow}`} />
+          </div>
+
+          <div className="mt-8 flex items-end justify-between gap-3">
+            <h2 className="text-[20px] font-bold tracking-[-0.02em] text-ink">운영 지표 <span className="text-[14px] font-medium text-muted">{round.title} 기준</span></h2>
+            <Link href={`/admin/metrics${rq}`} className="text-[14px] font-semibold text-accent hover:underline">지표 13개 전체와 정의 보기 →</Link>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            {(["auto_confirm", "intervention", "ops_time"] as const).map((k) => {
+              const x = mt(k);
+              if (!x) return null;
+              const v = metricValue(x);
+              return (
+                <Link key={k} href={`/admin/metrics${rq}`} className="shadow-card rounded-[20px] bg-card p-5 transition hover:-translate-y-0.5">
+                  <p className="text-[14px] text-muted">{x.name} <span className="text-[12px]">· {x.higherIsBetter ? "높을수록 좋음" : "낮을수록 좋음"}</span></p>
+                  <p className={`mt-0.5 font-bold tabular-nums tracking-[-0.03em] ${v ? "text-[30px] text-ink" : "py-2 text-[17px] text-muted"}`}>{v ?? "아직 데이터 없음"}</p>
+                  <p className="text-[13px] text-muted">{x.numeratorLabel} {x.numerator} ÷ {x.denominatorLabel} {x.denominator}</p>
+                  {x.sub && <p className="text-[13px] font-semibold text-ink/80">{x.sub}</p>}
+                </Link>
+              );
+            })}
           </div>
         </>
       )}
@@ -180,25 +216,29 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <li key={l.id} className="flex items-center gap-4 py-3 text-[14px]">
             <FileText size={18} className="shrink-0 text-accent" />
             <span className="w-40 shrink-0 tabular-nums text-muted">{fmtDateTime(l.created_at)}</span>
-            <span className="min-w-0 flex-1 truncate font-medium text-ink">{l.reason ?? `${l.field} → ${l.to_value}`}</span>
+            <span className="min-w-0 flex-1 truncate font-medium text-ink">{l.reason && !l.reason.startsWith("{") ? l.reason : eventText(l)}</span>
           </li>
         ))}
         {!logs?.length && <li className="py-4 text-[14px] text-muted">아직 자동 처리 기록이 없어요.</li>}
       </ul>
 
-      {round && (
-        <details className="group mt-8 rounded-[20px] border-2 border-dashed border-accent/30 bg-card/60 p-5">
+      {round && me.level === "full" && (
+        <>
+        <div className="mt-12 flex items-center gap-3 text-[12px] font-semibold text-muted" aria-hidden="true">
+          <span className="h-px flex-1 bg-line" />여기부터 심사용 시연 도구 (실제 운영 화면이 아니에요)<span className="h-px flex-1 bg-line" />
+        </div>
+        <details className="group mt-4 rounded-[20px] border-2 border-dashed border-warn/40 bg-warn-soft/30 p-5">
           <summary className="flex cursor-pointer list-none items-center justify-between">
-            <span className="flex items-center gap-2 text-[17px] font-semibold text-ink"><FlaskConical size={20} className="text-accent" />심사용 시연 패널 <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[12px] text-accent group-open:hidden">접힘</span></span>
+            <span className="flex items-center gap-2 text-[17px] font-semibold text-ink"><FlaskConical size={20} className="text-warn" />심사용 시연 패널 <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[12px] font-semibold text-warn">시연 전용</span><span className="rounded-full bg-card px-2 py-0.5 text-[12px] text-muted group-open:hidden">접힘</span></span>
             <ChevronDown size={20} className="text-muted transition group-open:rotate-180" />
           </summary>
-          <p className="mt-1 text-[13px] text-muted">마감 시각을 기다리지 않고 한 회차의 흐름을 처음부터 끝까지 돌려볼 수 있어요. 실제 운영에서는 숨기는 화면이에요.</p>
+          <p className="mt-1 text-[13px] text-muted">마감 시각을 기다리지 않고 한 회차의 흐름을 처음부터 끝까지 돌려볼 수 있어요. 테스트 참가자만 만들고 바꿔요. 실제 운영에서는 숨기는 도구예요.</p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <form action={seedParticipants} className="shadow-card rounded-[20px] bg-card p-4">
               <input type="hidden" name="round_id" value={round.id} />
               <p className="text-[14px] font-semibold">① 테스트 참가자 만들기</p>
-              <p className="mt-1 text-[12px] text-muted">결제까지 끝난 상태로 신청시켜요. 일부는 일부러 홍대에 몰거나 나이 차를 크게 넣어 재배치·실패 상황이 생겨요.</p>
+              <p className="mt-1 text-[12px] text-muted">운영 지역 4곳(홍대·잠실·강남·을지로) 일정에 결제까지 끝난 상태로 신청시켜요. 일부는 일부러 홍대에 몰거나 나이 차를 크게 넣어 재배치·실패 상황이 생겨요. 넷 중 하나꼴은 멤버십이라, 매칭에 실패하면 기간이 7일 늘어나는 것까지 볼 수 있어요(멤버십 비율은 시연용 가정).</p>
               <div className="mt-3 flex gap-2">
                 <input name="count" type="number" defaultValue={36} min={4} max={60} className="h-10 w-20 rounded-xl border border-line px-3 text-[14px]" />
                 <button className="h-10 flex-1 rounded-xl bg-accent text-[14px] font-semibold text-white">만들기</button>
@@ -250,24 +290,26 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             <form action={runTick}><button className="underline underline-offset-4">밀린 작업 지금 처리</button></form>
             <form action={resetRound}>
               <input type="hidden" name="round_id" value={round.id} />
-              <button className="text-accent underline underline-offset-4">이 회차 시연 데이터 초기화</button>
+              <ConfirmButton confirm={`'${round.title}'의 신청·테이블·후기를 모두 지우고 처음 상태로 되돌려요. 되돌릴 수 없어요. 계속할까요?`} className="text-danger underline underline-offset-4">이 회차 시연 데이터 초기화</ConfirmButton>
             </form>
           </div>
         </details>
+        </>
       )}
     </div>
   );
 }
 
-function Kpi({ I, label, value, sub, danger }: { I: LucideIcon; label: string; value: string; sub?: string; danger?: boolean }) {
+function Kpi({ href, I, label, value, sub, danger }: { href: string; I: LucideIcon; label: string; value: string; sub?: string; danger?: boolean }) {
   return (
-    <div className="shadow-card flex gap-4 rounded-[20px] bg-card p-5">
+    <Link href={href} className="shadow-card group flex gap-4 rounded-[20px] bg-card p-5 transition hover:-translate-y-0.5">
       <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><I size={22} /></span>
       <div className="min-w-0">
         <p className="text-[14px] text-muted">{label}</p>
         <p className={`mt-0.5 text-[30px] font-bold tabular-nums tracking-[-0.03em] ${danger ? "text-danger" : "text-ink"}`}>{value}</p>
         {sub && <p className="text-[13px] text-muted">{sub}</p>}
       </div>
-    </div>
+      <ChevronRight size={18} className="ml-auto mt-1 shrink-0 text-muted transition group-hover:text-accent" />
+    </Link>
   );
 }

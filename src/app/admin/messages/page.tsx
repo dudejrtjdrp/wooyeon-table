@@ -1,16 +1,16 @@
 import { Badge, PageHeader, Panel, Stat, btnPrimary, ctl, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime } from "@/lib/format";
+import { NOTICE } from "@/lib/labels";
 import { db } from "@/lib/supabase";
-import { TEMPLATES, loadTemplates, render } from "@/lib/templates";
+import { SAMPLE_VARS, TEMPLATES, loadTemplates, render } from "@/lib/templates";
 import { saveTemplate } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-const SAMPLE = { date: "10월 23일 (금)", time: "오후 7:30", region: "성수", reservation: "우연한식탁 2032", reason: "고른 일정에 4명이 모이지 않았어요.", alternatives: "옮길 수 있는 일정: 10월 다섯째 주 저녁(10월 30일·10월 31일, 성수·강남). " };
-
 export default async function Messages() {
-  await requireAdmin();
+  const me = await requireAdmin();
+  const ro = me.level !== "full";
   const tpl = await loadTemplates();
   const [{ data: log }, { data: counts }] = await Promise.all([
     db().from("notifications").select("id,template,title,status,attempts,last_error,scheduled_at,sent_at,users(name)").order("scheduled_at", { ascending: false }).limit(60),
@@ -32,21 +32,21 @@ export default async function Messages() {
       <div className="grid gap-4 lg:grid-cols-2">
         {Object.entries(TEMPLATES).map(([key, d]) => {
           const o = tpl[key] ?? {};
-          const preview = render(key as keyof typeof TEMPLATES, SAMPLE, tpl);
+          const preview = render(key as keyof typeof TEMPLATES, SAMPLE_VARS, tpl);
           return (
             <Panel key={key} title={d.label} action={<span className="text-[12px] text-muted">{d.channel}</span>}>
               <p className="text-[13px] text-muted">보내는 때: {d.when}</p>
               <form action={saveTemplate} className="mt-3 space-y-2">
                 <input type="hidden" name="key" value={key} />
-                {d.title !== "" && <input name="title" defaultValue={o.title ?? ""} placeholder={d.title} className={`${ctl} w-full`} />}
-                <textarea name="body" defaultValue={o.body ?? ""} placeholder={d.body} rows={3} className="w-full rounded-xl border border-line bg-card px-3 py-2 text-[14px] outline-none focus:border-accent" />
+                {d.title !== "" && <input name="title" readOnly={ro} defaultValue={o.title ?? ""} placeholder={d.title} className={`${ctl} w-full`} />}
+                <textarea name="body" readOnly={ro} defaultValue={o.body ?? ""} placeholder={d.body} rows={3} className="w-full rounded-xl border border-line bg-card px-3 py-2 text-[14px] outline-none focus:border-accent" />
                 {d.vars.length > 0 && <p className="text-[12px] text-muted">넣을 수 있는 값: {d.vars.map((v) => `{${v}}`).join(" ")}</p>}
                 <div className="rounded-xl bg-paper px-3 py-2 text-[13px]">
-                  <p className="text-[11px] text-muted">미리보기 (비워 두면 기본 문구)</p>
+                  <p className="text-[11px] text-muted">미리보기 (예시 값으로 채움, 비워 두면 기본 문구)</p>
                   {preview.title && <p className="font-semibold">{preview.title}</p>}
                   <p className="whitespace-pre-line">{preview.body}</p>
                 </div>
-                <button className={btnPrimary}>저장</button>
+                {ro ? <p className="text-[12px] text-muted">조회 전용 계정이라 문구를 바꿀 수 없어요.</p> : <button className={btnPrimary}>저장</button>}
               </form>
             </Panel>
           );
@@ -62,7 +62,7 @@ export default async function Messages() {
               <tr key={n.id}>
                 <td className={`${td} text-muted`}>{fmtDateTime(n.sent_at ?? n.scheduled_at)}</td>
                 <td className={td}>{n.users?.name}</td>
-                <td className={td}>{(TEMPLATES as Record<string, { label: string }>)[n.template]?.label ?? n.template}</td>
+                <td className={td}>{(TEMPLATES as Record<string, { label: string }>)[n.template]?.label ?? NOTICE[n.template] ?? "기타 알림"}</td>
                 <td className={td}>{n.title}</td>
                 <td className={td}><Badge v={n.status === "sent" ? ["보냄", "leaf"] : n.status === "pending" ? ["예약", "muted"] : ["실패", "danger"]} /></td>
                 <td className={`${td} text-muted`}>{n.attempts ? `${n.attempts}회${n.last_error ? `, ${n.last_error.slice(0, 30)}` : ""}` : "-"}</td>
@@ -70,6 +70,7 @@ export default async function Messages() {
             ))}
           </tbody>
         </table>
+        {!rows.length && <p className="p-10 text-center text-muted">아직 보낸 알림이 없어요. 테이블이 확정되면 확정 안내부터 자동으로 나가요.</p>}
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./supabase";
 import { getSession } from "./session";
@@ -38,20 +39,73 @@ export async function getMe(): Promise<Me | null> {
   };
 }
 
+/**
+ * 지금 보고 있던 화면 주소 (middleware가 x-pathname에 넣어 준다).
+ * 우리 사이트 안의 경로만 받는다: '/'로 시작하고 '//'·'/\\'로 시작하지 않으며, 로그인·가입·온보딩 화면 자체는 빼서 되돌아가기가 돌지 않게 한다.
+ */
+/** 로그인 뒤 돌아갈 주소로 우리 사이트 안 경로만 받는다 ('//'·'/\\'로 시작하는 바깥 주소 차단) */
+export function safeNext(p: string | null | undefined): string | null {
+  if (!p || !p.startsWith("/") || p.startsWith("//") || p.startsWith("/\\")) return null;
+  return p;
+}
+
+async function currentPath(): Promise<string | null> {
+  let p: string | null = null;
+  try { p = (await headers()).get("x-pathname"); } catch { return null; }
+  if (!p || !p.startsWith("/") || p.startsWith("//") || p.startsWith("/\\") || p === "/") return null;
+  if (/^\/(login|signup|onboarding|verify|logout)(\/|\?|$)/.test(p)) return null;
+  return p;
+}
+
+const withNext = async (to: string) => {
+  const p = await currentPath();
+  return p ? `${to}?next=${encodeURIComponent(p)}` : to;
+};
+
 export async function requireMe(): Promise<Me> {
   const me = await getMe();
-  if (!me) redirect("/login");
+  if (!me) redirect(await withNext("/login"));
   return me;
 }
 
 export async function requireProfile(): Promise<Me> {
   const me = await requireMe();
-  if (!me.hasProfile) redirect("/onboarding");
+  if (!me.hasProfile) redirect(await withNext("/onboarding"));
   return me;
 }
 
-export async function requireAdmin(): Promise<Me> {
+// 운영자 권한 등급 (PRD 4장·16장 권한별 접근 통제)
+// users.role은 'user'|'admin'만 받으므로 스키마를 바꾸지 않고 settings('admin.levels')에 운영자별 등급을 둔다.
+// 적혀 있지 않은 운영자는 전체 권한. '조회 전용'은 화면은 다 보지만 아무것도 바꾸지 못한다.
+export type AdminLevel = "full" | "viewer";
+export type AdminMe = Me & { level: AdminLevel };
+export const ADMIN_LEVEL_LABEL: Record<AdminLevel, string> = { full: "전체 권한", viewer: "조회 전용" };
+export const VIEWER_DENIED = "조회 전용 계정이라 바꿀 수 없어요. 전체 권한 운영자에게 부탁해 주세요";
+
+export async function adminLevels(): Promise<Record<string, AdminLevel>> {
+  const { data } = await db().from("settings").select("value").eq("key", "admin.levels").maybeSingle();
+  return (data?.value as Record<string, AdminLevel> | null) ?? {};
+}
+
+export async function adminLevelOf(userId: string): Promise<AdminLevel> {
+  return (await adminLevels())[userId] === "viewer" ? "viewer" : "full";
+}
+
+export async function requireAdmin(): Promise<AdminMe> {
   const me = await getMe();
   if (!me || me.role !== "admin") redirect("/admin/login");
+  return { ...me, level: await adminLevelOf(me.id) };
+}
+
+/**
+ * 무언가를 바꾸는 서버 액션은 이걸로 막는다. 조회 전용이면 back 화면으로 돌려보내고 이유를 알린다.
+ * back은 돌아갈 주소(쿼리 포함 가능). 버튼을 숨겨도 주소로 직접 보낼 수 있어서 서버에서 한 번 더 거른다.
+ */
+export async function requireAdminWrite(back = "/admin"): Promise<AdminMe> {
+  const me = await requireAdmin();
+  if (me.level === "viewer") {
+    const [path, hash] = back.split("#");
+    redirect(`${path}${path.includes("?") ? "&" : "?"}e=${encodeURIComponent(VIEWER_DENIED)}${hash ? `#${hash}` : ""}`);
+  }
   return me;
 }

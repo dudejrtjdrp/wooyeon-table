@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PrimaryButton } from "@/components/client";
+import { ConfirmSubmit, PrimaryButton } from "@/components/client";
 
 type Opt = { id: string; label: string; note: string; tag: string; hot?: boolean };
 type Act = (f: FormData) => void | Promise<void>;
@@ -115,7 +115,11 @@ export function ResolveChoice({ appId, joins, moves, waitUntil, nearOk, membersh
       <div className="h-32" />
       <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-paper px-6 pt-3">
         <div className="pb-4">
-          <PrimaryButton type="submit" pendingText="처리하는 중">{button}</PrimaryButton>
+          {choice === "refund" ? (
+            <ConfirmSubmit key="refund" tone="accent" label={button} question="환불하면 이번 신청이 끝나고 되돌릴 수 없어요. 결제한 수단으로 바로 돌려드려요." confirmLabel="환불받기" />
+          ) : (
+            <PrimaryButton type="submit" pendingText="처리하는 중">{button}</PrimaryButton>
+          )}
         </div>
       </div>
     </form>

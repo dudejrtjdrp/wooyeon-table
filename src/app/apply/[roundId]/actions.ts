@@ -5,9 +5,11 @@ import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { PASSES, isMembership, type PassType } from "@/lib/constants";
 import { usablePass } from "@/lib/billing";
-import { fmtDateTime } from "@/lib/format";
+import { fmtDay, fmtSlot } from "@/lib/format";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
+import { roundCutoff } from "@/lib/policy";
+import { loadTemplates, render } from "@/lib/templates";
 import { areasLabel, sidoOf, slotsFor } from "@/lib/regions";
 import { db } from "@/lib/supabase";
 
@@ -83,29 +85,33 @@ export async function submitApplication(form: FormData) {
   await db().from("application_slots").insert(chosen.map((slot_id) => ({ application_id: app!.id, slot_id })));
   await db().from("payments").update({ idempotency_key: `app:${app!.id}:${payment!.id}` }).eq("id", payment!.id);
   await logStatus({ entityType: "application", entityId: app!.id, field: "application_status", from: "DRAFT", to: "SUBMITTED", actor: `user:${me.id}`, reason: `${areasLabel(areas)} · ${dates.length}일 · 일정 ${chosen.length}개${nearOk ? " · 가까운 동네 허용" : ""}` });
+  // 14장 알림은 운영자가 어드민(자동 메시지)에서 고친 문구로 보낸다
+  const tpl = await loadTemplates();
+  const chosenStarts = (round!.slots ?? []).filter((x) => chosen.includes(x.id)).map((x) => x.starts_at);
+  const cancelBy = Math.min(new Date(round!.match_at).getTime(), roundCutoff(chosenStarts)?.getTime() ?? Infinity);
+  const ap = render("applied", { round: round!.title, areas: areasLabel(areas), days: [...dates].sort().map((d) => fmtDay(`${d}T12:00:00+09:00`)).join("·"), cutoff: fmtSlot(new Date(cancelBy).toISOString()) }, tpl);
   await notify({
     userId: me.id,
     template: "applied",
-    title: "신청이 접수됐어요",
-    body: `${round!.title} 신청을 받았어요. 결제를 마치면 매칭 대상이 돼요.`,
-    link: `/pay/${app!.id}`,
+    title: ap.title,
+    body: ap.body,
+    link: owned ? `/applications/${app!.id}` : `/pay/${app!.id}`,
     dedupeKey: `applied:${app!.id}:${payment!.id}`,
   });
   if (owned) {
     const used = ownedMembership ? "멤버십으로 신청(차감 없음)" : `보유 이용권 1회 사용 (남은 ${owned.remaining - 1}회)`;
     await logStatus({ entityType: "application", entityId: app!.id, field: "payment_status", from: "PENDING", to: "PAID", actor: `user:${me.id}`, reason: used });
-    const body = ownedMembership
-      ? `멤버십으로 신청했어요. 기간 안에는 횟수 제한 없이 신청할 수 있어요. ${fmtDateTime(round!.match_at)}에 자동으로 테이블을 꾸려서 알려드릴게요.`
-      : `이용권 1회를 썼어요. 남은 횟수는 ${owned.remaining - 1}회예요. ${fmtDateTime(round!.match_at)}에 자동으로 테이블을 꾸려서 알려드릴게요.`;
-    await notify({ userId: me.id, template: "paid", title: ownedMembership ? "멤버십으로 신청했어요" : "이용권으로 신청했어요", body, link: `/applications/${app!.id}`, dedupeKey: `paid:${app!.id}:${payment!.id}` });
+    const pm = ownedMembership
+      ? render("paid_membership", { match_at: fmtSlot(round!.match_at) }, tpl)
+      : render("paid_pass", { remaining: String(owned.remaining - 1), match_at: fmtSlot(round!.match_at) }, tpl);
+    await notify({ userId: me.id, template: "paid", title: pm.title, body: pm.body, link: `/applications/${app!.id}`, dedupeKey: `paid:${app!.id}:${payment!.id}` });
     redirect(`/applications/${app!.id}`);
   }
   // 결제 대기 안내 (14장): 결제 방법과 기한. 1시간 뒤에도 결제 전이면 한 번 더 알린다
   await notify({
     userId: me.id,
     template: "payment_pending",
-    title: "결제를 마쳐야 매칭에 들어가요",
-    body: `${fmtDateTime(round!.apply_deadline)}까지 결제해 주세요. 카드, 카카오페이, 네이버페이, 토스페이로 낼 수 있어요.`,
+    ...render("payment_pending", { deadline: fmtSlot(round!.apply_deadline) }, tpl),
     link: `/pay/${app!.id}`,
     dedupeKey: `payment_pending:${app!.id}:${payment!.id}`,
     scheduledAt: new Date(Math.min(Date.now() + 3600_000, new Date(round!.apply_deadline).getTime() - 600_000)),

@@ -1,11 +1,18 @@
 import { btnDanger, btnInk, ctl } from "@/components/admin-ui";
 import { fmtDate, fmtTime } from "@/lib/format";
+import { ConfirmButton } from "../../confirm-button";
 import { emergencyAction } from "./actions";
 
 type M = { id: string; name: string };
 type T = { id: string; count: number; slot_id: string; slots: { starts_at: string; region: string }; venues: { name: string } | null };
 
-const reasonInput = <input name="reason" required minLength={4} placeholder="사유 (참가자 이력과 테이블 이력에 남아요)" className={`${ctl} w-full`} />;
+const reasonInput = (
+  <label className="block">
+    <span className="text-[12px] font-semibold text-ink">사유 <span className="text-danger">(필수)</span></span>
+    <input name="reason" required minLength={4} placeholder="예: 신고 접수로 분리, 당일 사정으로 불참 연락" className={`${ctl} mt-1 w-full`} />
+    <span className="mt-1 block text-[12px] text-muted">4자 이상. 참가자 이력과 테이블 이력에 그대로 남아요.</span>
+  </label>
+);
 
 function Op({ title, desc, children, danger }: { title: string; desc: string; children: React.ReactNode; danger?: boolean }) {
   return (
@@ -23,10 +30,17 @@ function Op({ title, desc, children, danger }: { title: string; desc: string; ch
 }
 
 /** 운영자 긴급 수정 (MAT-14). 확정 후 취소·안전 문제 같은 예외에서만 쓴다 */
-export function OpsPanel({ tableId, slotId, members, siblings, active }: { tableId: string; slotId: string; members: M[]; siblings: T[]; active: boolean }) {
+export function OpsPanel({ tableId, slotId, members, siblings, active, exceptionId }: { tableId: string; slotId: string; members: M[]; siblings: T[]; active: boolean; exceptionId?: string }) {
   if (!active) return <p className="text-[13px] text-muted">끝났거나 해제된 테이블이라 수정할 수 없어요.</p>;
   const label = (t: T) => `${fmtDate(t.slots.starts_at)} ${fmtTime(t.slots.starts_at)} ${t.slots.region}${t.venues ? ` · ${t.venues.name}` : ""} (${t.count}명)`;
   const sameSlot = siblings.filter((t) => t.slot_id === slotId);
+  const hidden = (op: string) => (
+    <>
+      <input type="hidden" name="table_id" value={tableId} />
+      <input type="hidden" name="op" value={op} />
+      {exceptionId && <input type="hidden" name="ex" value={exceptionId} />}
+    </>
+  );
   return (
     <div className="space-y-2">
       <p className="mb-3 rounded-xl bg-candle/15 px-3.5 py-2.5 text-[12px] leading-relaxed text-ink">
@@ -34,44 +48,40 @@ export function OpsPanel({ tableId, slotId, members, siblings, active }: { table
       </p>
       <Op title="참가자 이동" desc="다른 테이블로 옮기기">
         <form action={emergencyAction} className="space-y-2.5">
-          <input type="hidden" name="table_id" value={tableId} />
-          <input type="hidden" name="op" value="move" />
+          {hidden("move")}
           <select name="app_id" required className={`${ctl} w-full`}>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
           <select name="target_id" required className={`${ctl} w-full`}>
             {siblings.length ? siblings.map((t) => <option key={t.id} value={t.id}>{label(t)}</option>) : <option value="">같은 회차에 열린 테이블이 없어요</option>}
           </select>
           <label className="flex items-center gap-2 text-[13px] text-muted"><input type="checkbox" name="allow_slot" /> 참가자가 고르지 않은 일정도 허용 (본인 동의 확인 후)</label>
           {reasonInput}
-          <button className={btnInk} disabled={!siblings.length}>옮기기</button>
+          <ConfirmButton confirm="이 참가자를 고른 테이블로 옮기고 두 단체방과 본인에게 바로 알려요. 계속할까요?" className={btnInk} disabled={!siblings.length}>옮기기</ConfirmButton>
         </form>
       </Op>
       <Op title="참가자 제외" desc="안전 문제 등으로 빼기">
         <form action={emergencyAction} className="space-y-2.5">
-          <input type="hidden" name="table_id" value={tableId} />
-          <input type="hidden" name="op" value="remove" />
+          {hidden("remove")}
           <select name="app_id" required className={`${ctl} w-full`}>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
           <label className="flex items-center gap-2 text-[13px] text-muted"><input type="checkbox" name="refund" /> 바로 전액 환불 (끄면 참가자가 다른 일정·보관·환불을 고름)</label>
           {reasonInput}
           <p className="text-[12px] text-muted">빈자리는 대기자에게 먼저 제안하고, 받을 사람이 없으면 인원 기준에 맞춰 자동 정리돼요.</p>
-          <button className={btnInk}>제외하기</button>
+          <ConfirmButton confirm="이 참가자를 테이블에서 빼고 본인에게 바로 알려요. '바로 전액 환불'을 켰다면 환불도 진행돼 되돌릴 수 없어요. 계속할까요?" className={btnInk}>제외하기</ConfirmButton>
         </form>
       </Op>
       <Op title="테이블 병합" desc="같은 시간 테이블과 합치기">
         <form action={emergencyAction} className="space-y-2.5">
-          <input type="hidden" name="table_id" value={tableId} />
-          <input type="hidden" name="op" value="merge" />
+          {hidden("merge")}
           <select name="target_id" required className={`${ctl} w-full`}>
             {sameSlot.length ? sameSlot.map((t) => <option key={t.id} value={t.id}>{label(t)}</option>) : <option value="">같은 시간·지역에 열린 테이블이 없어요</option>}
           </select>
           {reasonInput}
           <p className="text-[12px] text-muted">이 테이블 사람들이 고른 테이블로 옮기고, 이 테이블은 해제돼요.</p>
-          <button className={btnInk} disabled={!sameSlot.length}>합치기</button>
+          <ConfirmButton confirm="이 테이블 사람들을 고른 테이블로 옮기고 이 테이블은 해제해요. 되돌릴 수 없어요. 계속할까요?" className={btnInk} disabled={!sameSlot.length}>합치기</ConfirmButton>
         </form>
       </Op>
       <Op title="테이블 분리" desc="일부를 새 테이블로 나누기">
         <form action={emergencyAction} className="space-y-2.5">
-          <input type="hidden" name="table_id" value={tableId} />
-          <input type="hidden" name="op" value="split" />
+          {hidden("split")}
           <div className="grid grid-cols-2 gap-1.5">
             {members.map((m) => (
               <label key={m.id} className="flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-2 text-[13px]"><input type="checkbox" name="app_ids" value={m.id} /> {m.name}</label>
@@ -79,16 +89,15 @@ export function OpsPanel({ tableId, slotId, members, siblings, active }: { table
           </div>
           {reasonInput}
           <p className="text-[12px] text-muted">고른 사람은 같은 시간 새 테이블로 가고 식당을 새로 배정해요. 나눈 뒤 두 테이블 모두 최소 인원 이상이어야 해요.</p>
-          <button className={btnInk}>나누기</button>
+          <ConfirmButton confirm="고른 사람들을 새 테이블로 나누고 식당을 새로 배정해요. 계속할까요?" className={btnInk}>나누기</ConfirmButton>
         </form>
       </Op>
       <Op title="테이블 해제" desc="모임 취소" danger>
         <form action={emergencyAction} className="space-y-2.5">
-          <input type="hidden" name="table_id" value={tableId} />
-          <input type="hidden" name="op" value="dissolve" />
+          {hidden("dissolve")}
           {reasonInput}
           <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="confirm" /> 참가자 {members.length}명 모두에게 취소를 알리고 다른 일정·보관·환불을 고르게 해요</label>
-          <button className={btnDanger}>해제하기</button>
+          <ConfirmButton confirm={`참가자 ${members.length}명 모두에게 모임 취소를 알리고 테이블을 해제해요. 되돌릴 수 없어요. 계속할까요?`} className={btnDanger}>해제하기</ConfirmButton>
         </form>
       </Op>
     </div>

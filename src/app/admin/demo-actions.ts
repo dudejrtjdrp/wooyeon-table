@@ -3,12 +3,13 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
-import { INTERESTS, MBTIS, PRICE_RANGES, TRAITS } from "@/lib/constants";
+import { requireAdminWrite } from "@/lib/auth";
+import { INTERESTS, MBTIS, OPEN_REGIONS, PASSES, PRICE_RANGES, TRAITS, isMembership } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
 import { tick } from "@/lib/pipeline";
 import { kstDay } from "@/lib/regions";
+import { loadTemplates, render } from "@/lib/templates";
 import { db } from "@/lib/supabase";
 
 const FAMILY = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황"];
@@ -23,6 +24,22 @@ function rng(seed: number) {
   };
 }
 
+type Pass = keyof typeof PASSES;
+// 시연 참가자 중 멤버십 비율(약 25%)과 1·3·6개월 나눔은 PRD에 없는 시연용 가정이다. 가격은 운영사 Q&A 값(constants.ts PASSES)
+const MEMBERSHIP_SHARE = 0.25;
+function pickPass(x: number, y: number): Pass {
+  if (x >= MEMBERSHIP_SHARE) return "single";
+  return y < 0.5 ? "m1" : y < 0.8 ? "m3" : "m6";
+}
+/** payments.ts와 같은 규칙: 멤버십은 산 날부터 N개월(횟수 없음), 1회권은 이번 신청에 바로 1회를 쓴다(유효 60일) */
+function passRow(userId: string, type: Pass) {
+  const d = PASSES[type];
+  const expires = new Date();
+  if (d.months) expires.setMonth(expires.getMonth() + d.months);
+  else expires.setDate(expires.getDate() + 60);
+  return { user_id: userId, pass_type: type, total_count: d.count, remaining: Math.max(0, d.count - 1), expires_at: expires.toISOString() };
+}
+
 function back(msg: string) {
   revalidatePath("/admin");
   redirect(`/admin?m=${encodeURIComponent(msg)}`);
@@ -30,20 +47,23 @@ function back(msg: string) {
 
 /** 테스트 참가자를 만들고 결제 완료 상태로 신청까지 시킨다 */
 export async function seedParticipants(form: FormData) {
-  await requireAdmin();
+  await requireAdminWrite();
   const roundId = String(form.get("round_id"));
   const n = Math.min(60, Math.max(4, Number(form.get("count") ?? 36)));
-  const { data: slots } = await db().from("slots").select("id,region,starts_at").eq("round_id", roundId).order("starts_at");
-  if (!slots?.length) back("일정이 없는 회차예요");
+  // 시연 신청은 운영 지역 4곳(홍대·잠실·강남·을지로) 일정에만 넣는다
+  const { data: allSlots } = await db().from("slots").select("id,region,starts_at").eq("round_id", roundId).order("starts_at");
+  const slots = (allSlots ?? []).filter((s) => OPEN_REGIONS.includes(s.region));
+  if (!slots.length) back("운영 지역(홍대·잠실·강남·을지로) 일정이 없는 회차예요");
   const r = rng(Date.now());
   const pick = <T,>(arr: readonly T[], k: number) => [...arr].sort(() => r() - 0.5).slice(0, k);
   const hash = await bcrypt.hash("demo1234", 10);
   const stamp = Date.now().toString(36).slice(-4);
 
-  // 일부러 넣는 예외 상황: 앞의 두 동네 금요일에 몰리고, 나머지는 적게, 나이 차가 큰 사람 둘
-  const busy = [...new Set(slots!.map((s) => s.region))].slice(0, 2); // 앞의 두 동네에 몰리게
-  const main = slots!.filter((s) => busy.includes(s.region));
-  const thin = slots!.filter((s) => s.region === "홍대·합정·연남").slice(0, 1);
+  // 일부러 넣는 예외 상황: 앞의 두 동네 금요일에 몰리고, 나머지는 적게, 나이 차가 큰 사람 둘.
+  // 약 25%는 멤버십으로 결제해 둔다. 실패하기 쉬운 사람(홍대에 혼자 몰린 첫 사람, 나이 차가 큰 마지막 사람)은 꼭 멤버십으로 넣어 기한 연장이 보이게 한다
+  const busy = [...new Set(slots.map((s) => s.region))].slice(0, 2); // 앞의 두 동네에 몰리게
+  const main = slots.filter((s) => busy.includes(s.region));
+  const thin = slots.filter((s) => s.region === "홍대·합정·연남").slice(0, 1);
 
   // 한 번에 넣어야 서버 시간 제한 안에 끝난다 (참가자 수와 상관없이 쿼리 6번)
   const people = Array.from({ length: n }, (_, i) => {
@@ -53,7 +73,8 @@ export async function seedParticipants(form: FormData) {
       gender: r() < 0.5 ? "M" : "F",
       name: `${FAMILY[Math.floor(r() * FAMILY.length)]}${GIVEN[Math.floor(r() * GIVEN.length)]}`,
       birth: outlier ? 1982 : 1994 + Math.floor(r() * 8),
-      slots: i < 3 ? thin : outlier ? pick(slots!, 1) : pick(main.length ? main : slots!, 1 + Math.floor(r() * 2)),
+      slots: i < 3 ? thin : outlier ? pick(slots, 1) : pick(main.length ? main : slots, 1 + Math.floor(r() * 2)),
+      pass: (i === 0 ? "m1" : i === n - 1 ? "m3" : pickPass(r(), r())) as Pass,
     };
   });
   const { data: users } = await db()
@@ -79,12 +100,12 @@ export async function seedParticipants(form: FormData) {
   );
   const { data: passes } = await db()
     .from("passes")
-    .insert(people.map((p) => ({ user_id: uid(p.i), pass_type: "single", total_count: 1, remaining: 0 })))
+    .insert(people.map((p) => passRow(uid(p.i), p.pass)))
     .select("id,user_id");
   const passOf = new Map((passes ?? []).map((x) => [x.user_id, x.id]));
   const { data: pays } = await db()
     .from("payments")
-    .insert(people.map((p) => ({ user_id: uid(p.i), pass_id: passOf.get(uid(p.i)), amount: 9900, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() })))
+    .insert(people.map((p) => ({ user_id: uid(p.i), pass_id: passOf.get(uid(p.i)), amount: PASSES[p.pass].amount, pass_type: p.pass, status: "PAID", paid_at: new Date().toISOString() })))
     .select("id,user_id");
   const payOf = new Map((pays ?? []).map((x) => [x.user_id, x.id]));
   const { data: apps } = await db()
@@ -108,12 +129,13 @@ export async function seedParticipants(form: FormData) {
   const appOf = new Map((apps ?? []).map((x) => [x.user_id, x.id]));
   await db().from("application_slots").insert(people.flatMap((p) => p.slots.map((s) => ({ application_id: appOf.get(uid(p.i)), slot_id: s.id }))));
   const created = apps?.length ?? 0;
-  back(`테스트 참가자 ${created}명을 결제 완료 상태로 신청시켰어요`);
+  const members = people.filter((p) => isMembership(p.pass)).length;
+  back(`테스트 참가자 ${created}명을 결제 완료 상태로 신청시켰어요 (멤버십 ${members}명, 1회권 ${created - members}명)`);
 }
 
 /** 시연용 가상 시각 이동. 이동 뒤 바로 시간 이벤트를 처리한다 */
 export async function moveClock(form: FormData) {
-  await requireAdmin();
+  await requireAdminWrite();
   const to = String(form.get("to"));
   const roundId = String(form.get("round_id") ?? "");
   let target: Date | null = null;
@@ -136,7 +158,7 @@ export async function moveClock(form: FormData) {
 
 /** 테스트 참가자 체크인과 후기를 자동으로 채운다. 일부는 서로 '다시는 싫어요'를 고른다 */
 export async function autoAttend(form: FormData) {
-  await requireAdmin();
+  await requireAdminWrite();
   const roundId = String(form.get("round_id"));
   const { data: apps } = await db()
     .from("applications")
@@ -145,6 +167,7 @@ export async function autoAttend(form: FormData) {
     .eq("match_status", "CONFIRMED");
   const list = (apps ?? []) as unknown as { id: string; user_id: string; table_id: string; attendance_status: string; users: { login_id: string } }[];
   const r = rng(42);
+  const tpl = await loadTemplates();
   let n = 0;
   for (const a of list) {
     if (!a.users.login_id.startsWith("test-")) continue; // 실제 사람 계정은 건드리지 않는다
@@ -160,7 +183,7 @@ export async function autoAttend(form: FormData) {
       rejoin_intent: 3 + Math.floor(r() * 3), recommend_intent: 3 + Math.floor(r() * 3),
     });
     // 실제 참가자(김우연 등)는 직접 남기도록 후기 요청 알림만 간다
-    await notify({ userId: a.user_id, template: "feedback", title: "오늘 저녁 어떠셨어요?", body: "1분이면 끝나요. 남겨 주신 후기는 다음 매칭에 반영돼요.", link: `/tables/${a.table_id}/feedback`, dedupeKey: `feedback:${a.id}` });
+    await notify({ userId: a.user_id, template: "feedback", ...render("feedback", {}, tpl), link: `/tables/${a.table_id}/feedback`, dedupeKey: `feedback:${a.id}` });
     const mates = list.filter((m) => m.table_id === a.table_id && m.user_id !== a.user_id);
     if (mates.length && r() < 0.25) {
       await db().from("person_prefs").upsert({ from_user: a.user_id, to_user: mates[0].user_id, table_id: a.table_id, pref: "avoid" });
@@ -174,18 +197,27 @@ export async function autoAttend(form: FormData) {
 
 /** 이 차수 참가자들을 다음 차수에 다시 신청시킨다. 이전 만남과 비선호가 반영되는지 보려고 */
 export async function reapply(form: FormData) {
-  await requireAdmin();
+  await requireAdminWrite();
   const from = String(form.get("round_id"));
   const to = String(form.get("next_round_id"));
   const { data: apps } = await db().from("applications").select("user_id,users(login_id)").eq("round_id", from).eq("attendance_status", "ATTENDED");
-  const { data: slots } = await db().from("slots").select("id,region,starts_at").eq("round_id", to);
+  const { data: allSlots } = await db().from("slots").select("id,region,starts_at").eq("round_id", to);
+  const slots = (allSlots ?? []).filter((s) => OPEN_REGIONS.includes(s.region));
   const r = rng(7);
   let n = 0;
   for (const a of (apps ?? []) as unknown as { user_id: string; users: { login_id: string } }[]) {
     if (!a.users.login_id.startsWith("test-")) continue;
     const { data: exists } = await db().from("applications").select("id").eq("user_id", a.user_id).eq("round_id", to).maybeSingle();
     if (exists) continue;
-    const { data: pay } = await db().from("payments").insert({ user_id: a.user_id, amount: 9900, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() }).select("id").single();
+    // 기간이 남은 멤버십이 있으면 그걸로(0원) 신청하고, 없으면 1회권을 새로 산다. 실제 신청 화면과 같은 규칙
+    const { data: owned } = await db().from("passes").select("id,pass_type,expires_at").eq("user_id", a.user_id).in("pass_type", ["m1", "m3", "m6"]).gt("expires_at", new Date().toISOString()).order("expires_at", { ascending: false }).limit(1).maybeSingle();
+    let payRow: Record<string, unknown>;
+    if (owned) payRow = { user_id: a.user_id, amount: 0, pass_type: owned.pass_type, pass_id: owned.id, status: "PAID", provider: "pass", paid_at: new Date().toISOString() };
+    else {
+      const { data: np } = await db().from("passes").insert(passRow(a.user_id, "single")).select("id").single();
+      payRow = { user_id: a.user_id, amount: PASSES.single.amount, pass_type: "single", pass_id: np?.id ?? null, status: "PAID", paid_at: new Date().toISOString() };
+    }
+    const { data: pay } = await db().from("payments").insert(payRow).select("id").single();
     const two = [...new Set((slots ?? []).map((s) => s.region))].slice(0, 2);
     const chosen = (slots ?? []).filter((s) => two.includes(s.region)).sort(() => r() - 0.5).slice(0, 2);
     const { data: app } = await db()
@@ -201,7 +233,7 @@ export async function reapply(form: FormData) {
 
 /** 이 차수의 시연 데이터를 지우고 처음 상태로 되돌린다 */
 export async function resetRound(form: FormData) {
-  await requireAdmin();
+  await requireAdminWrite();
   const roundId = String(form.get("round_id"));
   const { data: tables } = await db().from("dining_tables").select("id").eq("round_id", roundId);
   const tableIds = (tables ?? []).map((t) => t.id);
@@ -238,7 +270,7 @@ export async function resetRound(form: FormData) {
 
 /** 지금 시각 기준으로 밀린 작업(마감 매칭, 알림, 단체방 게시)을 바로 처리한다 */
 export async function runTick() {
-  await requireAdmin();
+  await requireAdminWrite();
   const done = await tick();
   back(done.length ? `처리했어요: ${done.join(", ")}` : "지금 처리할 일이 없어요");
 }

@@ -38,7 +38,7 @@ export function Composer({ tableId, action, lateAction }: { tableId: string; act
           placeholder="메시지를 입력해 주세요"
           autoComplete="off"
           maxLength={500}
-          className="h-[54px] flex-1 rounded-full border border-line bg-card px-5 text-[16px] text-ink outline-none placeholder:text-muted/70 focus:border-accent"
+          className="h-[54px] flex-1 rounded-full border border-line bg-card px-5 text-[16px] text-ink outline-none placeholder:text-faint focus:border-accent"
         />
         <button
           aria-label="보내기"

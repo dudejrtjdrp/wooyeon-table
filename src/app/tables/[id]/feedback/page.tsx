@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { ChevronDown, Lock } from "lucide-react";
-import { CountedTextarea, ErrorText, Optional, PageTitle, PrimaryButton, Required, Screen, SectionCard, StarRating, inputCls } from "@/components/ui";
+import { ConfirmSubmit, CountedTextarea, ErrorText, Optional, PageTitle, PrimaryButton, Required, Screen, SectionCard, StarRating, inputCls } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { report, submitFeedback } from "./actions";
@@ -20,7 +20,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
   const prefMap = new Map((prefs ?? []).map((p) => [p.to_user, p.pref]));
 
   const AV = ["bg-accent-soft text-accent-text", "bg-[#CFE3D8] text-accent-text", "bg-[#EEF1EF] text-ink2", "bg-[#FDF3D2] text-[#6b5410]"];
-  const ta = "w-full resize-none rounded-[14px] border border-line bg-field px-4 pt-3.5 text-[16px] text-ink outline-none placeholder:text-muted/70 focus:border-accent focus:bg-card";
+  const ta = "w-full resize-none rounded-[14px] border border-line bg-field px-4 pt-3.5 text-[16px] text-ink outline-none placeholder:text-faint focus:border-accent focus:bg-card";
   return (
     <Screen title="모임 후기" back={`/tables/${id}`}>
       <PageTitle className="mt-4" title="함께한 저녁," accent="어떠셨나요?" sub="남겨 주신 점수와 선택은 다음 테이블을 꾸릴 때 바로 반영돼요." />
@@ -76,7 +76,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           <div>
             <p className="text-[16px] font-bold text-ink">신고 대상<Required /></p>
             <div className="relative mt-2.5">
-              <select name="target" defaultValue="" className={`${inputCls} appearance-none pr-12`}>
+              <select name="target" defaultValue="" required className={`${inputCls} appearance-none pr-12`}>
                 <option value="" disabled>대상을 선택해 주세요.</option>
                 {others.map((o) => (
                   <option key={o.user_id} value={o.user_id}>{o.users.name}</option>
@@ -90,7 +90,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               {REASONS.map((r) => (
                 <label key={r} className="cursor-pointer">
-                  <input type="radio" name="reason" value={r} className="peer sr-only" />
+                  <input type="radio" name="reason" value={r} required className="peer sr-only" />
                   <span className="flex min-h-12 items-center justify-center rounded-[14px] bg-row px-2 text-center text-[14px] text-ink transition peer-checked:bg-danger/10 peer-checked:font-extrabold peer-checked:text-danger peer-focus-visible:ring-2 peer-focus-visible:ring-danger">{r}</span>
                 </label>
               ))}
@@ -101,7 +101,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
             <div className="mt-2.5"><CountedTextarea name="detail" max={500} rows={3} placeholder="필요한 내용을 적어 주세요." className={ta} /></div>
           </div>
           <ErrorText msg={e} />
-          <PrimaryButton tone="danger-soft">신고하고 차단하기</PrimaryButton>
+          <ConfirmSubmit label="신고하고 차단하기" question="신고하면 이 분과는 다시 같은 테이블에 앉지 않아요. 상대에게는 알리지 않고, 운영팀이 내용을 확인해요." confirmLabel="신고하기" />
         </form>
       </section>
     </Screen>

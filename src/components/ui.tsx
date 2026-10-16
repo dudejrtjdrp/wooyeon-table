@@ -5,9 +5,9 @@ import { now } from "@/lib/clock";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/supabase";
 import { Bell } from "lucide-react";
-import { BackButton, TabBar } from "./client";
+import { BackButton, StaleActions, TabBar } from "./client";
 
-export { ConfirmSheet, CountedTextarea, PasswordInput, PrimaryButton, StarRating, Toast } from "./client";
+export { ConfirmSheet, ConfirmSubmit, CountedTextarea, PasswordInput, PrimaryButton, StarRating, Toast } from "./client";
 
 export const IMG = {
   homeBg: "/images/dining/generated/01-home-background.png",
@@ -321,12 +321,22 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
   );
 }
 
+// 다른 기기·자동 처리가 먼저 끝나 화면이 낡았을 때 나오는 오류들 (문구는 lib 그대로 두고 여기서 알아본다)
+const STALE = /이미 (처리|끝났|답한|마감)|그사이|같은 순간|기한이 지나|새로 고쳐/;
+
 export function ErrorText({ msg }: { msg?: string | null }) {
   if (!msg) return null;
+  const stale = STALE.test(msg);
   return (
-    <p role="alert" className="rounded-[12px] bg-danger/10 px-4 py-3 text-[14px] font-bold text-danger">
-      {msg}
-    </p>
+    <div role="alert" className="rounded-[12px] bg-danger/10 px-4 py-3 text-[14px] font-bold text-danger">
+      <p>{msg}</p>
+      {stale && (
+        <>
+          <p className="mt-1 font-medium">그사이 상태가 바뀌었을 수 있어요. 새로고침해서 지금 상태를 확인해 주세요.</p>
+          <StaleActions />
+        </>
+      )}
+    </div>
   );
 }
 

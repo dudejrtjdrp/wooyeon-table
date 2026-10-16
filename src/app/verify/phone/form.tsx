@@ -9,7 +9,7 @@ const input =
 
 const fmt = (p: string) => p.replace(/\D/g, "").replace(/^(\d{3})(\d{1,4})?(\d{1,4})?.*/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
 
-export function PhoneVerifyForm({ initialPhone, next, demo }: { initialPhone: string; next: string; demo: boolean }) {
+export function PhoneVerifyForm({ initialPhone, next, demo, autoSend = false }: { initialPhone: string; next: string; demo: boolean; autoSend?: boolean }) {
   const router = useRouter();
   const [phone, setPhone] = useState(fmt(initialPhone));
   const [code, setCode] = useState("");
@@ -18,6 +18,7 @@ export function PhoneVerifyForm({ initialPhone, next, demo }: { initialPhone: st
   const [busy, setBusy] = useState<"send" | "check" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const codeRef = useRef<HTMLInputElement>(null);
+  const autoSent = useRef(false);
 
   useEffect(() => {
     if (!sent) return;
@@ -40,6 +41,14 @@ export function PhoneVerifyForm({ initialPhone, next, demo }: { initialPhone: st
     setTimeout(() => codeRef.current?.focus(), 50);
   };
 
+  // 가입 직후: 가입한 번호로 한 번만 자동으로 보낸다 (화면이 두 번 그려져도 한 번)
+  useEffect(() => {
+    if (!autoSend || autoSent.current) return;
+    autoSent.current = true;
+    send();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSend]);
+
   const check = async (c = code) => {
     if (c.length !== 6) return;
     setErr(null);
@@ -53,12 +62,25 @@ export function PhoneVerifyForm({ initialPhone, next, demo }: { initialPhone: st
   const field = "rounded-[22px] bg-field p-5";
   return (
     <div className="pb-32">
-      <h2 className="animate-rise mt-6 text-[28px] font-bold leading-[1.3] tracking-[-0.03em] text-ink">
-        모임 안내를 받을
-        <br />
-        <span className="text-accent">휴대폰 번호를 인증해 주세요</span>
-      </h2>
-      <p className="mt-3 text-[15px] leading-relaxed text-muted">중요한 모임 소식을 문자로 알려드려요. 다른 참가자에게는 보이지 않아요.</p>
+      {autoSend ? (
+        <>
+          <h2 className="animate-rise mt-6 text-[28px] font-bold leading-[1.3] tracking-[-0.03em] text-ink">
+            가입한 번호로
+            <br />
+            <span className="text-accent">인증번호를 보냈어요</span>
+          </h2>
+          <p className="mt-3 text-[15px] leading-relaxed text-muted">문자로 온 6자리를 넣으면 바로 다음으로 넘어가요. 번호가 틀렸다면 고친 뒤 다시 받아 주세요. 다른 참가자에게는 보이지 않아요.</p>
+        </>
+      ) : (
+        <>
+          <h2 className="animate-rise mt-6 text-[28px] font-bold leading-[1.3] tracking-[-0.03em] text-ink">
+            모임 안내를 받을
+            <br />
+            <span className="text-accent">휴대폰 번호를 인증해 주세요</span>
+          </h2>
+          <p className="mt-3 text-[15px] leading-relaxed text-muted">중요한 모임 소식을 문자로 알려드려요. 다른 참가자에게는 보이지 않아요.</p>
+        </>
+      )}
 
       <div className="mt-8 space-y-3">
         <section className={field}>

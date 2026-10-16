@@ -14,9 +14,15 @@ export const dynamic = "force-dynamic";
 
 const ROUND_STATUS: Record<string, [string, "accent" | "leaf" | "muted" | "candle"]> = { open: ["모집 중", "accent"], matching: ["매칭 중", "candle"], matched: ["매칭 완료", "leaf"], closed: ["종료", "muted"] };
 
-export default async function Rounds({ searchParams }: { searchParams: Promise<{ e?: string; r?: string }> }) {
-  await requireAdmin();
-  const { e, r } = await searchParams;
+type Draft = { title?: string; deadline?: string; match_at?: string; dates?: string[]; time?: string; duration?: string; regions?: string[]; max_tables?: string };
+
+export default async function Rounds({ searchParams }: { searchParams: Promise<{ r?: string; f?: string }> }) {
+  const me = await requireAdmin();
+  const ro = me.level === "viewer";
+  const { r, f } = await searchParams;
+  // 회차 만들기에서 검증에 걸리면 넣었던 값을 그대로 채워 둔다
+  let draft: Draft = {};
+  try { draft = f ? (JSON.parse(f) as Draft) : {}; } catch { draft = {}; }
   const { rounds: picker, round: cur } = await roundsAndCurrent(r);
   const { data: rounds } = await db().from("rounds").select("id,title,status,apply_deadline,match_at,slots(id,region,starts_at,ends_at,max_tables,application_slots(application_id))").order("match_at");
   const { data: venues } = await db().from("venues").select("id,name,region,address,price_range,active").order("region");
@@ -33,7 +39,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   return (
     <div>
       <PageHeader title="회차·식당" desc="다음 저녁의 일정과 식당을 준비해요. 회차를 만들면 날짜×동네마다 일정이 생기고, 그 동네 제휴 식당이 일정마다 2테이블씩 잡혀요." />
-      {e && <p className="mt-4 rounded-xl bg-danger/10 px-4 py-2 text-[14px] text-danger">{e}</p>}
+      {!rounds?.length && <p className="mt-4 rounded-xl bg-accent-soft/60 px-4 py-3 text-[14px] text-ink">아직 회차가 없어요. 오른쪽 &lsquo;새 회차 만들기&rsquo;에 이름·날짜·동네만 채우면 마감·매칭 시각은 운영 규칙대로 잡혀요.</p>}
 
       <div className="mt-6 grid items-start gap-4 xl:grid-cols-[1fr_400px]">
         <div className="space-y-4">
@@ -54,7 +60,14 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
             </table>
             {selected && (
               <div className="mt-4 rounded-2xl bg-field p-4">
-                <p className="text-[14px] font-semibold text-ink">{selected.title} · 일정별 모집 현황</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[14px] font-semibold text-ink">{selected.title} · 일정별 모집 현황</p>
+                  <span className="flex gap-3 text-[13px] font-semibold">
+                    <Link href={`/admin/applicants?r=${selected.id}`} className="text-accent hover:underline">신청자 보기</Link>
+                    <Link href={`/admin/matching?r=${selected.id}`} className="text-accent hover:underline">매칭 결과 보기 →</Link>
+                  </span>
+                </div>
+                {selected.status === "open" && <p className="mt-1 text-[12px] text-muted">{fmtDateTime(selected.match_at)}에 결제를 마친 신청자로 자동 매칭해요. 그 전까지는 손댈 일이 없어요.</p>}
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {curSlots.map((sl) => {
                     const full = (selected.slots.find((x) => x.id === sl.id)?.application_slots.length ?? 0);
@@ -90,8 +103,11 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                           <form action={setCapacity} className="flex items-center gap-2">
                             <input type="hidden" name="venue_id" value={v.id} />
                             <input type="hidden" name="slot_id" value={sl.id} />
-                            <input name="tables" type="number" min={0} max={20} defaultValue={n} className={`${ctl} w-20`} />
-                            <button className="text-[13px] font-semibold text-accent">저장</button>
+                            <input type="hidden" name="r" value={cur?.id ?? ""} />
+                            {ro ? <span className="tabular-nums">{n}</span> : <>
+                              <input name="tables" type="number" min={0} max={20} defaultValue={n} className={`${ctl} w-20`} aria-label={`${v.name} 받을 수 있는 테이블`} />
+                              <button className="text-[13px] font-semibold text-accent">저장</button>
+                            </>}
                           </form>
                         </td>
                         <td className={td}>{u >= n && n > 0 ? <Badge v={[`${u} (가득)`, "candle"]} /> : u}</td>
@@ -120,36 +136,45 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                 </tbody>
               </table>
             </div>
+            {!ro && <>
             <p className="mt-5 text-[15px] font-bold text-ink">식당 추가</p>
             <form action={addVenue} className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-[110px_1fr_1.4fr_120px_auto]">
               <select name="region" className={ctl} aria-label="동네 묶음">{SIDOS.map((s) => <optgroup key={s.name} label={s.name}>{s.areas.map((x) => <option key={x}>{x}</option>)}</optgroup>)}</select>
-              <input name="name" placeholder="식당 이름 (필수)" className={ctl} />
-              <input name="address" placeholder="주소 (필수)" className={ctl} />
+              <input name="name" required placeholder="식당 이름 (필수)" className={ctl} />
+              <input name="address" required placeholder="주소 (필수)" className={ctl} />
               <input name="price" placeholder="가격대 (선택)" className={ctl} />
               <input name="rating" type="number" step="0.1" min="0" max="5" placeholder="리뷰 평점 (예: 4.5)" className={ctl} />
               <select name="channel" className={ctl} aria-label="예약 채널" defaultValue="naver"><option value="naver">네이버 예약</option><option value="catchtable">캐치테이블</option><option value="phone">전화 예약</option></select>
               <input name="booking_url" placeholder="예약 페이지 주소 (선택)" className={ctl} />
               <button className={btnPrimary}>식당 추가</button>
             </form>
+            </>}
           </Panel>
         </div>
 
-        <Panel title="새 회차 만들기" className="xl:sticky xl:top-6">
-          <form action={createRound} className="space-y-5 text-[14px]">
-            <label className="block"><span className={lbl}>이름<Required /></span><input name="title" placeholder="11월 둘째 주 저녁" className={`${ctl} mt-2 w-full`} /><span className={help}>참가자에게 보이는 회차 이름이에요.</span></label>
-            <label className="block"><span className={lbl}>신청 마감<Optional /></span><input name="deadline" type="datetime-local" className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 모임 주 화요일 밤 12시로 잡혀요. 이 시각부터 환불이 안 되고 매칭이 돌아요.</span></label>
-            <label className="block"><span className={lbl}>자동 매칭 실행<Optional /></span><input name="match_at" type="datetime-local" className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 마감과 같은 시각에 매칭이 진행돼요.</span></label>
-            <div><span className={lbl}>날짜<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="dates" type="date" className={ctl} aria-label="첫째 날" /><input name="dates" type="date" className={ctl} aria-label="둘째 날" /></span><span className={help}>이번 회차에 진행할 저녁 날짜를 1~2개 골라 주세요.</span></div>
-            <div><span className={lbl}>시작 시각 · 진행 시간<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="time" type="time" defaultValue="19:30" className={ctl} aria-label="시작 시각" /><span className="flex items-center gap-2"><input name="duration" type="number" defaultValue={150} min={60} className={`${ctl} w-full`} aria-label="진행 시간" /><span className="shrink-0 text-muted">분</span></span></span><span className={help}>모든 식당에 같은 시각에 시작해요.</span></div>
+        {ro ? (
+          <Panel title="새 회차 만들기" className="xl:sticky xl:top-6">
+            <p className="text-[14px] text-muted">조회 전용 계정이라 회차를 만들거나 식당 재고를 바꿀 수 없어요. 전체 권한 운영자에게 부탁해 주세요.</p>
+          </Panel>
+        ) : (
+        <Panel title="새 회차 만들기" className="scroll-mt-6 xl:sticky xl:top-6">
+          <div id="new-round" />
+          {/* 검증 뒤 돌아오면 f가 바뀌므로 폼을 새로 그려 넣었던 값을 다시 채운다(React가 제출 뒤 폼을 비우기 때문) */}
+          <form key={f ?? "new"} action={createRound} className="space-y-5 text-[14px]">
+            <label className="block"><span className={lbl}>이름<Required /></span><input name="title" required defaultValue={draft.title} placeholder="11월 둘째 주 저녁" className={`${ctl} mt-2 w-full`} /><span className={help}>참가자에게 보이는 회차 이름이에요.</span></label>
+            <label className="block"><span className={lbl}>신청 마감<Optional /></span><input name="deadline" type="datetime-local" defaultValue={draft.deadline} className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 모임 주 화요일 밤 12시로 잡혀요. 이 시각부터 환불이 안 되고 매칭이 돌아요.</span></label>
+            <label className="block"><span className={lbl}>자동 매칭 실행<Optional /></span><input name="match_at" type="datetime-local" defaultValue={draft.match_at} className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 마감과 같은 시각에 매칭이 진행돼요.</span></label>
+            <div><span className={lbl}>날짜<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="dates" type="date" required defaultValue={draft.dates?.[0]} className={ctl} aria-label="첫째 날 (필수)" /><input name="dates" type="date" defaultValue={draft.dates?.[1]} className={ctl} aria-label="둘째 날 (선택)" /></span><span className={help}>이번 회차에 진행할 저녁 날짜예요. 첫째 날은 꼭 넣고, 둘째 날은 있으면 넣어 주세요.</span></div>
+            <div><span className={lbl}>시작 시각 · 진행 시간<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="time" type="time" required defaultValue={draft.time || "19:30"} className={ctl} aria-label="시작 시각" /><span className="flex items-center gap-2"><input name="duration" type="number" required defaultValue={draft.duration || 150} min={60} className={`${ctl} w-full`} aria-label="진행 시간" /><span className="shrink-0 text-muted">분</span></span></span><span className={help}>모든 식당에 같은 시각에 시작해요.</span></div>
             <div>
               <span className={lbl}>동네<Required /></span>
               {SIDOS.map((s) => (
-              <details key={s.name} open={s.name === "서울"} className="mt-2">
+              <details key={s.name} open={s.name === "서울" || s.areas.some((x) => draft.regions?.includes(x))} className="mt-2">
               <summary className="cursor-pointer py-1 text-[13px] font-semibold text-muted">{s.name}</summary>
               <div className="mt-1 grid grid-cols-2 gap-2">
                 {s.areas.map((x) => (
                   <label key={x} className="cursor-pointer">
-                    <input type="checkbox" name="regions" value={x} defaultChecked={(DEFAULT_REGIONS as readonly string[]).includes(x)} className="peer sr-only" />
+                    <input type="checkbox" name="regions" value={x} defaultChecked={(draft.regions ?? (DEFAULT_REGIONS as readonly string[])).includes(x)} className="peer sr-only" />
                     <span className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-line text-[14px] text-ink transition peer-checked:border-accent peer-checked:bg-accent-soft/60 peer-checked:font-semibold peer-checked:text-accent [&>svg]:hidden peer-checked:[&>svg]:block"><Check size={16} strokeWidth={2.8} />{x}</span>
                   </label>
                 ))}
@@ -158,10 +183,11 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
               ))}
               <span className={help}>동네 묶음을 여러 개 고를 수 있어요. 기본은 식당이 있는 서울 네 곳이에요.</span>
             </div>
-            <label className="block"><span className={lbl}>일정당 최대 테이블 수<Required /></span><input name="max_tables" type="number" defaultValue={4} min={1} className={`${ctl} mt-2 w-28`} /><span className={help}>한 동네·날짜에 운영할 최대 테이블 수예요.</span></label>
+            <label className="block"><span className={lbl}>일정당 최대 테이블 수<Required /></span><input name="max_tables" type="number" required defaultValue={draft.max_tables || 4} min={1} className={`${ctl} mt-2 w-28`} /><span className={help}>한 동네·날짜에 운영할 최대 테이블 수예요.</span></label>
             <button className={`${btnPrimary} h-12 w-full text-[15px]`}>회차 만들기</button>
           </form>
         </Panel>
+        )}
       </div>
     </div>
   );

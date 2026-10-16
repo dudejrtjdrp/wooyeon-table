@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminWrite } from "@/lib/auth";
 import { TABLE_TYPES } from "@/lib/contents";
 import { logStatus } from "@/lib/events";
 import { db } from "@/lib/supabase";
@@ -12,7 +12,7 @@ const typesOf = (form: FormData) => form.getAll("table_types").map(String).filte
 const back = (k: "m" | "e", msg: string, kind?: string) => redirect(`/admin/contents?${kind ? `k=${kind}&` : ""}${k}=${encodeURIComponent(msg)}`);
 
 export async function saveContent(form: FormData) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminWrite("/admin/contents");
   const id = String(form.get("id") ?? "");
   const kind = String(form.get("kind")) === "icebreaker" ? "icebreaker" : "topic";
   const body = String(form.get("body") ?? "").trim();
@@ -38,7 +38,7 @@ export async function saveContent(form: FormData) {
 }
 
 export async function toggleContent(form: FormData) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminWrite("/admin/contents");
   const id = String(form.get("id"));
   const active = String(form.get("active")) === "true";
   const { data } = await db().from("conversation_contents").update({ active, updated_at: new Date().toISOString() }).eq("id", id).select("kind").single();
@@ -48,7 +48,7 @@ export async function toggleContent(form: FormData) {
 }
 
 export async function saveRules(form: FormData) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminWrite("/admin/contents");
   const n = (k: string, d: number) => Number(form.get(k) ?? d) || d;
   const value = {
     topicCount: Math.max(3, Math.min(6, n("topicCount", 3))),

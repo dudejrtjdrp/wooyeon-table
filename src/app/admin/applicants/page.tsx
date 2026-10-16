@@ -1,9 +1,10 @@
 import { Download } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, btnInk, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, btnLight, ctl, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime } from "@/lib/format";
-import { ACCOUNT, ATTEND, MATCH, PAYMENT, RESOLUTION, label } from "@/lib/labels";
+import { now } from "@/lib/clock";
+import { ACCOUNT, ATTEND, MATCH, PAYMENT, RESOLUTION, ageBand, label } from "@/lib/labels";
 import { db } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function Applicants({ searchParams }: { searchParams: Promise<{ r?: string; s?: string; q?: string }> }) {
   await requireAdmin();
   const { r, s, q: query } = await searchParams;
+  const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "numeric" }).format(await now()));
   const { data: rounds } = await db().from("rounds").select("id,title").order("match_at");
   const round = rounds?.find((x) => x.id === r) ?? rounds?.[0];
   let q = db()
@@ -18,13 +20,16 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
     .select("id,user_id,payment_status,match_status,attendance_status,realloc_count,submitted_at,resolution,application_status,users(name,login_id,account_status,profiles(birth_year,gender,mbti,job)),payments(amount,status),application_slots(slots(region))")
     .eq("round_id", round?.id ?? "")
     .order("submitted_at", { ascending: false });
-  if (s) q = q.eq("match_status", s);
+  // CHOOSING: 대시보드 '대체 일정·환불 선택 대기'와 같은 기준(실패 안내를 받고 아직 안 고른 사람, 자리 기다리기를 고른 사람 제외)
+  if (s === "CHOOSING") q = q.eq("match_status", "ALTERNATIVE_OFFERED");
+  else if (s) q = q.eq("match_status", s);
   const { data } = await q;
   let rows = (data ?? []) as unknown as {
     id: string; user_id: string; payment_status: string; match_status: string; attendance_status: string | null; realloc_count: number; submitted_at: string; resolution: string | null; application_status: string;
     users: { name: string; login_id: string; account_status: string; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null };
     payments: { amount: number; status: string } | null; application_slots: { slots: { region: string } }[];
   }[];
+  if (s === "CHOOSING") rows = rows.filter((a) => a.resolution !== "wait");
   if (query) rows = rows.filter((a) => a.users.name.includes(query) || a.users.login_id.includes(query));
   // 이전 참석·신고 이력 (11장 신청자 목록)
   const uids = rows.map((a) => a.user_id);
@@ -43,7 +48,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
     <div>
       <PageHeader
         title="신청자·결제"
-        desc="이름을 누르면 그 사람의 상태 이력, 받은 알림, 참가 기록을 한 화면에서 볼 수 있어요."
+        desc="이름을 누르면 그 사람의 상태 이력, 받은 알림, 참가 기록을 한 화면에서 볼 수 있어요. 목록에는 연령대만 보이고, 연락처는 상세 화면에서 가려서 보여요."
         actions={round && <a href={`/api/admin/export?r=${round.id}`} className={btnLight}><Download size={18} />CSV 내려받기</a>}
       />
       <form className="mt-6 flex flex-wrap gap-2">
@@ -52,6 +57,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
         </select>
         <select name="s" defaultValue={s ?? ""} className={ctl}>
           <option value="">모든 매칭 상태</option>
+          <option value="CHOOSING">다른 방법 아직 안 고름</option>
           {Object.entries(MATCH).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}
         </select>
         <input name="q" defaultValue={query ?? ""} placeholder="이름이나 아이디로 찾기" className={`${ctl} w-56`} />
@@ -73,7 +79,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
                     <Link href={`/admin/applicants/${a.id}`} className="text-[16px] font-bold text-ink hover:text-accent">{a.users.name}</Link>
                     {a.users.account_status !== "active" && <span className="ml-2"><Badge v={label(ACCOUNT, a.users.account_status)} /></span>}
                   </td>
-                  <td className={`${td} text-[#4c5368]`}>{p ? <><span className="block">{p.birth_year} · {p.gender === "M" ? "남" : "여"}{p.mbti ? ` · ${p.mbti}` : ""}</span>{p.job && <span className="block text-[12px] text-muted">{p.job}</span>}</> : "-"}</td>
+                  <td className={`${td} text-[#4c5368]`}>{p ? <><span className="block">{ageBand(p.birth_year, year)} · {p.gender === "M" ? "남" : "여"}{p.mbti ? ` · ${p.mbti}` : ""}</span>{p.job && <span className="block text-[12px] text-muted">{p.job}</span>}</> : "-"}</td>
                   <td className={td}>{[...new Set(a.application_slots.map((x) => x.slots.region))].join(" · ")}</td>
                   <td className={td}><Badge v={label(PAYMENT, a.payment_status)} /></td>
                   <td className={td}>
@@ -90,7 +96,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
             })}
           </tbody>
         </table>
-        {!rows.length && <p className="p-10 text-center text-muted">조건에 맞는 신청자가 없어요.</p>}
+        {!rows.length && <p className="p-10 text-center text-muted">{s || query ? "조건에 맞는 신청자가 없어요. 필터를 풀어 보세요." : "아직 이 회차에 신청한 사람이 없어요. 신청이 들어오면 여기에 바로 보여요."}</p>}
         <p className="border-t border-line px-4 py-3 text-[14px] text-muted">총 {rows.length}명</p>
       </div>
     </div>
