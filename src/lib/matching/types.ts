@@ -72,6 +72,8 @@ export interface ScoreDetail {
   bonus: number;
   /** 0~100 (+가산점) */
   total: number;
+  /** 최소 점수 비교용. 성비를 못 맞춘 감점은 빼고 센다(성비는 선호 조건이라 그것만으로 테이블을 막지 않음) */
+  gate: number;
   ageGap: number;
   oldestBirthYear: number;
   youngestBirthYear: number;

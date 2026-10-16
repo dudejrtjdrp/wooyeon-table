@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { PASSES, type PassType } from "@/lib/constants";
+import { PASSES, isMembership, type PassType } from "@/lib/constants";
 import { usablePass } from "@/lib/billing";
 import { fmtDateTime } from "@/lib/format";
 import { logStatus } from "@/lib/events";
@@ -22,6 +22,11 @@ export async function submitApplication(form: FormData) {
   const pass = (useOwned ? "single" : passRaw) as PassType;
   const back = (m: string) => redirect(`/apply/${roundId}?e=${encodeURIComponent(m)}`);
 
+  // 노쇼·신고로 이용이 제한된 계정은 신청할 수 없다 (SAF-02)
+  const { applyBlock } = await import("@/lib/noshow");
+  const blocked = await applyBlock(me.id, await now());
+  if (blocked) back(blocked);
+
   const { data: round } = await db().from("rounds").select("id,title,apply_deadline,match_at,status,slots(id,region,sido,starts_at)").eq("id", roundId).maybeSingle();
   if (!round || round.status !== "open") back("모집이 끝난 일정이에요");
   if (new Date(round!.apply_deadline) <= (await now())) back("신청 마감 시간이 지났어요");
@@ -39,7 +44,8 @@ export async function submitApplication(form: FormData) {
   // 보유 이용권으로 신청하면 결제 없이 1회를 쓴다 (RET-03). 아니면 결제 대기 건을 만들고 결제 화면에서 승인한다
   const owned = useOwned ? await usablePass(me.id, await now()) : null;
   if (useOwned && !owned) back("쓸 수 있는 이용권이 없어요. 새 이용권을 골라 주세요");
-  if (owned) {
+  const ownedMembership = Boolean(owned && isMembership(owned.pass_type));
+  if (owned && !ownedMembership) {
     const { data: took } = await db().from("passes").update({ remaining: owned.remaining - 1 }).eq("id", owned.id).eq("remaining", owned.remaining).select("id");
     if (!took?.length) back("이용권을 쓰는 중에 문제가 생겼어요. 다시 시도해 주세요");
   }
@@ -86,8 +92,12 @@ export async function submitApplication(form: FormData) {
     dedupeKey: `applied:${app!.id}:${payment!.id}`,
   });
   if (owned) {
-    await logStatus({ entityType: "application", entityId: app!.id, field: "payment_status", from: "PENDING", to: "PAID", actor: `user:${me.id}`, reason: `보유 이용권 1회 사용 (남은 ${owned.remaining - 1}회)` });
-    await notify({ userId: me.id, template: "paid", title: "이용권으로 신청했어요", body: `이용권 1회를 썼어요. 남은 횟수는 ${owned.remaining - 1}회예요. ${fmtDateTime(round!.match_at)}에 자동으로 테이블을 꾸려서 알려드릴게요.`, link: `/applications/${app!.id}`, dedupeKey: `paid:${app!.id}:${payment!.id}` });
+    const used = ownedMembership ? "멤버십으로 신청(차감 없음)" : `보유 이용권 1회 사용 (남은 ${owned.remaining - 1}회)`;
+    await logStatus({ entityType: "application", entityId: app!.id, field: "payment_status", from: "PENDING", to: "PAID", actor: `user:${me.id}`, reason: used });
+    const body = ownedMembership
+      ? `멤버십으로 신청했어요. 기간 안에는 횟수 제한 없이 신청할 수 있어요. ${fmtDateTime(round!.match_at)}에 자동으로 테이블을 꾸려서 알려드릴게요.`
+      : `이용권 1회를 썼어요. 남은 횟수는 ${owned.remaining - 1}회예요. ${fmtDateTime(round!.match_at)}에 자동으로 테이블을 꾸려서 알려드릴게요.`;
+    await notify({ userId: me.id, template: "paid", title: ownedMembership ? "멤버십으로 신청했어요" : "이용권으로 신청했어요", body, link: `/applications/${app!.id}`, dedupeKey: `paid:${app!.id}:${payment!.id}` });
     redirect(`/applications/${app!.id}`);
   }
   // 결제 대기 안내 (14장): 결제 방법과 기한. 1시간 뒤에도 결제 전이면 한 번 더 알린다

@@ -59,7 +59,7 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
           <summary className="flex cursor-pointer list-none items-center justify-between p-5">
             <span>
               <span className="block text-[16px] font-bold text-ink">환불 규정 확인하기</span>
-              <span className="mt-0.5 block text-[13px] text-muted">모임 2일 전까지는 전액 환불돼요.</span>
+              <span className="mt-0.5 block text-[13px] text-muted">모임 주 화요일 밤 12시까지는 전액 환불돼요.</span>
             </span>
             <ChevronDown size={20} className="text-muted transition group-open:rotate-180" />
           </summary>
@@ -73,9 +73,9 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
         <div className="mt-4"><ErrorText msg={e} /></div>
         {!tossLive() && (
           <div className="mt-6 flex flex-col items-center gap-2.5 text-[13px] text-muted">
-            <button formAction={pay} className="underline underline-offset-4">결제창 없이 바로 결제 완료 (시연용)</button>
+            <button formAction={pay} className="inline-flex h-11 items-center underline underline-offset-4">결제창 없이 바로 결제 완료 (시연용)</button>
             {app.payments.status === "PENDING" && (
-              <button formAction={failPayment} className="underline underline-offset-4">결제 실패 상황 보기 (시연용)</button>
+              <button formAction={failPayment} className="inline-flex h-11 items-center underline underline-offset-4">결제 실패 상황 보기 (시연용)</button>
             )}
           </div>
         )}

@@ -322,7 +322,7 @@ export function OnboardingWizard({
               ))}
             </ul>
             <div className="mx-2 mt-3 rounded-[12px] bg-field px-4 py-3.5 text-[13px] leading-relaxed text-[#4a5a51]">
-              모임 2일 전부터는 환불이 안 되고, 당일에는 취소나 단체방 나가기를 할 수 없어요.
+              모임 주 화요일 밤 12시부터는 환불이 안 되고, 당일에는 취소나 단체방 나가기를 할 수 없어요.
             </div>
           </section>
         )}

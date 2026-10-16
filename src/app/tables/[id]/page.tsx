@@ -6,6 +6,8 @@ import { BackButton } from "@/components/client";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { dday, ddayLabel, fmtSlot } from "@/lib/format";
+import { refundCutoff } from "@/lib/policy";
+import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
 import { checkIn } from "./actions";
 
@@ -30,6 +32,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   } | null;
   if (!t) redirect("/");
 
+  const { data: resv } = await db().from("reservations").select("channel,status,external_ref").eq("table_id", id).maybeSingle();
   const { data: memRaw } = await db()
     .from("applications")
     .select("id,user_id,attendance_status,users(name,profiles(job,gender,birth_year,interests,food_restrictions))")
@@ -57,7 +60,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   for (const p of ps) for (const x of p.interests ?? []) tally.set(x, (tally.get(x) ?? 0) + 1);
   const shared = [...tally.entries()].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([x]) => x);
   const myFood = mine?.users.profiles?.food_restrictions;
-  const twoDays = n.getTime() >= start.getTime() - 2 * 86400_000;
+  const twoDays = n >= refundCutoff(t.slots.starts_at);
 
   const status = done ? "모임 끝" : t.status === "IN_PROGRESS" ? "모임 중" : "매칭 확정";
   const title = done ? "오늘 저녁 어땠어요?" : t.status === "IN_PROGRESS" ? "지금 모임 중이에요" : "테이블이 정해졌어요";
@@ -118,6 +121,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
               ["식당", t.venues ? t.venues.name : "정하고 있어요"],
               ...(t.venues ? ([["주소", mapUrl ? <a key="m" href={mapUrl} target="_blank" rel="noreferrer" className="text-accent">{t.venues.address} · 지도</a> : t.venues.address]] as [string, React.ReactNode][]) : []),
               ...(t.reservation_name ? ([["예약 이름", t.reservation_name]] as [string, string][]) : []),
+              ...(resv ? ([["예약", resv.status === "CONFIRMED" ? <span key="r">{CHANNEL_LABEL[resv.channel as Channel]} 예약 확정{resv.external_ref ? ` · ${resv.external_ref}` : ""}</span> : "운영팀이 예약하고 있어요"]] as [string, React.ReactNode][]) : []),
               ...(t.venues?.price_range ? ([["1인 가격대", t.venues.price_range]] as [string, string][]) : []),
               ["못 드시는 음식", myFood ? `${myFood}` : "없어요"],
             ]}
@@ -157,7 +161,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
             <>
               {!done && (
                 <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
-                  하루 전에 한 번 더 알려드릴게요. {twoDays ? "모임 2일 전부터는 환불이 안 돼요." : "2일 전까지는 취소하면 환불돼요."}
+                  하루 전에 한 번 더 알려드릴게요. {twoDays ? "환불 마감(모임 주 화요일 밤 12시)이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 환불돼요."}
                   {mine?.attendance_status === "ATTENDED" && " 체크인했어요."}
                 </p>
               )}

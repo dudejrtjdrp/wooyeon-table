@@ -9,6 +9,8 @@ import { seatCandidates } from "@/lib/attendance";
 import { TYPE_LABEL } from "@/lib/contents";
 import { pickContents } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
+import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
+import { reservationAction } from "./actions";
 import { OpsPanel } from "./ops-panel";
 
 const OFFER: Record<string, [string, "muted" | "accent" | "leaf" | "danger"]> = {
@@ -27,14 +29,15 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
   const { m: okMsg, e: errMsg } = await searchParams;
   const { data } = await db()
     .from("dining_tables")
-    .select("id,status,slot_id,score,score_detail,explanation,reservation_name,confirmed_at,slots(starts_at,ends_at,region),venues(name,address,price_range),rounds(title)")
+    .select("id,status,slot_id,score,score_detail,explanation,reservation_name,confirmed_at,slots(starts_at,ends_at,region),venues(name,address,price_range,rating,booking_channel),rounds(title)")
     .eq("id", id)
     .maybeSingle();
   const t = data as unknown as {
-    id: string; status: string; slot_id: string; score: number; explanation: { reasons?: string[]; origin?: string }; reservation_name: string | null; confirmed_at: string | null;
-    slots: { starts_at: string; ends_at: string; region: string }; venues: { name: string; address: string; price_range: string | null } | null; rounds: { title: string };
+    id: string; status: string; slot_id: string; score: number; score_detail: { gate?: number } | null; explanation: { reasons?: string[]; origin?: string }; reservation_name: string | null; confirmed_at: string | null;
+    slots: { starts_at: string; ends_at: string; region: string }; venues: { name: string; address: string; price_range: string | null; rating: number | null; booking_channel: string | null } | null; rounds: { title: string };
   } | null;
   if (!t) notFound();
+  const { data: resv } = await db().from("reservations").select("id,channel,status,party_size,reservation_name,external_ref,deep_link,attempts,last_error,mode,updated_at").eq("table_id", id).maybeSingle();
   const [{ data: apps }, { data: room }, { data: events }] = await Promise.all([
     db().from("applications").select("id,user_id,attendance_status,realloc_count,users(name,profiles(birth_year,gender,mbti,job))").eq("table_id", id),
     db().from("chat_rooms").select("id,created_at").eq("table_id", id).maybeSingle(),
@@ -59,7 +62,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
     <div>
       <Link href="/admin/tables" className="text-[13px] text-muted hover:text-ink">← 테이블 목록</Link>
       <div className="mt-2">
-        <PageHeader title={`${fmtDate(t.slots.starts_at)} ${fmtTime(t.slots.starts_at)} ${t.slots.region}`} desc={`${t.rounds.title}, 확정 ${t.confirmed_at ? fmtDateTime(t.confirmed_at) : "-"}, 점수 ${Math.round(Number(t.score))}`} />
+        <PageHeader title={`${fmtDate(t.slots.starts_at)} ${fmtTime(t.slots.starts_at)} ${t.slots.region}`} desc={`${t.rounds.title}, 확정 ${t.confirmed_at ? fmtDateTime(t.confirmed_at) : "-"}, 점수 ${Math.round(Number(t.score))}${typeof t.score_detail?.gate === "number" ? ` (확정 판정 ${Math.round(t.score_detail.gate)}점, 성비 감점 제외)` : ""}`} />
       </div>
       {okMsg && <p className="mt-4 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-medium text-leaf">{okMsg}</p>}
       {errMsg && <p className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-[14px] font-medium text-danger">{errMsg}</p>}
@@ -126,10 +129,34 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
                 <div className="text-muted">{t.venues.address}</div>
                 <div><dt className="inline text-muted">예약명 </dt><dd className="inline">{t.reservation_name}</dd></div>
                 <div><dt className="inline text-muted">가격대 </dt><dd className="inline">{t.venues.price_range ?? "-"}</dd></div>
+                <div><dt className="inline text-muted">평점 </dt><dd className="inline">{t.venues.rating ?? "-"}</dd></div>
                 <div><dt className="inline text-muted">시간 </dt><dd className="inline">{fmtTime(t.slots.starts_at)}~{fmtTime(t.slots.ends_at)}</dd></div>
               </dl>
             ) : <p className="text-[14px] text-danger">배정된 식당이 없어요. 예외 처리함에서 다시 배정할 수 있어요.</p>}
           </Panel>
+          <div id="reservation" className="scroll-mt-6">
+          <Panel title="식당 예약">
+            {resv ? (
+              <div className="space-y-2 text-[14px]">
+                <div className="flex items-center gap-2">
+                  <Badge v={[{ REQUESTED: "예약 요청 중", CONFIRMED: "예약 확정", FAILED: "예약 실패", CANCELED: "예약 취소" }[resv.status as string] ?? resv.status, resv.status === "CONFIRMED" ? "leaf" : resv.status === "FAILED" ? "danger" : "candle"]} />
+                  <span className="text-muted">{CHANNEL_LABEL[resv.channel as Channel]} · {resv.party_size}명 · {resv.mode === "mock" ? "모의 연동" : resv.mode === "manual" ? "운영자 직접 예약" : "실연동"}</span>
+                </div>
+                {resv.external_ref && <div><span className="text-muted">예약번호 </span><b className="tabular-nums">{resv.external_ref}</b></div>}
+                {resv.last_error && <div className="text-danger">마지막 오류: {resv.last_error} (시도 {resv.attempts}회)</div>}
+                {resv.deep_link && <a href={resv.deep_link} target="_blank" rel="noreferrer" className="inline-block font-semibold text-accent hover:underline">{CHANNEL_LABEL[resv.channel as Channel]}에서 식당 열기</a>}
+                {resv.status !== "CONFIRMED" && (
+                  <form action={reservationAction} className="flex flex-wrap items-center gap-2 pt-1">
+                    <input type="hidden" name="table_id" value={t.id} />
+                    <input name="ref" placeholder="직접 예약했다면 예약번호" className="h-10 min-w-40 flex-1 rounded-xl border border-line bg-field px-3 text-[13px]" />
+                    <button name="op" value="manual" className="h-10 rounded-xl border border-accent/40 px-3 text-[13px] font-semibold text-accent">예약 완료로 표시</button>
+                    <button name="op" value="retry" className="h-10 rounded-xl bg-accent px-3 text-[13px] font-semibold text-white">다시 시도</button>
+                  </form>
+                )}
+              </div>
+            ) : <p className="text-[14px] text-muted">{t.venues ? "아직 예약 요청이 없어요." : "식당이 정해지면 예약을 요청해요."}</p>}
+          </Panel>
+          </div>
           <Panel title="안내 발송 상태">
             <ul className="divide-y divide-line text-[13px]">
               {(notes ?? []).map((n) => (

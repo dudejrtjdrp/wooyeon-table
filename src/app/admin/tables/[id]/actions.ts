@@ -23,3 +23,13 @@ export async function emergencyAction(form: FormData) {
   } else r = { ok: false, message: "알 수 없는 작업이에요" };
   back(r.ok ? "m" : "e", r.message);
 }
+
+/** 식당 예약: 다시 시도하거나, 운영자가 직접 예약한 것으로 표시 */
+export async function reservationAction(form: FormData) {
+  const me = await requireAdmin();
+  const tableId = String(form.get("table_id"));
+  const { markReservedManually, resetAndRetry } = await import("@/lib/reservations");
+  if (form.get("op") === "manual") await markReservedManually(tableId, String(form.get("ref") ?? "").trim(), me.id);
+  else await resetAndRetry(tableId, me.id);
+  redirect(`/admin/tables/${tableId}?m=${encodeURIComponent("예약 상태를 바꿨어요")}#reservation`);
+}

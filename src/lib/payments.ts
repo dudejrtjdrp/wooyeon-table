@@ -48,14 +48,18 @@ export async function markPaid(appId: string, userId: string, meta: PaidMeta): P
   if (!updated?.length) return false;
 
   const passDef = PASSES[app.payments.pass_type] ?? PASSES.single;
+  // 멤버십은 산 날부터 N개월, 횟수 없음. 1회권은 이번 신청에 바로 1회를 쓴다(유효 60일)
+  const expires = new Date();
+  if (passDef.months) expires.setMonth(expires.getMonth() + passDef.months);
+  else expires.setDate(expires.getDate() + 60);
   const { data: pass } = await db()
     .from("passes")
     .insert({
       user_id: userId,
       pass_type: app.payments.pass_type,
       total_count: passDef.count,
-      remaining: passDef.count - 1, // 이번 신청에 1회 사용
-      expires_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 60).toISOString(),
+      remaining: Math.max(0, passDef.count - 1),
+      expires_at: expires.toISOString(),
     })
     .select("id")
     .single();

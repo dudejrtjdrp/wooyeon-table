@@ -21,11 +21,24 @@ export async function resolveException(form: FormData) {
   if (!ex) return;
   const actor = `admin:${me.id}`;
 
-  if (ex.kind === "no_show") {
+  if (ex.kind === "no_show" && ex.ref_type === "user") {
+    // 노쇼 3회 이상: 영구 제한 검토
+    const ban = action === "ban";
+    await db().from("users").update(ban ? { account_status: "banned", restricted_until: null } : { account_status: "warned", restricted_until: null }).eq("id", ex.ref_id);
+    await logStatus({ entityType: "user", entityId: ex.ref_id, field: "account_status", from: "restricted", to: ban ? "banned" : "warned", actor, reason: note || (ban ? "노쇼 반복으로 영구 제한" : "소명 확인, 제한 해제") });
+    await close(id, me.id, ban ? "영구 제한" : "제한 해제");
+  } else if (ex.kind === "no_show") {
     const to = action === "attended" ? "ATTENDED" : "NO_SHOW";
     await db().from("applications").update({ attendance_status: to }).eq("id", ex.ref_id);
     await logStatus({ entityType: "application", entityId: ex.ref_id, field: "attendance_status", from: "SCHEDULED", to, actor, reason: note || "운영자 확인" });
     await close(id, me.id, to === "NO_SHOW" ? "노쇼 확정" : "참석으로 정정");
+    if (to === "NO_SHOW") {
+      const { data: app } = await db().from("applications").select("user_id").eq("id", ex.ref_id).single();
+      if (app) {
+        const { applyNoShowPolicy } = await import("@/lib/noshow");
+        await applyNoShowPolicy(app.user_id, ex.ref_id, actor);
+      }
+    }
   } else if (ex.kind === "safety") {
     const { data: rep } = await db().from("safety_reports").select("reported_id").eq("id", ex.ref_id).single();
     const level = ["warning", "restricted", "banned"].includes(action) ? action : "none";
@@ -42,6 +55,14 @@ export async function resolveException(form: FormData) {
       await afterConfirm(ex.ref_id);
       await close(id, me.id, "식당 재배정");
     }
+  } else if (ex.kind === "reservation" && action === "retry_reservation") {
+    const { resetAndRetry } = await import("@/lib/reservations");
+    await resetAndRetry(ex.ref_id, me.id);
+    const { data: r } = await db().from("reservations").select("status").eq("table_id", ex.ref_id).maybeSingle();
+    if (r?.status === "CONFIRMED") await close(id, me.id, "예약 다시 시도 성공");
+  } else if (ex.kind === "reservation" && action === "reserved") {
+    const { markReservedManually } = await import("@/lib/reservations");
+    await markReservedManually(ex.ref_id, note, me.id);
   } else if (ex.kind === "refund" && action === "retry_refund") {
     const { data: app } = await db().from("applications").select("id,user_id,payment_id").eq("id", ex.ref_id).single();
     if (app) {

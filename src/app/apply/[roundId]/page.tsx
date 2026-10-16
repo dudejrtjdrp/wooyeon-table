@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { usablePass } from "@/lib/billing";
 import { now } from "@/lib/clock";
-import { PASSES, REFUND_POLICY } from "@/lib/constants";
+import { LEGACY_PASS_LABEL, PASSES, REFUND_POLICY, isMembership } from "@/lib/constants";
 import { fmtDay, fmtSlot } from "@/lib/format";
 import { SIDOS, kstDay } from "@/lib/regions";
 import { db } from "@/lib/supabase";
@@ -48,7 +48,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       hot={hot}
       slots={slots}
       passes={Object.entries(PASSES).map(([k, p]) => ({ key: k, label: p.label, amount: p.amount, desc: p.desc }))}
-      owned={owned ? { label: PASSES[owned.pass_type as keyof typeof PASSES]?.label ?? "이용권", remaining: owned.remaining, until: owned.expires_at ? fmtDay(owned.expires_at) : null } : null}
+      owned={owned ? { label: PASSES[owned.pass_type as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[owned.pass_type] ?? "이용권", remaining: owned.remaining, unlimited: isMembership(owned.pass_type), until: owned.expires_at ? fmtDay(owned.expires_at) : null } : null}
       refund={REFUND_POLICY}
       error={e}
     />

@@ -41,6 +41,24 @@ export function commonInterests(members: Candidate[]): string[] {
     .map(([k]) => k);
 }
 
+/**
+ * 성비 점수 (성효님 결정 2026-10-16: "웬만하면 맞춘다").
+ * 4명 2:2, 5명 3:2, 6명 3:3은 만점, 6명 4:2는 거의 만점.
+ * 한 명만 다른 성별이거나 한 성별만 있으면 크게 깎아서, 다른 조합이 없을 때만 만들어지게 한다.
+ */
+export function genderBalance(male: number, female: number): number {
+  const n = male + female;
+  if (!n) return 0;
+  const minor = Math.min(male, female);
+  if (minor === 0) return 0;
+  if (minor === 1 && n >= 4) return 0.2;
+  const ideal = Math.floor(n / 2);
+  return minor >= ideal ? 1 : 0.85;
+}
+
+/** 성비를 맞추지 못한 테이블인지 (한 성별만, 또는 한 명만 다른 성별) */
+export const genderSkewed = (male: number, female: number) => male + female >= 4 && Math.min(male, female) <= 1;
+
 export function scoreGroup(
   members: Candidate[],
   rel: Relations,
@@ -88,7 +106,7 @@ export function scoreGroup(
 
   const parts: Record<keyof Weights, number> = {
     age: Math.max(0, 1 - ageGap / settings.maxAgeGap),
-    gender: n ? 1 - Math.abs(male - female) / n : 0,
+    gender: genderBalance(male, female),
     mbti: pairs ? mbtiSum / pairs : 0.5,
     interests: pairs ? interestSum / pairs : 0,
     wanted: wantedTotal ? Math.min(1, (wantedSum / wantedTotal) * 2) : 1,
@@ -106,11 +124,14 @@ export function scoreGroup(
   const weightSum = w.age + w.gender + w.mbti + w.interests + w.wanted + w.fresh;
   const bonus = Math.min(6, againPairs * 2);
   const total = Math.round(((base / weightSum) * 100 + bonus) * 10) / 10;
+  const gateBase = base + (Math.max(parts.gender, 1) - parts.gender) * w.gender;
+  const gate = Math.round(((gateBase / weightSum) * 100 + bonus) * 10) / 10;
 
   return {
     parts,
     bonus,
     total,
+    gate,
     ageGap,
     oldestBirthYear: oldest,
     youngestBirthYear: youngest,
@@ -130,10 +151,13 @@ export function reasonsFor(detail: ScoreDetail, settings: MatchSettings): string
   const w = settings.weights;
   const lines: { v: number; text: string }[] = [];
   lines.push({ v: detail.parts.age * w.age, text: detail.ageGap <= 3 ? "비슷한 또래예요" : "나이 차가 크지 않은 분들이에요" });
-  lines.push({
-    v: detail.parts.gender * w.gender,
-    text: detail.male === detail.female ? "남녀가 반반이에요" : "성비를 고르게 맞췄어요",
-  });
+  const skew = genderSkewed(detail.male, detail.female);
+  if (!skew) {
+    lines.push({
+      v: detail.parts.gender * w.gender,
+      text: detail.male === detail.female ? "남녀가 반반이에요" : "성비를 고르게 맞췄어요",
+    });
+  }
   lines.push({ v: detail.parts.mbti * w.mbti, text: "대화 템포가 잘 맞을 조합이에요" });
   if (detail.commonInterests.length > 0) {
     const top = detail.commonInterests.slice(0, 2).join(", ");
@@ -145,8 +169,11 @@ export function reasonsFor(detail: ScoreDetail, settings: MatchSettings): string
   if (detail.metPairs === 0) {
     lines.push({ v: detail.parts.fresh * w.fresh, text: "모두 처음 만나는 분들이에요" });
   }
-  return lines
+  const top = lines
     .sort((a, b) => b.v - a.v)
     .slice(0, 3)
     .map((l) => l.text);
+  // 성비를 못 맞췄으면 숨기지 않고 알려 준다 (설명 가능성)
+  if (skew) top.push(`이번엔 성비를 맞추기 어려웠어요 (여 ${detail.female} · 남 ${detail.male})`);
+  return top;
 }

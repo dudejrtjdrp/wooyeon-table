@@ -35,7 +35,7 @@ DRAFT ──제출──▶ SUBMITTED ──참가자 취소──▶ CANCELED
 ```
 
 - 결제 전 취소는 그냥 `CANCELED`.
-- 결제 후 매칭 전 취소는 `CANCELED` + 결제 쪽 환불 흐름으로 넘긴다. (모임 2일 전부터는 환불 불가)
+- 결제 후 매칭 전 취소는 `CANCELED` + 결제 쪽 환불 흐름으로 넘긴다. (모임 주 화요일 24:00부터 환불 불가, 매칭 마감과 같은 시각)
 - 매칭 확정 후 취소는 신청 상태는 그대로 두고 **참석 상태**로 처리한다.
 
 ## 2. 결제 상태 `payment_status`
@@ -59,7 +59,7 @@ PENDING ──결제──▶ PAID
                     │            일정 이동·보관 선택                 ▼
                     │            (PAID 유지)                REFUND_PROCESSING
                     │                                        │        │
-                    └─매칭 전 취소(2일 전까지)─▶ REFUND_REQUESTED   ▼        ▼
+                    └─매칭 전 취소(화요일 24:00 전)─▶ REFUND_REQUESTED   ▼        ▼
                                                     REFUNDED  REFUND_FAILED ─▶ 예외 큐
 ```
 
@@ -115,15 +115,15 @@ PENDING ──결제──▶ PAID
 |---|---|---|
 | `SCHEDULED` | 참석 예정 | 확정 시 자동 |
 | `ATTENDED` | 참석 완료 | 앱에서 체크인 |
-| `CANCELED_EARLY` | 사전 취소 | 모임 2일 전까지 취소 |
-| `CANCELED_LATE` | 늦은 취소 | 모임 2일 전 이후 취소 |
+| `CANCELED_EARLY` | 사전 취소 | 모임 주 화요일 24:00 전 취소 |
+| `CANCELED_LATE` | 늦은 취소 | 그 뒤 취소(환불 없음) |
 | `NO_SHOW` | 노쇼 | 종료 시각까지 체크인 없음 → 노쇼 후보로 올리고 운영자가 확정 |
 
 ```
 SCHEDULED ──체크인──▶ ATTENDED ──▶ 피드백 요청
     │
-    ├─2일 전까지 취소─▶ CANCELED_EARLY ─▶ 테이블 인원 재확인 (대기자 충원 or 재배치)
-    ├─2일 전 이후 취소─▶ CANCELED_LATE  ─▶ 환불 없음, 이용 제한 검토 대상
+    ├─화요일 24:00 전 취소─▶ CANCELED_EARLY ─▶ 테이블 인원 재확인 (대기자 충원 or 재배치)
+    ├─화요일 24:00 뒤 취소─▶ CANCELED_LATE  ─▶ 환불 없음, 이용 제한 검토 대상
     └─종료까지 체크인 없음─▶ 노쇼 후보 ─운영자 확인─▶ NO_SHOW
 ```
 

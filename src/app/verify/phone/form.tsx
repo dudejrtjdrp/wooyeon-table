@@ -133,7 +133,7 @@ export function PhoneVerifyForm({ initialPhone, next, demo }: { initialPhone: st
         {demo && !sent && <p className="px-1 text-[13px] text-muted">지금은 시연 모드예요. 실제 문자는 보내지 않아요.</p>}
       </div>
 
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-gradient-to-t from-paper via-paper to-paper/0 px-5 pt-6">
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-line2 bg-paper px-5 pt-3">
         <div className="pb-3">
           <button
             type="button"

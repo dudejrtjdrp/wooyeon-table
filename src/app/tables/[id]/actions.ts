@@ -38,6 +38,30 @@ export async function sendMessage(form: FormData) {
   revalidatePath(`/tables/${tableId}/chat`);
 }
 
+/**
+ * 당일 '늦을 것 같아요' (성효님 결정: 당일 취소는 막고, 늦으면 단체방에 알린다).
+ * 모임 당일 시작 전후로만, 한 사람이 한 번만 보낸다. 연락 없이 안 오면 노쇼로 처리된다.
+ */
+export async function lateNotice(form: FormData) {
+  const me = await requireMe();
+  const tableId = String(form.get("table_id"));
+  const m = await membership(tableId, me.id);
+  if (!m) redirect("/");
+  const { data: t } = await db().from("dining_tables").select("slots(starts_at,ends_at)").eq("id", tableId).single();
+  const s = (t as unknown as { slots: { starts_at: string; ends_at: string } }).slots;
+  const n = await now();
+  const kst = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+  if (kst(n) !== kst(new Date(s.starts_at)) || n > new Date(s.ends_at)) redirect(`/tables/${tableId}/chat?e=${encodeURIComponent("모임 당일에만 보낼 수 있어요")}`);
+  const { data: sent } = await db().from("status_events").select("id").eq("entity_type", "dining_table").eq("entity_id", tableId).eq("field", "late").eq("to_value", me.id).limit(1);
+  if (!sent?.length) {
+    const roomId = await ensureRoom(tableId);
+    await db().from("chat_messages").insert({ room_id: roomId, kind: "system", body: `${me.name}님이 조금 늦을 것 같대요\n먼저 주문하고 이야기 나누고 계세요.` });
+    await logStatus({ entityType: "dining_table", entityId: tableId, field: "late", to: me.id, actor: `user:${me.id}`, reason: "늦을 것 같아요" });
+  }
+  revalidatePath(`/tables/${tableId}/chat`);
+  redirect(`/tables/${tableId}/chat?m=${encodeURIComponent("늦는다고 알렸어요")}`);
+}
+
 /** 앱 체크인으로 참석 기록 (FDB-01). 시작 1시간 전부터 끝날 때까지 가능 */
 export async function checkIn(form: FormData) {
   const me = await requireMe();

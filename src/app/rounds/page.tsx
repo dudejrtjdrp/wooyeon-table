@@ -96,6 +96,9 @@ export default async function Rounds() {
           </section>
         )
       )}
+      <p className="mt-6 text-center text-[13px] text-muted">
+        지금은 서울 네 곳에서 먼저 모여요. <Link href="/wish" className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">다른 동네 원해요</Link>
+      </p>
       {!me && <p className="mt-5 text-center text-[13px] text-muted"><Link href="/login" className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">로그인</Link>하면 바로 신청할 수 있어요.</p>}
     </TabScreen>
   );

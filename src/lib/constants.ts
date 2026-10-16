@@ -2,8 +2,9 @@
 import { SIDOS } from "./regions";
 /** 운영 가능한 동네 묶음 전체 (시·도 → 묶음). 지역 단위는 동네 묶음이다 */
 export const REGIONS: readonly string[] = SIDOS.flatMap((s) => s.areas);
-/** 새 회차를 만들 때 기본으로 여는 묶음 (지금 식당이 있는 곳) */
-export const DEFAULT_REGIONS = ["성수·건대", "강남·역삼·선릉", "홍대·합정·연남", "여의도·영등포"] as const;
+/** 지금 운영하는 동네 (운영사 Q&A: 서울 4곳). 새 회차 기본값이고, 나머지는 수요 조사만 받는다 */
+export const DEFAULT_REGIONS = ["홍대·합정·연남", "잠실·송파", "강남·역삼·선릉", "을지로·종로·광화문"] as const;
+export const OPEN_REGIONS: readonly string[] = DEFAULT_REGIONS;
 
 export const INTERESTS = [
   "맛집 탐방", "여행", "운동", "영화·드라마", "음악·공연", "책",
@@ -34,19 +35,27 @@ export const MBTIS = [
 
 export const PRICE_RANGES = ["1만 원대", "2만 원대", "3만 원대", "상관없어요"] as const;
 
-// 가격은 해커톤 시연용 임시값이다. 실제 가격은 운영팀 확인이 필요하다.
+// 가격은 운영사 Q&A 답변(2026-10-16) 그대로다. docs/prd/08-qna.md
+// 1회권은 한 번 쓰면 끝, 멤버십은 기간 안에 횟수 제한 없이 신청한다. 멤버십으로 낸 신청이 매칭에 실패하면 1회당 7일 늘려 준다.
 export const PASSES = {
-  single: { label: "1회권", count: 1, amount: 29000, desc: "한 번 참여해 보고 싶을 때" },
-  subscription: { label: "구독 3회권", count: 3, amount: 75000, desc: "한 달에 세 번, 한 번에 25,000원" },
+  single: { label: "1회권", count: 1, months: 0, amount: 9900, desc: "한 번 참여해 보고 싶을 때" },
+  m1: { label: "멤버십 1개월", count: 0, months: 1, amount: 35000, desc: "한 달 동안 원하는 만큼" },
+  m3: { label: "멤버십 3개월", count: 0, months: 3, amount: 75000, desc: "한 달에 25,000원꼴" },
+  m6: { label: "멤버십 6개월", count: 0, months: 6, amount: 120000, desc: "한 달에 20,000원꼴" },
 } as const;
+/** 예전 '구독 3회권'(시연 데이터)은 이름만 남겨 둔다 */
+export const LEGACY_PASS_LABEL: Record<string, string> = { subscription: "구독 3회권" };
+export const isMembership = (t: string | null | undefined) => t === "m1" || t === "m3" || t === "m6";
+/** 멤버십 매칭 실패 1회당 늘려 주는 기간 (모임이 주 1회라 7일) */
+export const MEMBERSHIP_EXTEND_DAYS = 7;
 export type PassType = keyof typeof PASSES;
 
 export const REFUND_POLICY = [
-  "모임 2일 전까지는 전액 환불돼요.",
-  "모임 2일 전부터는 환불이 안 돼요.",
+  "모임 주 화요일 밤 12시까지는 전액 환불돼요. 이때 매칭도 함께 마감돼요.",
+  "그 뒤로는 환불이 안 돼요. 멤버십은 신청할 때 횟수를 차감하지 않아서, 신청을 취소해도 기간 안에 다른 일정에 바로 신청할 수 있어요.",
   "당일 취소와 단체방 나가기는 할 수 없어요.",
   "연락 없이 오지 않으면(노쇼) 환불이 안 되고, 운영팀이 이용 제한을 검토해요.",
-  "매칭이 안 되면 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요.",
+  "매칭이 안 되면 다른 일정으로 옮기거나 자리를 기다릴 수 있어요. 1회권은 이용권 보관·환불도 고를 수 있고, 멤버십은 기간을 7일 늘려 드려요.",
 ];
 
 export function won(n: number) {

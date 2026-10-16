@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { PushToggle } from "@/components/push-toggle";
 import { ConfirmSheet, List, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
+import { isMembership } from "@/lib/constants";
+import { fmtDay } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { logout } from "../login/actions";
 import { withdraw } from "./actions";
@@ -26,11 +28,14 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
   const me = await requireMe();
   const [{ data: ids }, { data: passes }, { count: attended }] = await Promise.all([
     db().from("user_identities").select("provider").eq("user_id", me.id),
-    db().from("passes").select("remaining,expires_at").eq("user_id", me.id).gt("remaining", 0),
+    db().from("passes").select("pass_type,remaining,expires_at").eq("user_id", me.id),
     db().from("applications").select("id", { count: "exact", head: true }).eq("user_id", me.id).eq("attendance_status", "ATTENDED"),
   ]);
   const via = (ids ?? []).map((i) => PROVIDER_LABEL[i.provider]).filter(Boolean);
-  const left = (passes ?? []).reduce((n, p) => n + p.remaining, 0);
+  const t = new Date();
+  const live = (passes ?? []).filter((p) => !p.expires_at || new Date(p.expires_at) > t);
+  const member = live.filter((p) => isMembership(p.pass_type)).sort((a, b) => (b.expires_at ?? "").localeCompare(a.expires_at ?? ""))[0];
+  const left = live.filter((p) => !isMembership(p.pass_type)).reduce((n, p) => n + p.remaining, 0);
 
   return (
     <TabScreen title="내 정보">
@@ -60,8 +65,8 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
             <p className="mt-1 text-[26px] font-extrabold text-accent">{attended ?? 0}번</p>
           </Link>
           <Link href="/rounds" className="border-l border-line text-center">
-            <p className="text-[14px] text-muted">남은 이용권</p>
-            <p className="mt-1 text-[26px] font-extrabold text-accent">{left}회</p>
+            <p className="text-[14px] text-muted">{member ? "멤버십" : "남은 이용권"}</p>
+            <p className="mt-1 text-[26px] font-extrabold text-accent">{member?.expires_at ? `${fmtDay(member.expires_at).replace(/\s*\(.\)$/, "")}까지` : `${left}회`}</p>
           </Link>
         </div>
       </section>

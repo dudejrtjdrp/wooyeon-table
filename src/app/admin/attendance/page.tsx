@@ -33,8 +33,8 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="참석 예정" value={count("SCHEDULED")} />
         <Stat label="체크인" value={count("ATTENDED")} tone="leaf" />
-        <Stat label="사전 취소" value={count("CANCELED_EARLY")} sub="2일 전까지, 환불" />
-        <Stat label="늦은 취소" value={count("CANCELED_LATE")} sub="2일 안, 환불 없음" />
+        <Stat label="사전 취소" value={count("CANCELED_EARLY")} sub="환불 마감 전, 환불" />
+        <Stat label="늦은 취소" value={count("CANCELED_LATE")} sub="환불 마감 뒤, 환불 없음" />
         <Stat label="노쇼" value={count("NO_SHOW")} tone={count("NO_SHOW") ? "danger" : undefined} sub={`확인 대기 후보 ${[...candidates].filter((c) => rows.some((x) => x.id === c)).length}`} />
       </div>
       <div className="mt-6 grid gap-4 md:grid-cols-2">

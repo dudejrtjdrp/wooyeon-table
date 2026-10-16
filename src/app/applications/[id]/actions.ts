@@ -7,6 +7,7 @@ import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
 import { cancelAttendance } from "@/lib/attendance";
 import { releaseUse } from "@/lib/billing";
+import { roundCutoff } from "@/lib/policy";
 import { db } from "@/lib/supabase";
 
 /**
@@ -29,7 +30,11 @@ export async function cancelApplication(form: FormData) {
   if (!app || app.user_id !== me.id) redirect("/");
   const back = (m: string) => redirect(`/applications/${appId}?e=${encodeURIComponent(m)}`);
   if (app.match_status !== "WAITING") back("매칭이 시작된 뒤에는 신청을 취소할 수 없어요");
-  if (new Date(app.rounds.match_at) <= (await now())) back("매칭 시각이 지나 취소할 수 없어요");
+  // 환불 마감(모임 주 화요일 24:00)과 매칭 시각 중 이른 쪽이 지나면 취소할 수 없다
+  const { data: sl } = await db().from("application_slots").select("slots(starts_at)").eq("application_id", appId);
+  const starts = ((sl ?? []) as unknown as { slots: { starts_at: string } }[]).map((x) => x.slots.starts_at);
+  const cut = Math.min(new Date(app.rounds.match_at).getTime(), roundCutoff(starts)?.getTime() ?? Infinity);
+  if (cut <= (await now()).getTime()) back("환불 마감이 지나 취소할 수 없어요");
 
   // 조건부 업데이트: 매칭과 동시에 눌려도 한쪽만 이긴다
   const { data: up } = await db()
@@ -47,7 +52,7 @@ export async function cancelApplication(form: FormData) {
   redirect(`/applications/${appId}`);
 }
 
-/** 확정된 모임 참석 취소 (2일 전까지 전액 환불, 그 뒤는 환불 없음, 당일 불가) */
+/** 확정된 모임 참석 취소 (모임 주 화요일 24:00 전까지 전액 환불, 그 뒤는 환불 없음, 당일 불가) */
 export async function cancelAttendanceAction(form: FormData) {
   const me = await requireProfile();
   const appId = String(form.get("app_id"));

@@ -12,6 +12,7 @@ import { loadRelations, loadSettings } from "./matching/runner";
 import { notify } from "./notify";
 import { ensureRoom } from "./pipeline";
 import { kstDay, neighborsOf } from "./regions";
+import { isMembership } from "./constants";
 import { db } from "./supabase";
 import { loadTemplates, render } from "./templates";
 
@@ -19,10 +20,10 @@ import { AUTO_KEEP_AFTER, TAG_RANK, WAIT_CUTOFF, countFrom, moveTag, noAnswerSte
 
 type AppRow = {
   id: string; user_id: string; round_id: string; match_status: string; payment_status: string; payment_id: string | null;
-  near_ok: boolean | null; areas: string[] | null; dates: string[] | null; resolution: string | null; wait_until: string | null; match_reason: string | null;
+  near_ok: boolean | null; areas: string[] | null; dates: string[] | null; resolution: string | null; wait_until: string | null; match_reason: string | null; payments?: { pass_type: string | null } | null;
   application_slots: { slot_id: string; slots: { region: string; starts_at: string } | null }[];
 };
-const APP_COLS = "id,user_id,round_id,match_status,payment_status,payment_id,near_ok,areas,dates,resolution,wait_until,match_reason,application_slots(slot_id,slots(region,starts_at))";
+const APP_COLS = "id,user_id,round_id,match_status,payment_status,payment_id,near_ok,areas,dates,resolution,wait_until,match_reason,payments(pass_type),application_slots(slot_id,slots(region,starts_at))";
 
 export async function loadApp(appId: string): Promise<AppRow | null> {
   const { data } = await db().from("applications").select(APP_COLS).eq("id", appId).maybeSingle();
@@ -221,8 +222,9 @@ export async function joinTable(appId: string, tableId: string, actor: string): 
 
 /** 이용권 보관: 이번 신청에 쓴 1회를 돌려준다. 참가자가 고르거나, 기한이 지나 자동으로 */
 export async function keepPassFor(appId: string, actor: string, why: "choice" | "no_answer" | "wait_over"): Promise<boolean> {
-  const { data } = await db().from("applications").select("id,user_id,payments(pass_id)").eq("id", appId).maybeSingle();
-  const app = data as unknown as { id: string; user_id: string; payments: { pass_id: string | null } | null } | null;
+  const { data } = await db().from("applications").select("id,user_id,payments(pass_id,pass_type)").eq("id", appId).maybeSingle();
+  const app = data as unknown as { id: string; user_id: string; payments: { pass_id: string | null; pass_type: string | null } | null } | null;
+  const membership = isMembership(app?.payments?.pass_type);
   if (!app) return false;
   const { data: up } = await db()
     .from("applications")
@@ -231,7 +233,8 @@ export async function keepPassFor(appId: string, actor: string, why: "choice" | 
     .eq("match_status", "ALTERNATIVE_OFFERED")
     .select("id");
   if (!up?.length) return false;
-  if (app.payments?.pass_id) {
+  // 멤버십은 횟수가 없어 돌려줄 것이 없다(실패 때 기간을 이미 늘려 줌)
+  if (app.payments?.pass_id && !membership) {
     const { data: pass } = await db().from("passes").select("remaining").eq("id", app.payments.pass_id).single();
     await db().from("passes").update({ remaining: (pass?.remaining ?? 0) + 1 }).eq("id", app.payments.pass_id);
   }
@@ -243,7 +246,14 @@ export async function keepPassFor(appId: string, actor: string, why: "choice" | 
     no_answer: "3일 동안 고르지 않으셔서 이용권으로 보관했어요. 결제한 금액은 그대로 남아 있고, 다음 일정에 바로 쓸 수 있어요.",
     wait_over: "기다리던 동네에 자리가 나지 않아 이용권으로 보관했어요. 다음 일정에 바로 쓸 수 있어요.",
   }[why];
-  await notify({ userId: app.user_id, template: "kept", title: "이용권을 보관했어요", body, link: "/rounds", dedupeKey: `kept:${appId}` });
+  await notify({
+    userId: app.user_id,
+    template: "kept",
+    title: membership ? "이번 일정은 넘겼어요" : "이용권을 보관했어요",
+    body: membership ? "멤버십 기간은 이미 늘려 드렸어요. 기간 안에 다른 일정을 바로 신청할 수 있어요." : body,
+    link: "/rounds",
+    dedupeKey: `kept:${appId}`,
+  });
   return true;
 }
 
@@ -329,5 +339,5 @@ async function scoreWith(_tableId: string, userIds: string[], rel: Awaited<Retur
   const cands = (data as { user_id: string; gender: string; birth_year: number; mbti: string | null; interests: string[] | null; my_traits: string[] | null; wanted_traits: string[] | null }[]).map((p) => ({
     applicationId: p.user_id, userId: p.user_id, birthYear: p.birth_year, gender: p.gender as "M" | "F", mbti: p.mbti, interests: p.interests ?? [], myTraits: p.my_traits ?? [], wantedTraits: p.wanted_traits ?? [], slotIds: [],
   }));
-  return scoreGroup(cands, rel, settings).total;
+  return scoreGroup(cands, rel, settings).gate;
 }

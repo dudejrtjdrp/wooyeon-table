@@ -145,7 +145,7 @@ export function runMatching(
     while (
       t.members.length > settings.minSize &&
       validateTable(t.members, t.slotId, rel, settings).length === 0 &&
-      scoreGroup(t.members, rel, settings).total < settings.minScore
+      scoreGroup(t.members, rel, settings).gate < settings.minScore
     ) {
       let bestIdx = 0;
       let bestScore = -Infinity;
@@ -163,7 +163,7 @@ export function runMatching(
     }
     if (trimmed) log.push(`${label(slots.get(t.slotId)!)} 테이블에서 ${trimmed}명을 빼서 점수를 맞춤`);
     const violations = validateTable(t.members, t.slotId, rel, settings);
-    const score = scoreGroup(t.members, rel, settings).total;
+    const score = scoreGroup(t.members, rel, settings).gate;
     if (violations.length || score < settings.minScore) {
       t.dissolved = true;
       dissolved++;
@@ -215,7 +215,7 @@ export function runMatching(
       const pool = remaining.filter((c) => c.slotIds.includes(slotId));
       if (pool.length < settings.minSize) continue;
       const { groups } = formGroups(pool, rel, settings, room);
-      const ok = groups.filter((g) => scoreGroup(g, rel, settings).total >= settings.minScore);
+      const ok = groups.filter((g) => scoreGroup(g, rel, settings).gate >= settings.minScore);
       if (!ok.length) continue;
       const placed = new Set<string>();
       for (const g of ok) {
@@ -277,7 +277,7 @@ export function runMatching(
         // 원래 이 묶음을 고른 사람이 한 명도 없으면 열지 않는다 (아무도 안 고른 동네에 테이블을 만들지 않음)
         if (pool.length < settings.minSize || !pool.some((c) => c.slotIds.includes(slotId))) continue;
         const { groups } = formGroups(pool, rel, settings, room);
-        const ok = groups.filter((g) => scoreGroup(g, rel, settings).total >= settings.minScore);
+        const ok = groups.filter((g) => scoreGroup(g, rel, settings).gate >= settings.minScore);
         if (!ok.length) continue;
         const placed = new Set<string>();
         for (const g of ok) {
@@ -318,7 +318,7 @@ export function runMatching(
     const violations = validateTable(t.members, t.slotId, rel, settings);
     if (t.members.some((m) => !consent.get(m.applicationId)?.has(t.slotId))) violations.push("slot");
     const score = scoreGroup(t.members, rel, settings);
-    if (violations.length || score.total < settings.minScore) {
+    if (violations.length || score.gate < settings.minScore) {
       // 재배치로 조건이 깨졌으면 확정하지 않는다
       for (const m of t.members) {
         remaining.push(m);
@@ -482,6 +482,28 @@ function improveGroups(
         }
       }
     }
+    // 한 명 옮기기: 인원이 넉넉한 테이블(5~6명)에서 덜 찬 테이블로. 성비를 맞추는 데 특히 필요하다
+    for (let x = 0; x < groups.length; x++) {
+      for (let y = 0; y < groups.length; y++) {
+        if (x === y) continue;
+        const gx = groups[x];
+        const gy = groups[y];
+        if (gx.length <= settings.minSize || gy.length >= settings.maxSize) continue;
+        const before = Math.min(sc(gx), sc(gy));
+        let best: { i: number; v: number } | null = null;
+        for (let i = 0; i < gx.length; i++) {
+          const nx = gx.filter((_, k) => k !== i);
+          const ny = [...gy, gx[i]];
+          if (!valid(ny)) continue;
+          const v = Math.min(sc(nx), sc(ny));
+          if (v > before + 0.05 && (!best || v > best.v)) best = { i, v };
+        }
+        if (best) {
+          gy.push(gx.splice(best.i, 1)[0]);
+          improved = true;
+        }
+      }
+    }
     // 테이블 ↔ 남은 사람
     for (const g of groups) {
       const before = sc(g);
@@ -530,8 +552,9 @@ function findReallocTarget(
     if (t.dissolved || t.members.length >= settings.maxSize) continue;
     if (!c.slotIds.includes(t.slotId)) continue;
     if (!canJoin(t.members, c, rel, settings)) continue;
-    const score = scoreGroup([...t.members, c], rel, settings).total;
-    if (score < settings.minScore) continue;
+    const sd = scoreGroup([...t.members, c], rel, settings);
+    if (sd.gate < settings.minScore) continue;
+    const score = sd.total;
     const { tier, label } = tierOf(slots.get(t.slotId)!);
     if (!best || tier < best.tier || (tier === best.tier && score > best.score)) {
       best = { table: t, tier, score, label };

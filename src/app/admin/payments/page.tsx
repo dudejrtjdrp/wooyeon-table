@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Badge, PageHeader, Stat, btnLight, ctl, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
-import { PASSES, won } from "@/lib/constants";
+import { LEGACY_PASS_LABEL, PASSES, won } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
 import { PAYMENT, label } from "@/lib/labels";
 import { db } from "@/lib/supabase";
@@ -54,7 +54,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                 <td className={`${td} text-muted`}>{fmtDateTime(p.paid_at ?? p.created_at)}</td>
                 <td className={td}>{p.applications[0] ? <Link href={`/admin/applicants/${p.applications[0].id}`} className="font-semibold text-accent hover:underline">{p.users.name}</Link> : p.users.name}</td>
                 <td className={td}>{p.applications.map((a) => a.rounds.title).join(", ") || "-"}</td>
-                <td className={td}>{p.provider === "pass" ? "보유 이용권 사용" : PASSES[p.pass_type as keyof typeof PASSES]?.label ?? "-"}</td>
+                <td className={td}>{p.provider === "pass" ? "보유 이용권 사용" : (PASSES[p.pass_type as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[p.pass_type ?? ""]) ?? "-"}</td>
                 <td className={td}>
                   {p.provider === "toss" ? (
                     <span>토스 · {p.method ?? "카드"}{p.receipt_url ? <> · <a href={p.receipt_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">영수증</a></> : null}</span>

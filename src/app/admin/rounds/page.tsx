@@ -126,6 +126,9 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
               <input name="name" placeholder="식당 이름 (필수)" className={ctl} />
               <input name="address" placeholder="주소 (필수)" className={ctl} />
               <input name="price" placeholder="가격대 (선택)" className={ctl} />
+              <input name="rating" type="number" step="0.1" min="0" max="5" placeholder="리뷰 평점 (예: 4.5)" className={ctl} />
+              <select name="channel" className={ctl} aria-label="예약 채널" defaultValue="naver"><option value="naver">네이버 예약</option><option value="catchtable">캐치테이블</option><option value="phone">전화 예약</option></select>
+              <input name="booking_url" placeholder="예약 페이지 주소 (선택)" className={ctl} />
               <button className={btnPrimary}>식당 추가</button>
             </form>
           </Panel>
@@ -134,7 +137,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
         <Panel title="새 회차 만들기" className="xl:sticky xl:top-6">
           <form action={createRound} className="space-y-5 text-[14px]">
             <label className="block"><span className={lbl}>이름<Required /></span><input name="title" placeholder="11월 둘째 주 저녁" className={`${ctl} mt-2 w-full`} /><span className={help}>참가자에게 보이는 회차 이름이에요.</span></label>
-            <label className="block"><span className={lbl}>신청 마감<Required /></span><input name="deadline" type="datetime-local" className={`${ctl} mt-2 w-full`} /><span className={help}>이 시각에 모집이 마감돼요.</span></label>
+            <label className="block"><span className={lbl}>신청 마감<Optional /></span><input name="deadline" type="datetime-local" className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 모임 주 화요일 밤 12시로 잡혀요. 이 시각부터 환불이 안 되고 매칭이 돌아요.</span></label>
             <label className="block"><span className={lbl}>자동 매칭 실행<Optional /></span><input name="match_at" type="datetime-local" className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 마감과 같은 시각에 매칭이 진행돼요.</span></label>
             <div><span className={lbl}>날짜<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="dates" type="date" className={ctl} aria-label="첫째 날" /><input name="dates" type="date" className={ctl} aria-label="둘째 날" /></span><span className={help}>이번 회차에 진행할 저녁 날짜를 1~2개 골라 주세요.</span></div>
             <div><span className={lbl}>시작 시각 · 진행 시간<Required /></span><span className="mt-2 grid grid-cols-2 gap-2"><input name="time" type="time" defaultValue="19:30" className={ctl} aria-label="시작 시각" /><span className="flex items-center gap-2"><input name="duration" type="number" defaultValue={150} min={60} className={`${ctl} w-full`} aria-label="진행 시간" /><span className="shrink-0 text-muted">분</span></span></span><span className={help}>모든 식당에 같은 시각에 시작해요.</span></div>

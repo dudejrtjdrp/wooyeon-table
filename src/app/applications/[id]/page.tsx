@@ -151,9 +151,9 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
         <div className="mt-8 text-center">
           <ConfirmSheet
-            trigger={<button className="text-[15px] font-semibold text-danger underline underline-offset-4">신청 취소하기</button>}
+            trigger={<button className="inline-flex h-11 items-center text-[15px] font-semibold text-danger underline underline-offset-4">신청 취소하기</button>}
             title="신청을 취소할까요?"
-            body={<>매칭 시각({fmtDateTime(app.rounds.match_at)}) 전이라 결제한 금액은 전액 돌려드려요. 이용권으로 신청했다면 1회를 다시 쓸 수 있어요.</>}
+            body={<>매칭 시각({fmtDateTime(app.rounds.match_at)}) 전이라 결제한 금액은 전액 돌려드려요. 이용권으로 신청했다면 1회를 다시 쓸 수 있고, 멤버십은 기간 안에 다른 일정을 바로 신청할 수 있어요.</>}
             confirmLabel="신청 취소하기"
             action={cancelApplication}
             hidden={{ app_id: app.id }}
@@ -170,7 +170,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       </ul>
 
       <p className="mt-8 text-center text-[13px] text-muted">
-        <Link href="/rounds" className="underline underline-offset-4">다른 일정 보기</Link>
+        <Link href="/rounds" className="inline-flex h-11 items-center underline underline-offset-4">다른 일정 보기</Link>
       </p>
     </Screen>
   );

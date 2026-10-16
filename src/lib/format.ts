@@ -9,6 +9,9 @@ export function fmtTime(iso: string) {
 }
 
 export function fmtDateTime(iso: string) {
+  // 정확히 0시(마감 시각)는 전날 '밤 12시'로 쓴다
+  const hm = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+  if (hm === "00:00") return `${fmtDate(new Date(new Date(iso).getTime() - 60_000).toISOString())} 밤 12시`;
   return `${fmtDate(iso)} ${fmtTime(iso)}`;
 }
 
@@ -34,8 +37,10 @@ export function fmtClock(iso: string) {
   return `${part} ${h12}${m ? `:${String(m).padStart(2, "0")}` : "시"}`;
 }
 
-/** 10월 23일(금) 저녁 7:30 */
+/** 10월 23일(금) 저녁 7:30. 정확히 0시(마감 시각)면 전날 '밤 12시'로 쓴다: 11월 4일 0시 → 11월 3일(화) 밤 12시 */
 export function fmtSlot(iso: string) {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+  if (p === "00:00") return `${fmtDay(new Date(new Date(iso).getTime() - 60_000).toISOString())} 밤 12시`;
   return `${fmtDay(iso)} ${fmtClock(iso)}`;
 }
 

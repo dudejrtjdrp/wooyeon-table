@@ -100,6 +100,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                     <div className="rounded-2xl bg-accent-soft/60 px-5 py-3 text-right">
                       <p className="text-[12px] text-muted">매칭 점수</p>
                       <p className="text-[30px] font-bold leading-tight text-accent">{Math.round(Number(t.score))}<span className="text-[16px] font-semibold"> / 100</span></p>
+                      {typeof d?.gate === "number" && d.gate !== Number(t.score) && <p className="text-[12px] text-muted">확정 판정 {Math.round(d.gate)}점 (성비 감점 제외)</p>}
                     </div>
                   </div>
                   <div className="mt-5 grid gap-6 lg:grid-cols-[1.1fr_1fr]">

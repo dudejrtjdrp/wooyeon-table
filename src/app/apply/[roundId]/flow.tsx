@@ -32,7 +32,7 @@ export function ApplyFlow({
   hot: string[];
   slots: Slot[];
   passes: Pass[];
-  owned: { label: string; remaining: number; until: string | null } | null;
+  owned: { label: string; remaining: number; unlimited: boolean; until: string | null } | null;
   refund: string[];
   error?: string;
 }) {
@@ -157,19 +157,31 @@ export function ApplyFlow({
               <ul className="min-w-0 flex-1 pl-[18px] pr-5" aria-label={`${active} 동네`}>
                 {[{ name: `${active} 전체`, open: sidoList.areas.some((a) => a.open) }, ...sidoList.areas].map((a) => {
                   const on = picked.includes(a.name) || (!a.name.endsWith(" 전체") && picked.includes(`${active} 전체`));
+                  if (!a.open) {
+                    // 아직 안 여는 동네는 수요 조사로 보낸다 (운영사 Q&A: 서울 4곳 먼저)
+                    const whole = a.name.endsWith(" 전체");
+                    return (
+                      <li key={a.name} className="border-b border-[#f1f4f2]">
+                        <Link href={whole ? `/wish?sido=${encodeURIComponent(active)}` : `/wish?area=${encodeURIComponent(a.name)}`} className="flex min-h-[52px] w-full items-center gap-2.5 py-2 text-left">
+                          <span className="min-w-0 flex-1 text-[15px] text-faint">{a.name}</span>
+                          <span className="shrink-0 rounded-[5px] bg-[#EEF1EF] px-1.5 py-[3px] text-[11px] font-bold text-ink2">열리면 알림</span>
+                        </Link>
+                      </li>
+                    );
+                  }
                   return (
                     <li key={a.name} className="border-b border-[#f1f4f2]">
-                      <button type="button" role="checkbox" aria-checked={on} disabled={!a.open} onClick={() => toggleArea(a.name, active)} className="flex min-h-[52px] w-full items-center gap-2.5 py-2 text-left disabled:cursor-not-allowed">
-                        <span className={`min-w-0 flex-1 text-[15px] ${on ? "font-extrabold text-accent-text" : a.open ? "text-ink2" : "text-[#b5c0ba]"}`}>
-                          {a.name}
-                          {!a.open && <span className="ml-1.5 text-[12px]">곧 열려요</span>}
-                        </span>
+                      <button type="button" role="checkbox" aria-checked={on} onClick={() => toggleArea(a.name, active)} className="flex min-h-[52px] w-full items-center gap-2.5 py-2 text-left">
+                        <span className={`min-w-0 flex-1 text-[15px] ${on ? "font-extrabold text-accent-text" : "text-ink2"}`}>{a.name}</span>
                         {hot.includes(a.name) && <span className="shrink-0 rounded-[5px] bg-accent-soft px-1.5 py-[3px] text-[11px] font-bold text-accent">많이 골라요</span>}
-                        <span className={`flex size-[22px] shrink-0 items-center justify-center rounded-[6px] ${on ? "bg-accent" : a.open ? "bg-dot" : "bg-line2"}`}>{CHECK}</span>
+                        <span className={`flex size-[22px] shrink-0 items-center justify-center rounded-[6px] ${on ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
                       </button>
                     </li>
                   );
                 })}
+                <li>
+                  <Link href={`/wish?sido=${encodeURIComponent(active)}`} className="flex min-h-[52px] items-center text-[13px] font-bold text-accent underline underline-offset-4">찾는 동네가 없나요? 원하는 곳 남기기</Link>
+                </li>
               </ul>
             </div>
           </>
@@ -240,7 +252,7 @@ export function ApplyFlow({
             </div>
             <div className="flex flex-col gap-2 px-4 pt-[22px]" role="radiogroup" aria-label="이용권">
               {owned && (
-                <PassRow on={pass === "owned"} onClick={() => setPass("owned")} title="가지고 있는 이용권" sub={`${owned.label} 남은 ${owned.remaining}회${owned.until ? ` · ${owned.until}까지` : ""}`} price="0원" />
+                <PassRow on={pass === "owned"} onClick={() => setPass("owned")} title="가지고 있는 이용권" sub={`${owned.label} ${owned.unlimited ? "기간 안 무제한" : `남은 ${owned.remaining}회`}${owned.until ? ` · ${owned.until}까지` : ""}`} price="0원" />
               )}
               {passes.map((p) => (
                 <PassRow key={p.key} on={pass === p.key} onClick={() => setPass(p.key)} title={p.label} sub={p.desc} price={won(p.amount)} />

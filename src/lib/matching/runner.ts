@@ -228,6 +228,7 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
         return `${r.title}(${days}, ${regions})`;
       })
       .join(", ");
+    const failedApps: string[] = [];
     for (const [appId, o] of Object.entries(result.outcomes)) {
       if (o.status !== "ALTERNATIVE_OFFERED") continue;
       const c = byApp.get(appId)!;
@@ -239,8 +240,14 @@ export async function runRound(roundId: string, actor = "system"): Promise<RunOu
       ev(appId, "payment_status", "PAID", "REFUND_AVAILABLE", "매칭 실패로 환불 선택 가능");
       const am = render("alternative", { reason: o.message, alternatives: alt ? `옮길 수 있는 일정: ${alt}. ` : "" }, tpl);
       nt(c.userId, "alternative", am.title, am.body, `/applications/${appId}/resolve`, `alternative:${appId}`);
+      failedApps.push(appId);
     }
     if (events.length) await db().from("status_events").insert(events);
+    // 멤버십 이용자는 실패한 만큼 기간을 늘려 준다 (운영사 Q&A)
+    if (failedApps.length) {
+      const { extendMembershipFor } = await import("../billing");
+      for (const id of failedApps) await extendMembershipFor(id, "system");
+    }
     if (notes.length) {
       const { data: sent } = await db().from("notifications").upsert(notes, { onConflict: "dedupe_key", ignoreDuplicates: true }).select("id");
       await pushNotifications((sent ?? []).map((n) => n.id)).catch(() => null);

@@ -7,7 +7,7 @@ import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
 import { refundPayment } from "@/lib/payments";
 import { joinTable, keepPassFor, startWaiting } from "@/lib/resolve";
-import { won } from "@/lib/constants";
+import { isMembership, won } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
 import { kstDay } from "@/lib/regions";
 import { db } from "@/lib/supabase";
@@ -15,12 +15,12 @@ import { db } from "@/lib/supabase";
 async function loadOwn(appId: string, userId: string) {
   const { data } = await db()
     .from("applications")
-    .select("id,user_id,match_status,payment_status,payment_id,round_id,near_ok,payments(id,pass_id,status,amount)")
+    .select("id,user_id,match_status,payment_status,payment_id,round_id,near_ok,payments(id,pass_id,pass_type,status,amount)")
     .eq("id", appId)
     .maybeSingle();
   const app = data as unknown as {
     id: string; user_id: string; match_status: string; payment_status: string; payment_id: string; round_id: string; near_ok: boolean | null;
-    payments: { id: string; pass_id: string | null; status: string; amount: number };
+    payments: { id: string; pass_id: string | null; pass_type: string | null; status: string; amount: number };
   } | null;
   if (!app || app.user_id !== userId) redirect("/");
   if (app.match_status !== "ALTERNATIVE_OFFERED") redirect(`/applications/${appId}`);
@@ -114,6 +114,8 @@ export async function refund(form: FormData) {
   const me = await requireProfile();
   const appId = String(form.get("app_id"));
   const app = await loadOwn(appId, me.id);
+  // 멤버십 신청은 실패 때 기간을 늘려 주는 것으로 대신한다 (운영사 Q&A)
+  if (isMembership(app.payments.pass_type)) redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("멤버십은 환불 대신 기간을 늘려 드렸어요")}`);
   if (!["PAID", "REFUND_AVAILABLE", "REFUND_FAILED"].includes(app.payments.status)) redirect(`/applications/${appId}`);
   await db().from("applications").update({ payment_status: "REFUND_REQUESTED", match_status: "NO_MATCH", resolution: "refund", wait_until: null }).eq("id", appId);
   await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "REFUND_AVAILABLE", to: "REFUND_REQUESTED", actor: `user:${me.id}`, reason: "참가자가 환불 선택" });

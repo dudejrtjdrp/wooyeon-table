@@ -59,9 +59,10 @@ function ChoiceRow({ on, onPick, title, sub, disabled, children }: { on: boolean
  * 실패했을 때 고를 수 있는 방법. 고른 것에 따라 아래 버튼이 바뀐다.
  * 순서: 바로 앉을 자리 → 다른 일정 → 기다리기 → 이용권 보관 → 환불
  */
-export function ResolveChoice({ appId, joins, moves, waitUntil, nearOk, actions }: {
+export function ResolveChoice({ appId, joins, moves, waitUntil, nearOk, membership, actions }: {
   appId: string;
   nearOk: boolean;
+  membership: boolean;
   joins: Opt[];
   moves: Opt[];
   waitUntil: string | null;
@@ -79,7 +80,7 @@ export function ResolveChoice({ appId, joins, moves, waitUntil, nearOk, actions 
     join: `${short(curJoin)} 테이블에 앉기`,
     move: `${short(curMove)} 일정으로 옮기기`,
     wait: "자리 나면 알려 주세요",
-    keep: "이용권 보관하기",
+    keep: membership ? "이번엔 넘기기" : "이용권 보관하기",
     refund: "환불받기",
   }[choice];
 
@@ -99,11 +100,17 @@ export function ResolveChoice({ appId, joins, moves, waitUntil, nearOk, actions 
           <OptList items={moves} value={slot} onPick={setSlot} label="옮길 일정" />
         </ChoiceRow>
         {waitUntil && <ChoiceRow on={choice === "wait"} onPick={() => setChoice("wait")} title="자리 나면 알려 주기" sub={`${waitUntil}까지 ${nearOk ? "고른 동네나 같은 날 옆 동네" : "고른 동네·날짜"}에 자리가 나면 먼저 여쭤볼게요`} />}
-        <ChoiceRow on={choice === "keep"} onPick={() => setChoice("keep")} title="이용권 보관하기" sub="다음에 원하는 일정에 바로 쓸 수 있어요" />
-        <ChoiceRow on={choice === "refund"} onPick={() => setChoice("refund")} title="환불받기" sub="결제한 수단으로 바로 돌려드려요" />
+        {membership ? (
+          <ChoiceRow on={choice === "keep"} onPick={() => setChoice("keep")} title="이번엔 넘기기" sub="멤버십 기간을 7일 늘려 드렸어요. 다른 일정은 언제든 신청할 수 있어요" />
+        ) : (
+          <>
+            <ChoiceRow on={choice === "keep"} onPick={() => setChoice("keep")} title="이용권 보관하기" sub="다음에 원하는 일정에 바로 쓸 수 있어요" />
+            <ChoiceRow on={choice === "refund"} onPick={() => setChoice("refund")} title="환불받기" sub="결제한 수단으로 바로 돌려드려요" />
+          </>
+        )}
       </div>
       {!joins.length && !moves.length && (
-        <p className="px-6 pt-4 text-[13px] leading-relaxed text-muted">새 일정이 열리면 일정 탭에서 보관한 이용권으로 바로 신청할 수 있어요.</p>
+        <p className="px-6 pt-4 text-[13px] leading-relaxed text-muted">{membership ? "새 일정이 열리면 일정 탭에서 멤버십으로 바로 신청할 수 있어요." : "새 일정이 열리면 일정 탭에서 보관한 이용권으로 바로 신청할 수 있어요."}</p>
       )}
       <div className="h-32" />
       <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-paper px-6 pt-3">

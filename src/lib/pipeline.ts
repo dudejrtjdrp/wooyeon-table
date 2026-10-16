@@ -6,6 +6,7 @@ import { notify } from "./notify";
 import { pushNotifications } from "./push";
 import { loadContentRules, rank, tableTypes } from "./contents";
 import { loadTemplates, render } from "./templates";
+import { GOOD_RATING } from "./reservations";
 import { db } from "./supabase";
 
 type TableRow = {
@@ -53,23 +54,31 @@ export async function ensureRoom(tableId: string): Promise<string> {
   return data!.id;
 }
 
-/** 식당 자동 배정 (INF-02). 같은 지역·일정에서 남은 자리가 있는 식당을 고른다 */
+/**
+ * 식당 자동 배정 (INF-02). 같은 지역·일정에서 남은 자리가 있고, 테이블 인원이 앉을 수 있고, 예약 채널이 있는 식당.
+ * 평점 4.3 이상을 먼저, 그다음 평점 높은 순, 같으면 덜 쓴 식당 (운영사 Q&A: 평점 좋고 예약 가능한 곳)
+ */
 export async function assignVenue(tableId: string): Promise<boolean> {
   const t = await loadTable(tableId);
   if (t.venue_id) return true;
   const { data: options } = await db()
     .from("venue_slots")
-    .select("venue_id,tables_available,venues(id,name,active,region)")
+    .select("venue_id,tables_available,venues(id,name,active,region,rating,booking_channel,seats_per_table)")
     .eq("slot_id", t.slot_id);
+  const { count: party } = await db().from("applications").select("id", { count: "exact", head: true }).eq("table_id", tableId).eq("match_status", "CONFIRMED");
   const { data: used } = await db().from("dining_tables").select("venue_id").eq("slot_id", t.slot_id).not("venue_id", "is", null);
   const usedCount = new Map<string, number>();
   for (const u of used ?? []) usedCount.set(u.venue_id, (usedCount.get(u.venue_id) ?? 0) + 1);
 
   const pick = (options ?? [])
-    .map((o) => o as unknown as { venue_id: string; tables_available: number; venues: { active: boolean; region: string } })
+    .map((o) => o as unknown as { venue_id: string; tables_available: number; venues: { active: boolean; region: string; rating: number | null; booking_channel: string | null; seats_per_table: number } })
     .filter((o) => o.venues?.active && o.venues.region === t.slots.region)
     .filter((o) => (usedCount.get(o.venue_id) ?? 0) < o.tables_available)
-    .sort((a, b) => (usedCount.get(a.venue_id) ?? 0) - (usedCount.get(b.venue_id) ?? 0))[0];
+    .filter((o) => (o.venues.seats_per_table ?? 6) >= (party ?? 0))
+    .sort((a, b) => {
+      const good = (x: typeof a) => Number((x.venues.rating ?? 0) >= GOOD_RATING) + Number(Boolean(x.venues.booking_channel));
+      return good(b) - good(a) || (b.venues.rating ?? 0) - (a.venues.rating ?? 0) || (usedCount.get(a.venue_id) ?? 0) - (usedCount.get(b.venue_id) ?? 0);
+    })[0];
 
   if (!pick) {
     await db().from("exceptions").upsert(
@@ -90,6 +99,9 @@ export async function assignVenue(tableId: string): Promise<boolean> {
   if (updated?.length) {
     await logStatus({ entityType: "dining_table", entityId: tableId, field: "status", from: t.status, to: "VENUE_ASSIGNED", actor: "system", reason: "식당 자동 배정" });
   }
+  // 이어서 식당 예약 요청 (네이버 예약·캐치테이블 어댑터, 실패하면 재시도 후 예외)
+  const { requestReservation } = await import("./reservations");
+  await requestReservation(tableId);
   return true;
 }
 
@@ -238,6 +250,11 @@ export async function tick() {
   const { expireOffers } = await import("./attendance");
   const expired = await expireOffers();
   if (expired) done.push(`빈자리 제안 ${expired}건 기한 만료, 다음 대기자 확인`);
+
+  // 식당 예약 재시도 (3번 실패하면 예외 큐)
+  const { retryReservations } = await import("./reservations");
+  const retried = await retryReservations();
+  if (retried) done.push(`식당 예약 재시도 ${retried}건`);
 
   // 매칭 실패 뒤: 하루 전 다시 알림, 3일 무응답·기다리기 마감이면 이용권 보관
   const { autoResolve } = await import("./resolve");

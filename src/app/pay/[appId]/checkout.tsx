@@ -99,7 +99,7 @@ export function TossCheckout(p: Props) {
       </div>
       {err && <p className="mt-3 rounded-2xl bg-danger/10 px-4 py-3 text-[14px] font-medium text-danger">{err}</p>}
 
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-gradient-to-t from-paper via-paper to-paper/0 px-5 pt-6">
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-line2 bg-paper px-5 pt-3">
         <div className="pb-3">
           <button
             type="button"

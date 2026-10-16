@@ -40,8 +40,9 @@ export async function seedParticipants(form: FormData) {
   const hash = await bcrypt.hash("demo1234", 10);
   const stamp = Date.now().toString(36).slice(-4);
 
-  // 일부러 넣는 예외 상황: 성수 금요일에 몰리고, 홍대는 적게, 나이 차가 큰 사람 둘
-  const main = slots!.filter((s) => s.region === "성수·건대" || s.region === "강남·역삼·선릉");
+  // 일부러 넣는 예외 상황: 앞의 두 동네 금요일에 몰리고, 나머지는 적게, 나이 차가 큰 사람 둘
+  const busy = [...new Set(slots!.map((s) => s.region))].slice(0, 2); // 앞의 두 동네에 몰리게
+  const main = slots!.filter((s) => busy.includes(s.region));
   const thin = slots!.filter((s) => s.region === "홍대·합정·연남").slice(0, 1);
 
   // 한 번에 넣어야 서버 시간 제한 안에 끝난다 (참가자 수와 상관없이 쿼리 6번)
@@ -83,7 +84,7 @@ export async function seedParticipants(form: FormData) {
   const passOf = new Map((passes ?? []).map((x) => [x.user_id, x.id]));
   const { data: pays } = await db()
     .from("payments")
-    .insert(people.map((p) => ({ user_id: uid(p.i), pass_id: passOf.get(uid(p.i)), amount: 29000, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() })))
+    .insert(people.map((p) => ({ user_id: uid(p.i), pass_id: passOf.get(uid(p.i)), amount: 9900, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() })))
     .select("id,user_id");
   const payOf = new Map((pays ?? []).map((x) => [x.user_id, x.id]));
   const { data: apps } = await db()
@@ -184,8 +185,9 @@ export async function reapply(form: FormData) {
     if (!a.users.login_id.startsWith("test-")) continue;
     const { data: exists } = await db().from("applications").select("id").eq("user_id", a.user_id).eq("round_id", to).maybeSingle();
     if (exists) continue;
-    const { data: pay } = await db().from("payments").insert({ user_id: a.user_id, amount: 29000, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() }).select("id").single();
-    const chosen = (slots ?? []).filter((s) => s.region === "성수·건대" || s.region === "강남·역삼·선릉").sort(() => r() - 0.5).slice(0, 2);
+    const { data: pay } = await db().from("payments").insert({ user_id: a.user_id, amount: 9900, pass_type: "single", status: "PAID", paid_at: new Date().toISOString() }).select("id").single();
+    const two = [...new Set((slots ?? []).map((s) => s.region))].slice(0, 2);
+    const chosen = (slots ?? []).filter((s) => two.includes(s.region)).sort(() => r() - 0.5).slice(0, 2);
     const { data: app } = await db()
       .from("applications")
       .insert({ user_id: a.user_id, round_id: to, payment_id: pay!.id, application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: new Date().toISOString(), areas: [...new Set(chosen.map((s) => s.region))], dates: [...new Set(chosen.map((s) => kstDay(s.starts_at)))], near_ok: true })

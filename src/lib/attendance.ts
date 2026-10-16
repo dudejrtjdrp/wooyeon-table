@@ -1,5 +1,5 @@
 // 확정 뒤 참가 취소와, 인원이 모자란 테이블의 자동 재배치 (PRD 15장 "확정 후 1명 취소")
-import { releaseUse } from "./billing";
+import { extendMembershipFor, releaseUse } from "./billing";
 import { now } from "./clock";
 import { logStatus } from "./events";
 import { fmtDate, fmtTime } from "./format";
@@ -8,6 +8,7 @@ import { loadRelations, loadSettings } from "./matching/runner";
 import type { Candidate } from "./matching/types";
 import { notify } from "./notify";
 import { ensureRoom } from "./pipeline";
+import { refundCutoff } from "./policy";
 import { neighborsOf } from "./regions";
 import { db } from "./supabase";
 
@@ -15,13 +16,13 @@ const KST = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slic
 
 export type CancelRule = { kind: "early" | "late" | "blocked"; message: string };
 
-/** 지금 취소하면 어떻게 되는지. 2일 전까지는 전액 환불, 그 뒤는 환불 없이 취소, 당일은 취소 불가 */
+/** 지금 취소하면 어떻게 되는지. 모임 주 화요일 24:00 전까지는 전액 환불, 그 뒤는 환불 없이 취소, 당일은 취소 불가 */
 export function cancelRule(startsAt: string, at: Date): CancelRule {
   const start = new Date(startsAt);
   if (at >= start) return { kind: "blocked", message: "모임이 이미 시작됐어요" };
   if (KST(at) === KST(start)) return { kind: "blocked", message: "당일 취소는 할 수 없어요. 늦을 것 같으면 단체방에 알려 주세요" };
-  if (start.getTime() - at.getTime() >= 48 * 3600_000) return { kind: "early", message: "지금 취소하면 전액 돌려드려요" };
-  return { kind: "late", message: "모임 2일 전이 지나 환불 없이 취소돼요" };
+  if (at < refundCutoff(startsAt)) return { kind: "early", message: "지금 취소하면 전액 돌려드려요" };
+  return { kind: "late", message: "환불 마감(모임 주 화요일 밤 12시)이 지나 환불 없이 취소돼요" };
 }
 
 export type Member = { id: string; user_id: string; birth_year: number; slotIds: string[]; name: string };
@@ -67,8 +68,8 @@ export async function cancelAttendance(appId: string, userId: string): Promise<{
   await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/tables/${tableId}`);
 
   let body: string;
-  if (rule.kind === "early") body = await releaseUse(appId, `user:${userId}`, "모임 2일 전까지 취소");
-  else body = "모임 2일 전이 지나 환불 없이 취소됐어요.";
+  if (rule.kind === "early") body = await releaseUse(appId, `user:${userId}`, "환불 마감 전 취소");
+  else body = "환불 마감(모임 주 화요일 밤 12시)이 지나 환불 없이 취소됐어요.";
   await notify({ userId, template: "attendance_canceled", title: "참석을 취소했어요", body, link: `/applications/${appId}`, dedupeKey: `attendance_canceled:${appId}` });
 
   const roomId = await ensureRoom(tableId);
@@ -125,6 +126,7 @@ export async function reflowTable(tableId: string, actor: string) {
     } else {
       await db().from("applications").update({ table_id: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "함께하기로 한 분이 취소해 테이블 인원이 모자라요. 조건에 맞는 다른 테이블도 없었어요." }).eq("id", m.id).eq("payment_status", "PAID");
       await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: "확정 후 취소로 인원 부족, 옮길 테이블 없음" });
+      await extendMembershipFor(m.id, actor);
       await notify({ userId: m.user_id, template: "alternative", title: "테이블 인원이 모자라졌어요", body: "함께하기로 한 분이 취소해 모임을 열 수 없게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 환불받을 수 있어요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", link: `/applications/${m.id}/resolve`, dedupeKey: `reflow-alt:${m.id}` });
       offered++;
     }

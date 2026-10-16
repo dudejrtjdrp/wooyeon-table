@@ -1,7 +1,7 @@
 // 운영자 긴급 수정 (MAT-14). 확정 뒤 취소·안전 문제 같은 예외 상황에서만 쓴다.
 // 참가자 이동, 테이블 분리·병합·해제. 사유를 반드시 받고, 모든 변경은 status_events에 운영자 이름으로 남긴다.
 import { fillOrReflow, tableMembers } from "./attendance";
-import { releaseUse } from "./billing";
+import { extendMembershipFor, releaseUse } from "./billing";
 import { logStatus } from "./events";
 import { fmtDate, fmtTime } from "./format";
 import { canJoin } from "./matching/constraints";
@@ -88,6 +88,7 @@ export async function removeMember(appId: string, reason: string, adminId: strin
   const tableId = app.table_id;
   await db().from("applications").update({ table_id: null, attendance_status: null, match_status: "ALTERNATIVE_OFFERED", payment_status: app.payment_status === "PAID" ? "REFUND_AVAILABLE" : app.payment_status, match_reason: "운영팀 확인으로 이번 테이블에서 빠지게 됐어요." }).eq("id", appId);
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: tag(reason) });
+  await extendMembershipFor(appId, actor);
   await logStatus({ entityType: "dining_table", entityId: tableId, field: "member_out", to: app.users.name, actor, reason: tag(reason) });
   await db().from("notifications").delete().eq("user_id", app.user_id).eq("status", "pending").eq("link", `/tables/${tableId}`);
   await db().from("seat_offers").update({ status: "void" }).eq("application_id", appId).eq("status", "pending");
@@ -116,6 +117,7 @@ export async function dissolveTable(tableId: string, reason: string, adminId: st
   for (const m of ms) {
     await db().from("applications").update({ table_id: null, attendance_status: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "운영팀 사정으로 이번 테이블이 열리지 못하게 됐어요." }).eq("id", m.id).eq("payment_status", "PAID");
     await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: tag(`테이블 해제: ${reason}`) });
+    await extendMembershipFor(m.id, actor);
     await db().from("notifications").delete().eq("user_id", m.user_id).eq("status", "pending").eq("link", `/tables/${tableId}`);
     await notify({ userId: m.user_id, template: "alternative", title: "모임이 취소됐어요", body: "운영팀 사정으로 이번 테이블이 열리지 못하게 됐어요. 다른 일정으로 옮기거나, 이용권을 보관하거나, 전액 환불받을 수 있어요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", link: `/applications/${m.id}/resolve`, dedupeKey: `admin-dissolve:${m.id}:${tableId}` });
   }

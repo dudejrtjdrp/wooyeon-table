@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const LABEL: Record<string, string> = {
   payment: "결제 오류", refund: "자동 환불 실패", data_missing: "데이터 누락", condition_conflict: "조건 충돌",
-  venue_shortage: "식당 부족", notification: "알림 발송 실패", no_show: "노쇼 후보", safety: "안전 신고",
+  venue_shortage: "식당 부족", notification: "알림 발송 실패", no_show: "노쇼 후보", safety: "안전 신고", reservation: "식당 예약 실패",
 };
 
 const TONE: Record<string, string> = { safety: "ring-danger/40", payment: "ring-accent/30", refund: "ring-accent/30", venue_shortage: "ring-warn/40", no_show: "ring-warn/40" };
@@ -66,7 +66,12 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                 <form action={resolveException} className="mt-4 flex flex-wrap items-center gap-2">
                   <input type="hidden" name="id" value={e.id} />
                   <input name="note" placeholder="처리 메모를 입력해 주세요 (기록에 남아요)" className="h-10 min-w-48 flex-1 rounded-xl border border-line bg-field px-3.5 text-[14px] outline-none focus:border-accent" />
-                  {e.kind === "no_show" ? (
+                  {e.kind === "no_show" && e.ref_type === "user" ? (
+                    <>
+                      <button name="action" value="ban" className="h-10 rounded-xl bg-danger px-4 text-[13px] font-semibold text-white">영구 제한</button>
+                      <button name="action" value="lift" className="h-10 rounded-xl border border-accent/40 px-4 text-[13px] font-semibold text-accent">소명 확인, 제한 풀기</button>
+                    </>
+                  ) : e.kind === "no_show" ? (
                     <>
                       <button name="action" value="noshow" className="h-10 rounded-xl bg-accent px-4 text-[13px] font-semibold text-white">노쇼 확정</button>
                       <button name="action" value="attended" className="h-10 rounded-xl border border-accent/40 px-4 text-[13px] font-semibold text-accent">참석으로 정정</button>
@@ -82,6 +87,12 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                     <>
                       <button name="action" value="retry_refund" className="h-10 rounded-xl bg-accent px-4 text-[13px] font-semibold text-white">환불 다시 요청</button>
                       <button name="action" value="done" className="h-10 rounded-xl border border-accent/40 px-4 text-[13px] font-semibold text-accent">직접 처리함</button>
+                    </>
+                  ) : e.kind === "reservation" ? (
+                    <>
+                      <Link href={`/admin/tables/${e.ref_id}#reservation`} className="flex h-10 items-center rounded-xl border border-line px-4 text-[13px] font-semibold text-ink">예약 페이지·정보 보기</Link>
+                      <button name="action" value="retry_reservation" className="h-10 rounded-xl bg-accent px-4 text-[13px] font-semibold text-white">예약 다시 시도</button>
+                      <button name="action" value="reserved" className="h-10 rounded-xl border border-accent/40 px-4 text-[13px] font-semibold text-accent">직접 예약함(메모에 예약번호)</button>
                     </>
                   ) : e.kind === "venue_shortage" ? (
                     <>

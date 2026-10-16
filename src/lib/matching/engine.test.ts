@@ -51,7 +51,7 @@ function checkInvariants(cands: Candidate[], rel: Relations) {
   for (const t of res.tables) {
     const members = t.applicationIds.map((id) => byApp.get(id)!);
     expect(validateTable(members, t.slotId, rel, DEFAULT_SETTINGS)).toEqual([]);
-    expect(t.score.total).toBeGreaterThanOrEqual(DEFAULT_SETTINGS.minScore);
+    expect(t.score.gate).toBeGreaterThanOrEqual(DEFAULT_SETTINGS.minScore);
     for (const id of t.applicationIds) {
       expect(seen.has(id)).toBe(false); // 한 사람은 한 테이블에만
       seen.add(id);
@@ -194,5 +194,29 @@ describe("가까운 동네 확장 (2026-10-16)", () => {
     const res = runMatching(c, nearSlots, emptyRel());
     expect(res.summary.widened).toBe(0);
     expect(res.tables.every((t) => t.slotId === "s-seongsu")).toBe(true);
+  });
+});
+
+describe("성비 웬만하면 맞추기 (2026-10-16)", () => {
+  it("남녀 4명씩 8명이면 한 성별만 앉은 테이블을 만들지 않는다", () => {
+    const base = makeCandidates(8, 31).map((c, i) => ({
+      ...c,
+      gender: (i < 4 ? "M" : "F") as "M" | "F",
+      birthYear: 1995,
+      slotIds: ["s-fri-seongsu"],
+    }));
+    const res = runMatching(base, slots, { excluded: new Set(), met: new Set(), again: new Set() }, DEFAULT_SETTINGS);
+    for (const t of res.tables) {
+      const ms = t.applicationIds.map((id) => base.find((b) => b.applicationId === id)!);
+      const m = ms.filter((x) => x.gender === "M").length;
+      expect(Math.min(m, ms.length - m)).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("다른 조합이 없으면 한 성별 테이블도 만들고, 그 사실을 이유에 적는다", () => {
+    const base = makeCandidates(4, 32).map((c) => ({ ...c, gender: "F" as const, birthYear: 1995, slotIds: ["s-fri-seongsu"] }));
+    const res = runMatching(base, slots, { excluded: new Set(), met: new Set(), again: new Set() }, DEFAULT_SETTINGS);
+    expect(res.tables.length).toBe(1);
+    expect(res.tables[0].reasons.some((r) => r.includes("성비를 맞추기 어려웠어요"))).toBe(true);
   });
 });
