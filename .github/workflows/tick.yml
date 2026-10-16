@@ -1,0 +1,21 @@
+# 10분마다 자동 처리(마감 뒤 매칭, 예약 알림, 발송 재시도, 리마인드, 모임 시작 콘텐츠)를 부른다.
+# Vercel Hobby의 Cron은 하루 한 번만 돌아 화요일 24:00 마감 뒤 매칭이 다음 날 정오까지 밀리던 문제를 푼다.
+# CRON_SECRET을 Vercel에 넣었다면 같은 값을 저장소 Secrets에도 넣는다. 없으면 헤더 없이 부른다.
+name: tick
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: 자동 처리 호출
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: https://wooyeon-table-ten.vercel.app
+        run: |
+          auth=()
+          if [ -n "$CRON_SECRET" ]; then auth=(-H "Authorization: Bearer $CRON_SECRET"); fi
+          curl -fsS --max-time 90 "${auth[@]}" "$APP_URL/api/cron/tick"

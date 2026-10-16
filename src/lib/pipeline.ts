@@ -4,6 +4,7 @@ import { logStatus } from "./events";
 import { fmtDate, fmtTime } from "./format";
 import { notify } from "./notify";
 import { pushNotifications } from "./push";
+import { MAX_TRIES, postSystem, retryPushes, retrySystemMessages } from "./delivery";
 import { loadContentRules, rank, tableTypes } from "./contents";
 import { loadTemplates, render } from "./templates";
 import { GOOD_RATING } from "./reservations";
@@ -42,10 +43,9 @@ async function members(tableId: string) {
   }[];
 }
 
+/** 단체방 시스템 메시지. 실패하면 이력을 남기고 스케줄러가 다시 올린다 (INF-08, lib/delivery.ts) */
 async function systemMessage(roomId: string, body: string, dedupeKey: string, meta: Record<string, unknown> = {}) {
-  await db()
-    .from("chat_messages")
-    .upsert({ room_id: roomId, kind: "system", body, meta, dedupe_key: dedupeKey }, { onConflict: "dedupe_key", ignoreDuplicates: true });
+  await postSystem(roomId, body, { dedupeKey, meta });
 }
 
 export async function ensureRoom(tableId: string): Promise<string> {
@@ -149,7 +149,8 @@ export async function afterConfirm(tableId: string) {
   // 하루 전 리마인드 예약 (INF-07). 시각이 되면 tick이 발송 처리한다
   const remindAt = new Date(new Date(t.slots.starts_at).getTime() - 24 * 60 * 60 * 1000);
   const tpl = await loadTemplates();
-  const rm = render("reminder", { date: fmtDate(t.slots.starts_at), time: fmtTime(t.slots.starts_at), region: t.slots.region, reservation: t.reservation_name ?? "식당 안내 참고" }, tpl);
+  const { data: vn } = t.venue_id ? await db().from("venues").select("name").eq("id", t.venue_id).maybeSingle() : { data: null };
+  const rm = render("reminder", { date: fmtDate(t.slots.starts_at), time: fmtTime(t.slots.starts_at), region: t.slots.region, venue: vn?.name ?? "", reservation: t.reservation_name ?? "식당 안내 참고" }, tpl);
   for (const m of ms) {
     await notify({
       userId: m.user_id,
@@ -234,8 +235,9 @@ export async function tick() {
     if (up?.length) sentNow.push(n.id);
     if (error) {
       const attempts = (n.attempts ?? 0) + 1;
-      await db().from("notifications").update({ attempts, last_error: error.message, status: attempts >= 3 ? "failed" : "pending" }).eq("id", n.id);
-      if (attempts >= 3) {
+      await db().from("notifications").update({ attempts, last_error: error.message, status: attempts >= MAX_TRIES ? "failed" : "pending" }).eq("id", n.id);
+      await logStatus({ entityType: "notification", entityId: n.id, field: "status", from: "pending", to: attempts >= MAX_TRIES ? "failed" : "pending", actor: "system", reason: `알림함 저장 실패 ${attempts}번째: ${error.message}` }).catch(() => null);
+      if (attempts >= MAX_TRIES) {
         await db().from("exceptions").upsert(
           { kind: "notification", ref_type: "notification", ref_id: n.id, reason: "알림을 세 번 보내지 못했어요", dedupe_key: `notify:${n.id}` },
           { onConflict: "dedupe_key", ignoreDuplicates: true },
@@ -245,6 +247,12 @@ export async function tick() {
   }
   await pushNotifications(sentNow).catch(() => null);
   if (pending?.length) done.push(`예약 알림 ${pending.length}건 발송`);
+
+  // 2-0. 발송 실패 재시도 (INF-08): 푸시·단체방 메시지를 10분 간격으로 3번까지, 그래도 안 되면 예외 큐
+  const rp = await retryPushes(t.getTime()).catch(() => 0);
+  if (rp) done.push(`푸시 다시 보내기 ${rp}건`);
+  const rs = await retrySystemMessages().catch(() => 0);
+  if (rs) done.push(`단체방 안내 다시 올리기 ${rs}건`);
 
   // 2-1. 빈자리 제안 응답 기한이 지난 건은 다음 대기자에게 넘긴다 (STA-07)
   const { expireOffers } = await import("./attendance");
@@ -267,10 +275,10 @@ export async function tick() {
   const tpl = await loadTemplates();
   const { data: tables } = await db()
     .from("dining_tables")
-    .select("id,status,reservation_name,slots(starts_at,ends_at,region)")
+    .select("id,status,reservation_name,slots(starts_at,ends_at,region),venues(name)")
     .in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY", "IN_PROGRESS"]);
   for (const raw of tables ?? []) {
-    const tb = raw as unknown as { id: string; status: string; reservation_name: string | null; slots: { starts_at: string; ends_at: string; region: string } };
+    const tb = raw as unknown as { id: string; status: string; reservation_name: string | null; slots: { starts_at: string; ends_at: string; region: string }; venues: { name: string } | null };
     const start = new Date(tb.slots.starts_at);
     const end = new Date(tb.slots.ends_at);
     const roomId = await ensureRoom(tb.id);
@@ -278,7 +286,7 @@ export async function tick() {
     if (t.getTime() >= start.getTime() - 24 * 60 * 60 * 1000) {
       await systemMessage(
         roomId,
-        render("reminder_chat", { time: fmtTime(tb.slots.starts_at), region: tb.slots.region, reservation: tb.reservation_name ?? "식당 안내 참고" }, tpl).body,
+        render("reminder_chat", { time: fmtTime(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "", reservation: tb.reservation_name ?? "식당 안내 참고" }, tpl).body,
         `remind:${tb.id}`,
         { type: "reminder" },
       );
@@ -340,7 +348,28 @@ export async function tick() {
   // 4. 모집 중인 회차를 지난 참가자에게 추천 (새 일정 소식 받기에 동의한 사람만)
   const recommended = await recommendOpenRounds(t);
   if (recommended) done.push(`다음 일정 추천 ${recommended}건`);
+  // 운영자 화면에 '마지막 자동 실행'으로 보여 준다
+  await db().from("settings").upsert({ key: "tick.ran", value: { at: new Date().toISOString(), done } }, { onConflict: "key" }).then(() => null, () => null);
   return done;
+}
+
+/**
+ * 화면을 열 때 부르는 보조 실행. 최근 gap초 안에 누가 이미 돌렸으면 건너뛴다.
+ * 여러 요청이 동시에 와도 settings 'tick.claim'을 먼저 바꾼 한 곳만 돈다 (낙관적 잠금).
+ */
+export async function maybeTick(gapSec = 120): Promise<string[] | null> {
+  const { data } = await db().from("settings").select("value").eq("key", "tick.claim").maybeSingle();
+  const prev: string | undefined = data?.value?.at;
+  if (prev && Date.now() - Date.parse(prev) < gapSec * 1000) return null;
+  const at = new Date().toISOString();
+  if (prev) {
+    const { data: won } = await db().from("settings").update({ value: { at } }).eq("key", "tick.claim").eq("value->>at", prev).select("key");
+    if (!won?.length) return null;
+  } else {
+    const { error } = await db().from("settings").insert({ key: "tick.claim", value: { at } });
+    if (error) return null;
+  }
+  return tick();
 }
 
 const DAYS = "일월화수목금토";

@@ -44,6 +44,12 @@ export function fmtSlot(iso: string) {
   return `${fmtDay(iso)} ${fmtClock(iso)}`;
 }
 
+/** 날짜와 시각을 두 줄로 쓸 때. 0시는 fmtSlot처럼 전날 '밤 12시' */
+export function fmtDayClock(iso: string): [string, string] {
+  const [day, ...rest] = fmtSlot(iso).split(") ");
+  return [`${day})`, rest.join(") ")];
+}
+
 /** 오늘(서울 기준)부터 그날까지 남은 날 수. 0이면 오늘 */
 export function dday(iso: string, now: Date) {
   const a = Date.parse(`${dateKey(now.toISOString())}T00:00:00+09:00`);

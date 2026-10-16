@@ -10,6 +10,7 @@ import type { Candidate } from "./matching/types";
 import { notify } from "./notify";
 import { afterConfirm, ensureRoom } from "./pipeline";
 import { db } from "./supabase";
+import { postSystem } from "./delivery";
 
 export const ACTIVE = ["CONFIRMED", "VENUE_ASSIGNED", "READY"];
 type Result = { ok: boolean; message: string };
@@ -28,7 +29,7 @@ const tag = (reason: string) => `[운영자 긴급 수정] ${reason}`;
 
 async function say(tableId: string, body: string) {
   const room = await ensureRoom(tableId);
-  await db().from("chat_messages").insert({ room_id: room, kind: "system", body });
+  await postSystem(room, body);
 }
 
 /** 옮긴 사람의 예약 안내를 새 테이블 기준으로 다시 건다 */

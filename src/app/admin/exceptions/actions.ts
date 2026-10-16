@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
@@ -63,6 +64,34 @@ export async function resolveException(form: FormData) {
   } else if (ex.kind === "reservation" && action === "reserved") {
     const { markReservedManually } = await import("@/lib/reservations");
     await markReservedManually(ex.ref_id, note, me.id);
+  } else if (ex.kind === "notification" && action === "resend") {
+    // 알림 발송 실패: 운영자가 원인을 보고 다시 보낸다 (INF-08)
+    let ok = false;
+    if (ex.ref_type === "chat_room") {
+      const { resendSystem } = await import("@/lib/delivery");
+      ok = await resendSystem(ex.dedupe_key ?? "");
+    } else if (ex.ref_type === "notification") {
+      // 알림함 저장이 실패했던 알림(failed)은 알림함에 넣고, 푸시도 다시 보낸다. 등록 기기가 없으면 알림함만으로 성공
+      const { pushNotifications } = await import("@/lib/push");
+      const { data: before } = await db().from("notifications").select("status,sent_at").eq("id", ex.ref_id).maybeSingle();
+      if (before) {
+        const { error } = await db()
+          .from("notifications")
+          .update({ status: "sent", sent_at: before.status === "sent" ? before.sent_at : new Date().toISOString(), last_error: null })
+          .eq("id", ex.ref_id);
+        if (!error) {
+          await pushNotifications([ex.ref_id]);
+          const { data: n } = await db().from("notifications").select("status,last_error").eq("id", ex.ref_id).maybeSingle();
+          ok = n?.status === "sent" && !n.last_error;
+        }
+      }
+    }
+    await logStatus({ entityType: "exception", entityId: id, field: "resend", to: ok ? "SENT" : "FAILED", actor, reason: note || "운영자가 다시 보내기" });
+    if (ok) await close(id, me.id, "다시 보내기 성공");
+    else {
+      revalidatePath("/admin/exceptions");
+      redirect(`/admin/exceptions?m=${encodeURIComponent("다시 보내지 못했어요. 사유를 확인하고 직접 연락해 주세요")}`);
+    }
   } else if (ex.kind === "refund" && action === "retry_refund") {
     const { data: app } = await db().from("applications").select("id,user_id,payment_id").eq("id", ex.ref_id).single();
     if (app) {

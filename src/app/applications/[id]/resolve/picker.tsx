@@ -75,7 +75,7 @@ export function ResolveChoice({ appId, joins, moves, waitUntil, nearOk, membersh
   const curJoin = joins.find((o) => o.id === table);
   const curMove = moves.find((o) => o.id === slot);
   const action = { join: actions.join, move: actions.transfer, wait: actions.wait, keep: actions.keepPass, refund: actions.refund }[choice];
-  const short = (o?: Opt) => o?.label.split(" · ")[0].replace(/ (오전|오후).*$/, "") ?? "";
+  const short = (o?: Opt) => o?.label.split(" · ")[0].replace(/ (오전|오후|저녁|낮|새벽|밤) .*$/, "") ?? "";
   const button = {
     join: `${short(curJoin)} 테이블에 앉기`,
     move: `${short(curMove)} 일정으로 옮기기`,

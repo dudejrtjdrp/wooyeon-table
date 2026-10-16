@@ -5,7 +5,7 @@
 import { ACTIVE_TABLE, offerSeat, tableInfo, tableMembers, tableMembersOf, toCand } from "./attendance";
 import { now } from "./clock";
 import { logStatus } from "./events";
-import { fmtDate, fmtTime } from "./format";
+import { fmtDate, fmtSlot } from "./format";
 import { canJoin } from "./matching/constraints";
 import { scoreGroup } from "./matching/score";
 import { loadRelations, loadSettings } from "./matching/runner";
@@ -17,6 +17,7 @@ import { db } from "./supabase";
 import { loadTemplates, render } from "./templates";
 
 import { AUTO_KEEP_AFTER, TAG_RANK, WAIT_CUTOFF, countFrom, moveTag, noAnswerStep, waitDeadline as deadlineOf, type MoveTag } from "./resolve-rules";
+import { postSystem } from "./delivery";
 
 type AppRow = {
   id: string; user_id: string; round_id: string; match_status: string; payment_status: string; payment_id: string | null;
@@ -126,8 +127,8 @@ export async function moveOptions(app: AppRow): Promise<MoveOption[]> {
       const demand = s.application_slots?.[0]?.count ?? 0;
       return {
         id: s.id, roundId: r.id, tag, starts: s.starts_at, demand,
-        label: `${fmtDate(s.starts_at)} ${fmtTime(s.starts_at)} · ${s.region}`,
-        note: demand >= 4 ? `신청 ${demand}명` : `${fmtDate(r.apply_deadline)} 마감`,
+        label: `${fmtSlot(s.starts_at)} · ${s.region}`,
+        note: demand >= 4 ? `신청 ${demand}명` : `${fmtSlot(r.apply_deadline)} 마감`,
         hot: demand >= 4,
       };
     })
@@ -208,12 +209,12 @@ export async function joinTable(appId: string, tableId: string, actor: string): 
   }
   await db().from("notifications").delete().eq("user_id", app.user_id).eq("status", "pending").eq("link", `/applications/${appId}/resolve`);
   const room = await ensureRoom(tableId);
-  await db().from("chat_messages").insert({ room_id: room, kind: "system", body: `빈자리에 새로운 분이 합류했어요. ${me?.name ?? ""}님 반가워요!` });
+  await postSystem(room, `빈자리에 새로운 분이 합류했어요. ${me?.name ?? ""}님 반가워요!`);
   await notify({
     userId: app.user_id,
     template: "confirmed",
     title: "테이블에 합류했어요",
-    body: `${fmtDate(tb.slots.starts_at)} ${fmtTime(tb.slots.starts_at)} ${tb.slots.region}${tb.venues ? ` ${tb.venues.name}` : ""}에서 만나요. 단체방에서 인사를 나눠 보세요.`,
+    body: `${fmtSlot(tb.slots.starts_at)} ${tb.slots.region}${tb.venues ? ` ${tb.venues.name}` : ""}에서 만나요. 단체방에서 인사를 나눠 보세요.`,
     link: `/tables/${tableId}`,
     dedupeKey: `join:${appId}:${tableId}`,
   });
@@ -264,7 +265,7 @@ export async function startWaiting(appId: string, actor: string): Promise<{ ok: 
   const until = waitDeadline(app, await now());
   if (!until) return { ok: false, message: "모임이 2일 안으로 다가와 더 기다릴 수 없어요. 다른 방법을 골라 주세요" };
   await db().from("applications").update({ resolution: "wait", wait_until: until.toISOString() }).eq("id", appId).eq("match_status", "ALTERNATIVE_OFFERED");
-  await logStatus({ entityType: "application", entityId: appId, field: "resolution", from: app.resolution ?? undefined, to: "wait", actor, reason: `자리 나면 알려 주기 (${fmtDate(until.toISOString())} ${fmtTime(until.toISOString())}까지)` });
+  await logStatus({ entityType: "application", entityId: appId, field: "resolution", from: app.resolution ?? undefined, to: "wait", actor, reason: `자리 나면 알려 주기 (${fmtSlot(until.toISOString())}까지)` });
   // 이미 비어 있는 자리가 있으면 바로 묻는다
   const { data: tables } = await db().from("dining_tables").select("id").eq("round_id", app.round_id).in("status", ACTIVE_TABLE);
   for (const tb of tables ?? []) await offerSeat(tb.id, "system");
@@ -273,7 +274,7 @@ export async function startWaiting(appId: string, actor: string): Promise<{ ok: 
     userId: app.user_id,
     template: "waiting",
     title: "자리가 나면 바로 알려 드릴게요",
-    body: `${fmtDate(until.toISOString())} ${fmtTime(until.toISOString())}까지 ${app.near_ok ? "고른 동네나 같은 날 바로 옆 동네" : "고른 동네·날짜"}에 자리가 나면 먼저 여쭤볼게요. 그때까지 자리가 없으면 이용권으로 보관해 드려요.`,
+    body: `${fmtSlot(until.toISOString())}까지 ${app.near_ok ? "고른 동네나 같은 날 바로 옆 동네" : "고른 동네·날짜"}에 자리가 나면 먼저 여쭤볼게요. 그때까지 자리가 없으면 이용권으로 보관해 드려요.`,
     link: `/applications/${appId}`,
     dedupeKey: `waiting:${appId}`,
   });

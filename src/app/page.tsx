@@ -9,9 +9,9 @@ import { RoundTable } from "@/components/brand";
 import { Card, LinkButton, List, Pill, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { dday, ddayLabel, fmtClock, fmtDateTime, fmtDay, fmtSlot } from "@/lib/format";
+import { dday, ddayLabel, fmtDateTime, fmtDayClock, fmtSlot } from "@/lib/format";
 import { areasLabel } from "@/lib/regions";
-import { tick } from "@/lib/pipeline";
+import { maybeTick } from "@/lib/pipeline";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
 
@@ -31,7 +31,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   const { m } = await searchParams;
   // 마감·리마인드·모임 시작 같은 시간 이벤트를 화면을 열 때도 처리한다 (크론 보조)
   // 밀린 일(마감·리마인드·종료)은 화면을 먼저 보낸 뒤 처리한다
-  after(() => tick().catch(() => null));
+  after(() => maybeTick().catch(() => null));
   const t = await now();
 
   const { data: apps } = await db()
@@ -87,7 +87,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
           <Card>
             <p className="text-[14px] text-muted">{me.name}님</p>
             <h1 className="mt-1.5 text-[23px] font-black leading-[1.4]">{upcoming[0] ? <>이번 주 저녁,<br />같이 먹을래요?</> : <>다음 테이블을<br />준비하고 있어요</>}</h1>
-            <div className="my-5 flex justify-center"><RoundTable size={200} filled={1} center={upcoming[0] ? <>{fmtDay(upcoming[0].startsAt)}<br />{fmtClock(upcoming[0].startsAt)}</> : null} /></div>
+            <div className="my-5 flex justify-center"><RoundTable size={200} filled={1} center={upcoming[0] ? <>{fmtDayClock(upcoming[0].startsAt)[0]}<br />{fmtDayClock(upcoming[0].startsAt)[1]}</> : null} /></div>
             <LinkButton href={upcoming[0] ? `/apply/${upcoming[0].roundId}` : "/my-tables"}>{upcoming[0] ? "신청하기" : "지난 테이블 보기"}</LinkButton>
           </Card>
         )}
@@ -177,7 +177,7 @@ function StatusCard({ a, t }: { a: ActiveRow; t: Date }) {
           size={220}
           filled={confirmed ? 6 : failed ? 3 : 1}
           label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"}
-          center={confirmed ? <>{ddayLabel(dday(slot!.starts_at, t))}</> : failed ? null : <>결과<br />{fmtDay(a.rounds.match_at)}<br />{fmtClock(a.rounds.match_at)}</>}
+          center={confirmed ? <>{ddayLabel(dday(slot!.starts_at, t))}</> : failed ? null : <>결과<br />{fmtDayClock(a.rounds.match_at)[0]}<br />{fmtDayClock(a.rounds.match_at)[1]}</>}
         />
       </div>
       <div className="mt-4 flex gap-1" aria-hidden="true">

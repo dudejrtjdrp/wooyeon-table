@@ -20,3 +20,23 @@
 ## 대화 콘텐츠 관리 (CON-04)
 어드민 → 대화 콘텐츠. 주제·아이스브레이킹 등록·수정·노출 중지, 관심사 태그, 테이블 유형(첫 참가 위주·재방문 위주·4인·5~6인·20대·30대 이상), 우선순위.
 노출 규칙(`settings.content.rules`): 주제 개수(3~6), 아이스브레이킹 개수, 관심사 가중치, 유형 가중치. 테이블 상세에서 실제로 나갈 콘텐츠를 미리 볼 수 있다.
+
+## 자동 처리 주기와 발송 재시도 (INF-08)
+
+**자동 처리(`tick`)가 도는 때**
+- GitHub Actions가 10분마다 `/api/cron/tick`을 부른다(`.github/workflows/tick.yml`). Vercel Cron은 Hobby 요금제라 하루 한 번만 되므로 백업으로 남겼다.
+- 참가자 홈·어드민 홈을 열 때도 화면을 먼저 보낸 뒤 돌린다(`maybeTick`). 2분 안에 이미 돌았으면 건너뛰고, 여러 요청이 동시에 와도 `settings.tick.claim`을 먼저 바꾼 한 곳만 돈다.
+- 그래서 화요일 24:00 마감 뒤 매칭은 늦어도 10분 안에 돈다(예전엔 다음 날 정오). 하루 전 리마인드와 모임 시작 콘텐츠도 10분 안에 나간다.
+- 어드민 홈에 마지막 실행 시각과 '알림 N건 다시 보내는 중'을 보여 준다.
+
+**발송 재시도 — 실패는 자동으로, 반복 실패만 운영자에게**
+
+| 갈래 | 실패를 아는 방법 | 이력 | 재시도 | 3번 실패하면 |
+|---|---|---|---|---|
+| 앱 알림함 | 저장 오류 | 바로 0.4초 뒤 한 번 더. 예약 알림은 `notifications.attempts`·`last_error`, `status_events(notification, status)` | 예약 알림은 매 실행마다 | `failed` + 예외 `notification` |
+| 휴대폰 푸시 | 등록 기기가 있는데 한 대도 못 받음(만료 구독 404·410은 지우고 실패로 안 셈) | `attempts`·`last_error='푸시 실패: …'`, `status_events(notification, push)` | 실패 횟수×10분 뒤, 하루 안 | 예외 `notification`(ref `notification`). 알림함에는 이미 있음 |
+| 단체방 안내 | 메시지 저장 오류 | 바로 한 번 더, 그래도 안 되면 `status_events(chat_room, system_message, FAILED)`에 다시 보낼 내용까지 | 마지막 실패 10분 뒤, 하루 안. 성공하면 `SENT` 한 줄 | 예외 `notification`(ref `chat_room`) |
+
+- 같은 메시지는 중복 방지 키(`dedupe_key`)로 한 번만 올라가므로 몇 번을 다시 보내도 두 번 보이지 않는다.
+- 운영자는 예외 처리함에서 '다시 보내기'(성공하면 자동으로 닫힘) 또는 '직접 연락함'을 고른다.
+- 코드: `lib/delivery.ts`(재시도·예외), `lib/push.ts`(기기별 결과), `lib/notify.ts`(알림함 저장), 테스트 `lib/delivery.test.ts`.

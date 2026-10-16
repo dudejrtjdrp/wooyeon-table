@@ -4,7 +4,7 @@ import { ErrorText } from "@/components/ui";
 import { BackButton } from "@/components/client";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { fmtDate, fmtTime } from "@/lib/format";
+import { fmtSlot } from "@/lib/format";
 import { autoKeepAt, joinOptions, loadApp, moveOptions, waitDeadline } from "@/lib/resolve";
 import { isMembership } from "@/lib/constants";
 import { db } from "@/lib/supabase";
@@ -42,21 +42,21 @@ export default async function Resolve({ params, searchParams }: { params: Promis
       </div>
       {app.resolution === "wait" && app.wait_until ? (
         <p className="mx-6 mt-4 rounded-[14px] bg-accent-soft px-4 py-3 text-[13px] leading-relaxed text-accent-text">
-          지금 자리를 기다리는 중이에요. {fmtDate(app.wait_until)} {fmtTime(app.wait_until)}까지 자리가 없으면 {isMembership(app.payments?.pass_type) ? "이번 일정은 넘긴 것으로 할게요" : "이용권으로 보관해 드려요"}. 그 전에 다른 방법으로 바꿔도 돼요.
+          지금 자리를 기다리는 중이에요. {fmtSlot(app.wait_until)}까지 자리가 없으면 {isMembership(app.payments?.pass_type) ? "이번 일정은 넘긴 것으로 할게요" : "이용권으로 보관해 드려요"}. 그 전에 다른 방법으로 바꿔도 돼요.
         </p>
       ) : keepAt ? (
         <p className="mx-6 mt-4 rounded-[14px] bg-field px-4 py-3 text-[13px] leading-relaxed text-ink2">
           {isMembership(app.payments?.pass_type)
-            ? `멤버십 기간을 7일 늘려 드렸어요. ${fmtDate(iso(keepAt))} ${fmtTime(iso(keepAt))}까지 고르지 않으면 이번 일정은 넘긴 것으로 할게요.`
-            : `${fmtDate(iso(keepAt))} ${fmtTime(iso(keepAt))}까지 고르지 않으면 이용권으로 보관해 드려요. 결제한 금액은 그대로 남아요.`}
+            ? `멤버십 기간을 7일 늘려 드렸어요. ${fmtSlot(iso(keepAt))}까지 고르지 않으면 이번 일정은 넘긴 것으로 할게요.`
+            : `${fmtSlot(iso(keepAt))}까지 고르지 않으면 이용권으로 보관해 드려요. 결제한 금액은 그대로 남아요.`}
         </p>
       ) : null}
       <div className="px-6"><ErrorText msg={e} /></div>
       <ResolveChoice
         appId={app.id}
-        joins={joins.map((j) => ({ id: j.tableId, label: `${fmtDate(j.startsAt)} ${fmtTime(j.startsAt)} · ${j.region}`, note: `${j.members}명 모였어요${j.venue ? ` · ${j.venue}` : ""}`, tag: j.tag }))}
+        joins={joins.map((j) => ({ id: j.tableId, label: `${fmtSlot(j.startsAt)} · ${j.region}`, note: `${j.members}명 모였어요${j.venue ? ` · ${j.venue}` : ""}`, tag: j.tag }))}
         moves={moves.map((o) => ({ id: o.id, label: o.label, note: o.note, tag: o.tag, hot: o.hot }))}
-        waitUntil={waitUntil && app.resolution !== "wait" ? `${fmtDate(iso(waitUntil))} ${fmtTime(iso(waitUntil))}` : null}
+        waitUntil={waitUntil && app.resolution !== "wait" ? `${fmtSlot(iso(waitUntil))}` : null}
         nearOk={Boolean(app.near_ok)}
         membership={isMembership(app.payments?.pass_type)}
         actions={{ join, transfer, wait, keepPass, refund }}

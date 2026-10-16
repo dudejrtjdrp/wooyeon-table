@@ -11,6 +11,7 @@ import { ensureRoom } from "./pipeline";
 import { refundCutoff } from "./policy";
 import { neighborsOf } from "./regions";
 import { db } from "./supabase";
+import { postSystem } from "./delivery";
 
 const KST = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
 
@@ -73,7 +74,7 @@ export async function cancelAttendance(appId: string, userId: string): Promise<{
   await notify({ userId, template: "attendance_canceled", title: "참석을 취소했어요", body, link: `/applications/${appId}`, dedupeKey: `attendance_canceled:${appId}` });
 
   const roomId = await ensureRoom(tableId);
-  await db().from("chat_messages").insert({ room_id: roomId, kind: "system", body: "한 분이 사정이 생겨 함께하지 못하게 됐어요." });
+  await postSystem(roomId, "한 분이 사정이 생겨 함께하지 못하게 됐어요.");
   // 빈자리는 먼저 대기자에게 묻고, 받을 사람이 없을 때만 남은 인원으로 정리한다 (STA-07)
   await fillOrReflow(tableId, `user:${userId}`);
   return { ok: true, message: body };
@@ -120,7 +121,7 @@ export async function reflowTable(tableId: string, actor: string) {
       await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "CONFIRMED", actor, reason: `인원 부족으로 다른 테이블 재배치 (${tableId.slice(0, 8)} → ${target.id.slice(0, 8)})` });
       groups.get(target.id)!.push(m);
       const room = await ensureRoom(target.id);
-      await db().from("chat_messages").insert({ room_id: room, kind: "system", body: `새로운 분이 합류했어요. ${m.name}님 반가워요!` });
+      await postSystem(room, `새로운 분이 합류했어요. ${m.name}님 반가워요!`);
       await notify({ userId: m.user_id, template: "reallocated", title: "테이블이 바뀌었어요", body: `함께하기로 한 분이 취소해 ${fmtDate(target.slots.starts_at)} ${fmtTime(target.slots.starts_at)} ${target.slots.region} 테이블로 옮겼어요. 새 단체방을 확인해 주세요.`, link: `/tables/${target.id}`, dedupeKey: `reflow:${m.id}:${target.id}` });
       moved++;
     } else {
@@ -292,7 +293,7 @@ export async function respondOffer(offerId: string, userId: string, accept: bool
   // 결제 독촉·대안 안내처럼 이제 필요 없는 예약 알림 정리
   await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/applications/${o.application_id}/resolve`);
   const room = await ensureRoom(o.table_id);
-  await db().from("chat_messages").insert({ room_id: room, kind: "system", body: `빈자리에 새로운 분이 합류했어요. ${me!.name}님 반가워요!` });
+  await postSystem(room, `빈자리에 새로운 분이 합류했어요. ${me!.name}님 반가워요!`);
   await notify({
     userId,
     template: "confirmed",

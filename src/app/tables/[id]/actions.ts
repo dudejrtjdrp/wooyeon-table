@@ -9,6 +9,7 @@ import { now } from "@/lib/clock";
 import { logStatus } from "@/lib/events";
 import { ensureRoom } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
+import { postSystem } from "@/lib/delivery";
 
 async function membership(tableId: string, userId: string) {
   const { data } = await db()
@@ -55,7 +56,7 @@ export async function lateNotice(form: FormData) {
   const { data: sent } = await db().from("status_events").select("id").eq("entity_type", "dining_table").eq("entity_id", tableId).eq("field", "late").eq("to_value", me.id).limit(1);
   if (!sent?.length) {
     const roomId = await ensureRoom(tableId);
-    await db().from("chat_messages").insert({ room_id: roomId, kind: "system", body: `${me.name}님이 조금 늦을 것 같대요\n먼저 주문하고 이야기 나누고 계세요.` });
+    await postSystem(roomId, `${me.name}님이 조금 늦을 것 같대요\n먼저 주문하고 이야기 나누고 계세요.`);
     await logStatus({ entityType: "dining_table", entityId: tableId, field: "late", to: me.id, actor: `user:${me.id}`, reason: "늦을 것 같아요" });
   }
   revalidatePath(`/tables/${tableId}/chat`);

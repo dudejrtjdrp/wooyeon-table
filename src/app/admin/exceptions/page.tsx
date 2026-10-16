@@ -14,9 +14,9 @@ const LABEL: Record<string, string> = {
 const TONE: Record<string, string> = { safety: "ring-danger/40", payment: "ring-accent/30", refund: "ring-accent/30", venue_shortage: "ring-warn/40", no_show: "ring-warn/40" };
 const PILL: Record<string, string> = { safety: "bg-danger/10 text-danger", payment: "bg-accent-soft text-accent", refund: "bg-accent-soft text-accent", venue_shortage: "bg-warn-soft text-warn", no_show: "bg-warn-soft text-warn" };
 
-export default async function Exceptions({ searchParams }: { searchParams: Promise<{ all?: string; k?: string }> }) {
+export default async function Exceptions({ searchParams }: { searchParams: Promise<{ all?: string; k?: string; m?: string }> }) {
   await requireAdmin();
-  const { all, k } = await searchParams;
+  const { all, k, m } = await searchParams;
   let q = db().from("exceptions").select("*").order("created_at", { ascending: false }).limit(100);
   if (!all) q = q.eq("status", "open");
   const { data: rows } = await q;
@@ -34,6 +34,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
     <div>
       <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">예외 처리함</h1>
       <p className="mt-1.5 text-[15px] text-muted">자동으로 해결하지 못한 일만 모았어요.</p>
+      {m && <p role="status" className="mt-4 rounded-xl bg-warn-soft px-4 py-3 text-[14px] font-semibold text-warn">{m}</p>}
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Link href={qs()} className={`rounded-full px-4 py-2 text-[15px] font-semibold ${!k ? "bg-accent-soft text-accent" : "border border-line bg-card text-ink/80"}`}>전체 {rows?.length ?? 0}</Link>
         {[...counts.entries()].map(([kind, n]) => (
@@ -93,6 +94,11 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                       <Link href={`/admin/tables/${e.ref_id}#reservation`} className="flex h-10 items-center rounded-xl border border-line px-4 text-[13px] font-semibold text-ink">예약 페이지·정보 보기</Link>
                       <button name="action" value="retry_reservation" className="h-10 rounded-xl bg-accent px-4 text-[13px] font-semibold text-white">예약 다시 시도</button>
                       <button name="action" value="reserved" className="h-10 rounded-xl border border-accent/40 px-4 text-[13px] font-semibold text-accent">직접 예약함(메모에 예약번호)</button>
+                    </>
+                  ) : e.kind === "notification" && (e.ref_type === "chat_room" || e.ref_type === "notification") ? (
+                    <>
+                      <button name="action" value="resend" className="h-10 rounded-xl bg-accent px-4 text-[13px] font-semibold text-white">다시 보내기</button>
+                      <button name="action" value="done" className="h-10 rounded-xl border border-accent/40 px-4 text-[13px] font-semibold text-accent">직접 연락함</button>
                     </>
                   ) : e.kind === "venue_shortage" ? (
                     <>

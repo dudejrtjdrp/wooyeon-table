@@ -8,7 +8,7 @@ import { after } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDateTime } from "@/lib/format";
-import { tick } from "@/lib/pipeline";
+import { maybeTick } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants } from "./demo-actions";
 
@@ -29,7 +29,7 @@ const KIND_LABEL: Record<string, string> = {
 export default async function AdminHome({ searchParams }: { searchParams: Promise<{ r?: string; m?: string }> }) {
   await requireAdmin();
   // 밀린 일(마감·리마인드·종료)은 화면을 먼저 보낸 뒤 처리한다
-  after(() => tick().catch(() => null));
+  after(() => maybeTick().catch(() => null));
   const { r, m } = await searchParams;
   const t = await now();
   const { data: clock } = await db().from("app_clock").select("offset_seconds").eq("id", 1).single();
@@ -52,6 +52,10 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
 
   const { data: run } = round ? await db().from("match_runs").select("summary,status,finished_at").eq("round_id", round.id).maybeSingle() : { data: null };
   const { count: tableCount } = round ? await db().from("dining_tables").select("id", { count: "exact", head: true }).eq("round_id", round.id) : { count: 0 };
+
+  // 자동 처리 상태: 마지막 실행 시각과 다시 보내는 중인 알림 (INF-08)
+  const { data: ran } = await db().from("settings").select("value").eq("key", "tick.ran").maybeSingle();
+  const { count: retrying } = await db().from("notifications").select("id", { count: "exact", head: true }).eq("status", "sent").like("last_error", "푸시 실패%").lt("attempts", 3).gte("sent_at", new Date(Date.now() - 24 * 3600_000).toISOString());
 
   const { data: ex } = await db().from("exceptions").select("kind").eq("status", "open");
   const exCount = new Map<string, number>();
@@ -101,6 +105,10 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <p className="mt-1.5 text-[15px] text-muted">
             자동 처리를 확인하고 필요한 일만 살펴봐요. 지금 {fmtDateTime(t.toISOString())}
             {Number(clock?.offset_seconds) ? <span className="ml-2 rounded-full bg-warn-soft px-2 py-0.5 text-[12px] font-semibold text-warn">시연용 가상 시각</span> : null}
+          </p>
+          <p className="mt-1 text-[13px] text-muted">
+            자동 처리는 10분마다 돌아요{ran?.value?.at ? ` · 마지막 ${fmtDateTime(ran.value.at)}` : ""}
+            {retrying ? <span className="ml-2 font-semibold text-warn">알림 {retrying}건 다시 보내는 중</span> : null}
           </p>
         </div>
         <form className="flex items-center gap-2 lg:mr-[400px]">
