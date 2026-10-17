@@ -25,7 +25,7 @@ const CHECK = (
 );
 
 export function ApplyFlow({
-  action, round, sidos, hot, slots, passes, owned, refund, error, nudge = null,
+  action, round, sidos, hot, slots, passes, owned, refund, error, nudge = null, initialStep = 1,
 }: {
   action: (f: FormData) => void | Promise<void>;
   round: { id: string; title: string; deadline: string; today: string };
@@ -38,8 +38,10 @@ export function ApplyFlow({
   error?: string;
   /** 두 번째 신청부터 멤버십 권유 (추천 표시와 계산만, 기본 선택은 그대로) */
   nudge?: { key: string; note: string } | null;
+  /** 주소의 ?step= (뒤로 가기로 돌아왔을 때 첫 화면이 1단계로 깜빡이지 않게) */
+  initialStep?: number;
 }) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialStep);
   const [picked, setPicked] = useState<string[]>([]); // 묶음 이름 또는 "서울 전체"
   const [active, setActive] = useState(sidos[0]?.name ?? "서울");
   const [near, setNear] = useState(true);

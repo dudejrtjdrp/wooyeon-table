@@ -124,7 +124,7 @@ function parseFood(s: string | null | undefined, avoidList: readonly string[]) {
 }
 
 export function OnboardingWizard({
-  action, profile: p, name, phone, next, error, prefill, lists, editing, verified, idvOn, userKey, phoneVerified,
+  action, profile: p, name, phone, next, error, prefill, lists, editing, verified, idvOn, userKey, phoneVerified, initialStep,
 }: {
   action: (f: FormData) => void | Promise<void>;
   profile: Profile;
@@ -139,6 +139,8 @@ export function OnboardingWizard({
   idvOn: boolean;
   userKey: string;
   phoneVerified: boolean;
+  /** 주소의 ?step= (뒤로 가기로 돌아왔을 때 첫 단계가 깜빡이지 않게) */
+  initialStep?: number;
 }) {
   // 0: 약관(처음 가입할 때만), 1~6: 프로필
   const first = editing ? 1 : 0;
@@ -165,7 +167,7 @@ export function OnboardingWizard({
     agree_marketing: Boolean(p?.marketing_opt_in),
   };
   const [v, setV] = useState<Values>(initial);
-  const [step, setStep] = useState(first);
+  const [step, setStep] = useState(Math.max(first, Math.min(initialStep ?? first, LAST)));
   const [msg, setMsg] = useState<string | null>(error ?? null);
   const [doc, setDoc] = useState<"terms" | "privacy" | null>(null);
   const restored = useRef(false);
@@ -173,7 +175,10 @@ export function OnboardingWizard({
   // 휴대폰 인증처럼 화면을 잠깐 떠났다 돌아와도 입력한 내용과 단계를 이어 간다
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem(storeKey);
+      // 저장하다 오류로 돌아온 경우(?e=)엔 보내기 직전 내용을, 아니면 보내고 남은 사본은 지운다
+      const sent = sessionStorage.getItem(`${storeKey}:sent`);
+      sessionStorage.removeItem(`${storeKey}:sent`);
+      const saved = sessionStorage.getItem(storeKey) ?? (error ? sent : null);
       if (saved) {
         const s = JSON.parse(saved) as { v: Values; step: number };
         setV((cur) => ({ ...cur, ...s.v, name: verified?.name ?? (s.v.name || cur.name) }));
@@ -277,7 +282,7 @@ export function OnboardingWizard({
 
       <form
         action={action}
-        onSubmit={() => { try { sessionStorage.removeItem(storeKey); } catch {} }}
+        onSubmit={() => { try { const cur = sessionStorage.getItem(storeKey); if (cur) sessionStorage.setItem(`${storeKey}:sent`, cur); sessionStorage.removeItem(storeKey); } catch {} }}
         className="flex flex-1 flex-col pb-36"
         noValidate
       >
