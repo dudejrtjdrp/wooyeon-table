@@ -400,7 +400,7 @@ export async function tick() {
     if (t.getTime() >= start.getTime() - 24 * 60 * 60 * 1000 && t < start) {
       await systemMessage(
         roomId,
-        render("reminder_chat", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "", reservation: tb.reservation_name ?? "테이블 화면 참고" }, tpl).body,
+        render("reminder_chat", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "", reservation: tb.reservation_name ?? "" }, tpl).body.replace(/ 예약명은 ''이에요\./, " 식당과 예약명은 테이블 화면에서 확인해 주세요."),
         `remind:${tb.id}`,
         { type: "reminder" },
       );

@@ -187,6 +187,9 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           </Row>
         ))}
       </List>
+      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
+        <p className="mt-2 px-1 text-[13px] leading-relaxed text-muted">동네나 날짜를 바꾸려면 아래에서 신청을 취소하고 다시 신청해 주세요. 매칭 시각 전이라 결제한 금액은 그대로 돌려드려요.</p>
+      )}
 
       {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
         <div className="mt-8 text-center">

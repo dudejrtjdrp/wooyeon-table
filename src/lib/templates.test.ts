@@ -50,4 +50,10 @@ describe("알림 템플릿 (G10)", () => {
     expect(render("applied", SAMPLE_VARS).body).toContain("결제");
     expect(render("feedback", SAMPLE_VARS).body).toContain("후기");
   });
+
+  it("하루 전 푸시에 시각·식당·예약명이 들어가고(INF-07), 식당이 없으면 테이블 화면으로 안내한다", () => {
+    expect(render("reminder", SAMPLE_VARS).body).toBe("저녁 7:30 · 홍대 둥근식탁 · 예약명 '우연한식탁 2032'");
+    expect(render("reminder", { ...SAMPLE_VARS, venue: "식당은 테이블 화면에서", reservation: "" }).body).toBe("저녁 7:30 · 식당은 테이블 화면에서");
+    expect(render("reminder", SAMPLE_VARS).title).toContain("당일 취소");
+  });
 });
