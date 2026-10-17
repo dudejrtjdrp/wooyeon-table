@@ -3,7 +3,7 @@
 import { CalendarDays, ChevronLeft, Eye, EyeOff, Home, MessageSquare, Star, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 const Spinner = () => (
@@ -257,5 +257,28 @@ export function StaleActions() {
       <a href={path} className="inline-flex h-11 items-center underline underline-offset-4">새로고침</a>
       <Link href="/rounds" className="inline-flex h-11 items-center underline underline-offset-4">내 신청 보기</Link>
     </span>
+  );
+}
+
+/**
+ * 식당 위치를 네이버 지도·카카오맵으로 바로 연다 (lib/maps.ts).
+ * 안드로이드는 intent 주소(앱이 없으면 브라우저가 웹 지도로), 그 밖에는 웹 지도를 새 탭으로.
+ */
+export function MapButtons({ links }: { links: { naver: { web: string; android: string }; kakao: { web: string; android: string } } }) {
+  const open = (l: { web: string; android: string }) => (e: MouseEvent) => {
+    if (!/Android/i.test(navigator.userAgent)) return; // 아이폰·컴퓨터는 링크 그대로(새 탭)
+    e.preventDefault();
+    window.location.href = l.android;
+  };
+  const cls = "flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[12px] bg-field text-[14px] font-bold text-ink";
+  return (
+    <div role="group" aria-label="지도에서 보기" className="mt-2 flex gap-2">
+      <a href={links.naver.web} target="_blank" rel="noreferrer" onClick={open(links.naver)} className={cls}>
+        <span aria-hidden="true" className="size-2.5 rounded-full bg-[#03C75A]" />네이버 지도
+      </a>
+      <a href={links.kakao.web} target="_blank" rel="noreferrer" onClick={open(links.kakao)} className={cls}>
+        <span aria-hidden="true" className="size-2.5 rounded-full bg-[#FEE500] ring-1 ring-black/10" />카카오맵
+      </a>
+    </div>
   );
 }

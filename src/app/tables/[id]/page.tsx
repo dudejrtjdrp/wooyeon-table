@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { RoundTable } from "@/components/brand";
 import { ErrorText, InfoRows, LinkButton, PrimaryButton, Toast } from "@/components/ui";
-import { BackButton } from "@/components/client";
+import { BackButton, MapButtons } from "@/components/client";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { dday, ddayLabel, fmtSlot } from "@/lib/format";
+import { mapLinks } from "@/lib/maps";
 import { refundCutoff } from "@/lib/policy";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
@@ -47,7 +48,8 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const start = new Date(t.slots.starts_at);
   const end = new Date(t.slots.ends_at);
   const canCheckIn = mine?.attendance_status === "SCHEDULED" && n >= new Date(start.getTime() - 3600_000) && n <= end;
-  const mapUrl = t.venues ? t.venues.map_url ?? `https://map.naver.com/p/search/${encodeURIComponent(t.venues.address)}` : null;
+  // 주소를 누르면 지도 앱이 바로 열리게: 네이버 지도·카카오맵 (앱 없으면 웹 지도)
+  const maps = t.venues ? mapLinks(t.venues.name, t.venues.address, t.venues.map_url) : null;
   const done = t.status === "DONE";
 
   // 테이블 요약: 성비·나이대·겹치는 관심사
@@ -119,14 +121,15 @@ export default async function TablePage({ params, searchParams }: { params: Prom
           <InfoRows
             rows={[
               ["식당", t.venues ? t.venues.name : "정하고 있어요"],
-              ...(t.venues ? ([["주소", mapUrl ? <a key="m" href={mapUrl} target="_blank" rel="noreferrer" className="-my-3 inline-flex min-h-11 items-center text-accent underline underline-offset-4">{t.venues.address} · 지도</a> : t.venues.address]] as [string, React.ReactNode][]) : []),
+              ...(t.venues ? ([["주소", t.venues.address]] as [string, string][]) : []),
               ...(t.reservation_name ? ([["예약 이름", t.reservation_name]] as [string, string][]) : []),
               ...(resv ? ([["예약", resv.status === "CONFIRMED" ? <span key="r">{CHANNEL_LABEL[resv.channel as Channel]} 예약 확정{resv.external_ref ? ` · ${resv.external_ref}` : ""}</span> : "운영팀이 예약하고 있어요"]] as [string, React.ReactNode][]) : []),
               ...(t.venues?.price_range ? ([["1인 가격대", t.venues.price_range]] as [string, string][]) : []),
               ["못 드시는 음식", myFood ? `${myFood}` : "없어요"],
             ]}
           />
-          {myFood && <p className="text-[12px] text-faint">식당을 정할 때 운영팀이 참고해요.</p>}
+          {maps && <MapButtons links={maps} />}
+          {myFood && <p className="mt-2 text-[12px] text-faint">식당을 정할 때 운영팀이 참고해요.</p>}
         </div>
 
         <section className="mt-6" aria-label="함께하는 사람">
