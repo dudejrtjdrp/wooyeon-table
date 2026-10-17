@@ -3,6 +3,7 @@ import { REFUND_POLICY } from "./constants";
 import { logStatus } from "./events";
 import { fmtSlot } from "./format";
 import { notify } from "./notify";
+import { shouldNudgeCheckIn } from "./attendance-rules";
 import { pushNotifications } from "./push";
 import { MAX_TRIES, postSystem, retryPushes, retrySystemMessages } from "./delivery";
 import { chooseContents, loadContentRules, tableTypes } from "./contents";
@@ -425,7 +426,7 @@ export async function tick() {
     }
 
     // 시작 20분이 지나도 체크인하지 않은 사람에게 한 번 알린다 (갔는데 체크인을 깜빡해 노쇼 후보가 되는 일을 줄인다)
-    if (t.getTime() >= start.getTime() + 20 * 60_000 && t < end) {
+    if (shouldNudgeCheckIn(start, end, t)) {
       const ms = await members(tb.id);
       for (const m of ms.filter((x) => x.attendance_status === "SCHEDULED")) {
         await notify({ userId: m.user_id, template: "checkin_nudge", ...render("checkin_nudge", {}, tpl), link: `/tables/${tb.id}`, dedupeKey: `checkin:${m.id}` });

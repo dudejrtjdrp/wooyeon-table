@@ -6,6 +6,7 @@ import { pushToUsers } from "@/lib/push";
 import { redirect } from "next/navigation";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
+import { canClaimAttended } from "@/lib/attendance-rules";
 import { logStatus } from "@/lib/events";
 import { ensureRoom } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
@@ -100,7 +101,10 @@ export async function claimAttended(form: FormData) {
   const { data: t } = await db().from("dining_tables").select("slots(ends_at)").eq("id", tableId).single();
   const end = new Date((t as unknown as { slots: { ends_at: string } }).slots.ends_at);
   const n = await now();
-  if (m.attendance_status !== "SCHEDULED" || n < end || n.getTime() > end.getTime() + 48 * 3600_000) redirect(`/tables/${tableId}`);
+  if (!canClaimAttended(m.attendance_status, end, n)) redirect(`/tables/${tableId}`);
+  // 이미 알린 사람은 다시 기록하지 않는다 (두 번 눌러도 한 번)
+  const { data: prev } = await db().from("status_events").select("id").eq("entity_id", m.id).eq("field", "attendance_claim").limit(1);
+  if (prev?.length) redirect(`/tables/${tableId}`);
   const when = `${n.getMonth() + 1}/${n.getDate()} ${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
   const note = `${me.name}님 체크인 기록이 없어요 · 본인이 '참석했는데 체크인을 못 했어요'라고 알림(${when})`;
   const { data: ex } = await db().from("exceptions").select("id,status").eq("dedupe_key", `noshow:${m.id}`).maybeSingle();

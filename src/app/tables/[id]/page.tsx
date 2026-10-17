@@ -11,6 +11,7 @@ import { refundCutoff } from "@/lib/policy";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
 import { checkIn, claimAttended } from "./actions";
+import { canClaimAttended } from "@/lib/attendance-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const maps = t.venues ? mapLinks(t.venues.name, t.venues.address, t.venues.map_url) : null;
   const done = t.status === "DONE";
   // 갔는데 체크인을 못 한 사람이 끝난 뒤 48시간 안에 알릴 수 있게
-  const missedCheckIn = mine?.attendance_status === "SCHEDULED" && n > end && n.getTime() <= end.getTime() + 48 * 3600_000;
+  const missedCheckIn = canClaimAttended(mine?.attendance_status, end, n);
   const claimed = missedCheckIn
     ? Boolean((await db().from("status_events").select("id").eq("entity_id", mine!.id).eq("field", "attendance_claim").limit(1)).data?.length)
     : false;

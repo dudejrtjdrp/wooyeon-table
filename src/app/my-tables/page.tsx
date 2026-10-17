@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 type A = {
   id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null;
   table_id: string | null; created_at: string;
-  rounds: { title: string };
+  rounds: { title: string; match_at: string };
   dining_tables: { id: string; slots: { starts_at: string; region: string } | null; venues: { name: string; address: string; price_range: string | null } | null } | null;
 };
 
@@ -22,7 +22,7 @@ export default async function MyTables() {
   const t = await now();
   const { data } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,table_id,created_at,rounds(title),dining_tables(id,slots(starts_at,region),venues(name,address,price_range))")
+    .select("id,application_status,payment_status,match_status,attendance_status,table_id,created_at,rounds(title,match_at),dining_tables(id,slots(starts_at,region),venues(name,address,price_range))")
     .eq("user_id", me.id)
     .order("created_at", { ascending: false });
   const apps = (data ?? []) as unknown as A[];
@@ -100,8 +100,8 @@ export default async function MyTables() {
                   key={a.id}
                   href={needReview ? `/tables/${a.table_id}/feedback` : `/tables/${a.table_id}/chat`}
                   title={`${fmtDay(s.starts_at)} · ${s.region}`}
-                  sub={a.dining_tables?.venues?.name ?? headline(a).label}
-                  pill={needReview ? <Pill tone="accent">후기 남기기</Pill> : reviewed.has(a.id) ? <Pill tone="muted">후기 남김</Pill> : <Pill tone="muted">{headline(a).label}</Pill>}
+                  sub={a.dining_tables?.venues?.name ?? headline(a, t).label}
+                  pill={needReview ? <Pill tone="accent">후기 남기기</Pill> : reviewed.has(a.id) ? <Pill tone="muted">후기 남김</Pill> : <Pill tone="muted">{headline(a, t).label}</Pill>}
                 />
               );
             })}

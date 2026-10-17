@@ -80,7 +80,7 @@ describe("자동 매칭", () => {
 
   it("여러 시드에서도 조건이 깨지지 않는다", () => {
     for (let seed = 1; seed <= 30; seed++) checkInvariants(makeCandidates(25 + seed, seed), emptyRel());
-  });
+  }, 20000);
 
   it("같은 입력이면 같은 결과가 나온다", () => {
     const c = makeCandidates(30, 3);

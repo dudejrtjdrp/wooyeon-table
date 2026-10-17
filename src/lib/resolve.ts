@@ -16,6 +16,7 @@ import { isMembership } from "./constants";
 import { db } from "./supabase";
 import { loadTemplates, render, slotVars } from "./templates";
 
+import { failureMoment } from "./attendance-rules";
 import { AUTO_KEEP_AFTER, TAG_RANK, WAIT_CUTOFF, countFrom, moveTag, noAnswerStep, waitDeadline as deadlineOf, type MoveTag } from "./resolve-rules";
 import { postSystem } from "./delivery";
 
@@ -53,9 +54,7 @@ export async function failedAt(appId: string): Promise<Date | null> {
   if (!data?.[0]) return null;
   // 감사 로그 시각은 실제 시각이고, 기한은 앱 시각(시연용 시계)으로 잰다. 시계를 앞으로 옮겨 둔 시연에서
   // 실패 안내 직후 바로 '3일 지나 자동 보관'이 되지 않도록, 실패는 적어도 그 회차 매칭 시각 뒤에 났다고 본다
-  const matchAt = (app as unknown as { rounds: { match_at: string } | null } | null)?.rounds?.match_at;
-  const logged = new Date(data[0].created_at);
-  return matchAt && new Date(matchAt) > logged ? new Date(matchAt) : logged;
+  return failureMoment(new Date(data[0].created_at), (app as unknown as { rounds: { match_at: string } | null } | null)?.rounds?.match_at);
 }
 
 /** 자리 나면 알려 주기를 어디까지 받을 수 있는지: 고른 일정 중 가장 늦은 모임의 2일 전 */

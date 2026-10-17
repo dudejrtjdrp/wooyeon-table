@@ -41,7 +41,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   if (!app || app.user_id !== me.id) redirect("/");
 
   const t = await now();
-  const h = headline(app);
+  const h = headline(app, t);
   const slots = app.application_slots.map((x) => x.slots).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const paid = !["PENDING", "FAILED"].includes(app.payment_status);
   const matched = app.match_status === "CONFIRMED";
