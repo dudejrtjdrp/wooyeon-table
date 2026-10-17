@@ -78,7 +78,7 @@ export async function checkIn(form: FormData) {
   }
   const { data: up } = await db()
     .from("applications")
-    .update({ attendance_status: "ATTENDED" })
+    .update({ attendance_status: "ATTENDED", checked_in_at: n.toISOString() })
     .eq("id", m!.id)
     .eq("attendance_status", "SCHEDULED")
     .select("id");

@@ -172,7 +172,7 @@ export async function autoAttend(form: FormData) {
   for (const a of list) {
     if (!a.users.login_id.startsWith("test-")) continue; // 실제 사람 계정은 건드리지 않는다
     if (a.attendance_status === "SCHEDULED") {
-      await db().from("applications").update({ attendance_status: "ATTENDED" }).eq("id", a.id);
+      await db().from("applications").update({ attendance_status: "ATTENDED", checked_in_at: new Date().toISOString() }).eq("id", a.id);
       await logStatus({ entityType: "application", entityId: a.id, field: "attendance_status", from: "SCHEDULED", to: "ATTENDED", actor: "admin:demo", reason: "시연용 자동 체크인" });
       // 모임이 이미 끝나 노쇼 후보로 올라갔다면 함께 정리한다
       await db().from("exceptions").update({ status: "resolved", resolution: "시연용 체크인으로 참석 처리", resolved_at: new Date().toISOString() }).eq("dedupe_key", `noshow:${a.id}`);
