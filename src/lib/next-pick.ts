@@ -9,7 +9,7 @@ import { db } from "./supabase";
 export async function nextPick(userId: string) {
   const t = (await now()).toISOString();
   const [{ data: rounds }, { data: mine }, { data: past }] = await Promise.all([
-    db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t).order("apply_deadline").limit(4),
+    db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t).order("apply_deadline").limit(8),
     db().from("applications").select("round_id").eq("user_id", userId).neq("application_status", "CANCELED"),
     db().from("applications").select("id,dining_tables(slots(region,starts_at))").eq("user_id", userId).eq("attendance_status", "ATTENDED"),
   ]);

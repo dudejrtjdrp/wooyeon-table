@@ -67,6 +67,12 @@ describe("홈·후기 직후 다음 일정 추천 (알림과 같은 기준)", ()
     const pick = pickNext([round("r1", [{ region: "을지로·종로·광화문", starts_at: FRI(30) }])], [{ region: "을지로·종로·광화문", startsAt: FRI(23), venueScore: 1 }]);
     expect(pick?.why).not.toMatch(/지난번처럼|을지로.*한 번 더/);
   });
+  it("식당을 낮게 준 동네는 요일이 맞아도 고르지 않고, 다른 동네가 있으면 그쪽", () => {
+    const v = [{ region: "을지로·종로·광화문", startsAt: FRI(23), venueScore: 1 }];
+    const pick = pickNext([round("r1", [{ region: "을지로·종로·광화문", starts_at: FRI(30) }]), round("r2", [{ region: "잠실·송파", starts_at: FRI(30) }])], v);
+    expect(pick?.roundId).toBe("r2");
+    expect(pick?.why).toMatch(/잠실/);
+  });
   it("모집 중인 일정이 없으면 null, 이력이 없으면 가장 가까운 회차", () => {
     expect(pickNext([], [])).toBeNull();
     expect(pickNext([round("r1", [{ region: "잠실·송파", starts_at: FRI(30) }])], [])?.roundId).toBe("r1");

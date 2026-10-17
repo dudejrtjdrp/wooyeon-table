@@ -49,9 +49,10 @@ export function pickSlotFor<S extends { region: string; starts_at: string }>(slo
       // 식당이 별로였던 동네는 '동네가 맞음'으로 치지 않는다
       const regionHit = Boolean(r && !r.low);
       const dayHit = prefs.day !== null && kstDay(s.starts_at) === prefs.day;
-      return { s, regionHit, dayHit, order: regionHit ? order(s.region) : 99 };
+      return { s, regionHit, dayHit, low: Boolean(r?.low), order: regionHit ? order(s.region) : 99 };
     })
-    .filter((x) => x.regionHit || x.dayHit)
+    // 요일만 맞아도 식당이 별로였던 동네는 권하지 않는다
+    .filter((x) => x.regionHit || (x.dayHit && !x.low))
     .sort((a, b) => Number(b.regionHit) - Number(a.regionHit) || a.order - b.order || Number(b.dayHit) - Number(a.dayHit) || a.s.starts_at.localeCompare(b.s.starts_at));
   const best = scored[0];
   if (!best) return { slot: null, kind: "any" };
