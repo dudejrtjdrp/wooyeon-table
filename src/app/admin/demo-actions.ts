@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminWrite } from "@/lib/auth";
+import { now } from "@/lib/clock";
 import { INTERESTS, MBTIS, OPEN_REGIONS, PASSES, PRICE_RANGES, TRAITS, isMembership } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
@@ -168,11 +169,12 @@ export async function autoAttend(form: FormData) {
   const list = (apps ?? []) as unknown as { id: string; user_id: string; table_id: string; attendance_status: string; users: { login_id: string } }[];
   const r = rng(42);
   const tpl = await loadTemplates();
+  const at = (await now()).toISOString(); // 앱 체크인과 같은 시연용 시계
   let n = 0;
   for (const a of list) {
     if (!a.users.login_id.startsWith("test-")) continue; // 실제 사람 계정은 건드리지 않는다
     if (a.attendance_status === "SCHEDULED") {
-      await db().from("applications").update({ attendance_status: "ATTENDED" }).eq("id", a.id);
+      await db().from("applications").update({ attendance_status: "ATTENDED", checked_in_at: at }).eq("id", a.id);
       await logStatus({ entityType: "application", entityId: a.id, field: "attendance_status", from: "SCHEDULED", to: "ATTENDED", actor: "admin:demo", reason: "시연용 자동 체크인" });
       // 모임이 이미 끝나 노쇼 후보로 올라갔다면 함께 정리한다
       await db().from("exceptions").update({ status: "resolved", resolution: "시연용 체크인으로 참석 처리", resolved_at: new Date().toISOString() }).eq("dedupe_key", `noshow:${a.id}`);

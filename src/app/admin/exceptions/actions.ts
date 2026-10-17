@@ -41,10 +41,11 @@ export async function resolveException(form: FormData) {
     done = await close(id, me.id, ban ? "영구 제한" : "제한 해제");
   } else if (ex.kind === "no_show") {
     const to = action === "attended" ? "ATTENDED" : "NO_SHOW";
-    await db().from("applications").update({ attendance_status: to }).eq("id", ex.ref_id);
-    await logStatus({ entityType: "application", entityId: ex.ref_id, field: "attendance_status", from: "SCHEDULED", to, actor, reason: note || "운영자 확인" });
-    done = await close(id, me.id, to === "NO_SHOW" ? "노쇼 확정" : "참석으로 정정");
-    if (to === "NO_SHOW") {
+    // 운영자 정정은 앱 체크인이 아니라 checked_in_at을 비워 둔다. 이미 처리된 신청은 다시 바꾸지 않는다(노쇼 제재가 두 번 걸리지 않게)
+    const { data: changed } = await db().from("applications").update({ attendance_status: to }).eq("id", ex.ref_id).eq("attendance_status", "SCHEDULED").select("id");
+    if (changed?.length) await logStatus({ entityType: "application", entityId: ex.ref_id, field: "attendance_status", from: "SCHEDULED", to, actor, reason: note || "운영자 확인" });
+    done = await close(id, me.id, !changed?.length ? "이미 처리된 신청이라 상태는 바꾸지 않음" : to === "NO_SHOW" ? "노쇼 확정" : "참석으로 정정");
+    if (to === "NO_SHOW" && changed?.length) {
       const { data: app } = await db().from("applications").select("user_id").eq("id", ex.ref_id).single();
       if (app) {
         const { applyNoShowPolicy } = await import("@/lib/noshow");
