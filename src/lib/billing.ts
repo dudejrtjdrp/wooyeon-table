@@ -69,6 +69,6 @@ export async function extendMembershipFor(appId: string, actor: string): Promise
   await logStatus({ entityType: "application", entityId: appId, field: "membership_extend", from: base.toISOString(), to: next.toISOString(), actor, reason: `매칭 실패로 멤버십 ${MEMBERSHIP_EXTEND_DAYS}일 연장` });
   await logStatus({ entityType: "pass", entityId: passId, field: "expires_at", from: base.toISOString(), to: next.toISOString(), actor, reason: `신청 ${appId.slice(0, 8)} 매칭 실패` });
   const ymd = fmtDay(next.toISOString());
-  await notify({ userId: app.user_id, template: "membership_extended", title: `멤버십 기간을 ${MEMBERSHIP_EXTEND_DAYS}일 늘렸어요`, body: `이번에 테이블을 못 만들어서 ${ymd}까지로 늘려 드렸어요.`, link: "/me", dedupeKey: `membership_extend:${appId}` });
+  await notify({ userId: app.user_id, template: "membership_extended", title: `멤버십 기간을 ${MEMBERSHIP_EXTEND_DAYS}일 늘렸어요`, body: `${ymd}까지 쓸 수 있어요`, link: "/me", dedupeKey: `membership_extend:${appId}` });
   return true;
 }

@@ -161,7 +161,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
             <>
               {!done && (
                 <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
-                  하루 전에 한 번 더 알려드릴게요. {twoDays ? "환불 마감(모임 주 화요일 밤 12시)이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 환불돼요."}
+                  하루 전에 한 번 더 알려드릴게요. {twoDays ? "환불 마감(모임 주 화요일 밤 12시)이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 환불돼요."} 당일 취소는 안 되고, 연락 없이 오지 않으면 노쇼로 기록돼요.
                   {mine?.attendance_status === "ATTENDED" && " 체크인했어요."}
                 </p>
               )}

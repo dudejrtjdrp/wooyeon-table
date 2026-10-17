@@ -91,7 +91,7 @@ export async function cancelAttendance(appId: string, userId: string): Promise<{
   let body: string;
   if (rule.kind === "early") body = await releaseUse(appId, `user:${userId}`, "환불 마감 전 취소");
   else body = "환불 마감(모임 주 화요일 밤 12시)이 지나 환불 없이 취소됐어요.";
-  await notify({ userId, template: "attendance_canceled", title: "참석을 취소했어요", body, link: `/applications/${appId}`, dedupeKey: `attendance_canceled:${appId}` });
+  await notify({ userId, template: "attendance_canceled", title: "참석을 취소했어요", body: rule.kind === "early" ? "환불은 내 신청 화면에서 확인할 수 있어요" : "환불 마감이 지나 환불 없이 취소됐어요", link: `/applications/${appId}`, dedupeKey: `attendance_canceled:${appId}` });
 
   const roomId = await ensureRoom(tableId);
   await postSystem(roomId, "한 분이 사정이 생겨 함께하지 못하게 됐어요.");
@@ -160,7 +160,7 @@ export async function reflowTable(tableId: string, actor: string) {
       await db().from("applications").update({ table_id: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "함께하기로 한 분이 빠져 테이블 인원이 모자라요. 고르신 일정 안에서 조건에 맞는 다른 테이블도 없었어요." }).eq("id", m.id).eq("payment_status", "PAID");
       await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: "확정 후 취소로 인원 부족, 옮길 테이블 없음" });
       await extendMembershipFor(m.id, actor);
-      await notify({ userId: m.user_id, template: "alternative", title: "테이블 인원이 모자라졌어요", body: "함께하기로 한 분이 빠져 모임을 열 수 없게 됐어요. 빈자리에 앉거나, 다른 일정으로 옮기거나, 이용권 보관·환불 중에 골라 주세요. 3일 안에 고르지 않으면 이용권으로 보관해 드려요.", link: `/applications/${m.id}/resolve`, dedupeKey: `reflow-alt:${m.id}` });
+      await notify({ userId: m.user_id, template: "alternative", title: "이번 모임이 열리지 못하게 됐어요", body: "3일 안에 다음 방법을 골라 주세요", link: `/applications/${m.id}/resolve`, dedupeKey: `reflow-alt:${m.id}` });
       offered++;
     }
   }
@@ -289,7 +289,7 @@ export async function offerSeat(tableId: string, actor: string): Promise<boolean
       userId: w.user_id,
       template: "seat_offer",
       title: "기다리던 자리가 났어요",
-      body: `${fmtSlot(tb.slots.starts_at)} ${tb.slots.region} 테이블에 한 자리가 비었어요. ${sameDay(new Date(expires).toISOString(), t) ? `오늘 ${fmtClock(new Date(expires).toISOString())}` : fmtSlot(new Date(expires).toISOString())}까지 참가 여부를 알려 주세요.`,
+      body: `${fmtSlot(tb.slots.starts_at)} · ${sameDay(new Date(expires).toISOString(), t) ? `오늘 ${fmtClock(new Date(expires).toISOString())}` : fmtSlot(new Date(expires).toISOString())}까지 답해 주세요`,
       link: `/offers/${offer.id}`,
       dedupeKey: `seat_offer:${offer.id}`,
     });
@@ -405,7 +405,7 @@ async function closeOffer(o: OfferRow, status: "declined" | "expired" | "void", 
   await logStatus({ entityType: "application", entityId: o.application_id, field: "seat_offer", from: "OFFERED", to: status.toUpperCase(), actor, reason: `빈자리 제안 ${word}` });
   await logStatus({ entityType: "dining_table", entityId: o.table_id, field: "seat_offer", to: status.toUpperCase(), actor, reason: `빈자리 제안 ${word}, 다음 대기자 확인` });
   if (status === "expired") {
-    await notify({ userId: o.user_id, template: "seat_offer_expired", title: "빈자리 제안 기한이 지났어요", body: "답이 없어 다음 분께 자리를 넘겼어요. 지금 신청은 그대로 남아 있어요.", link: `/applications/${o.application_id}`, dedupeKey: `seat_offer_expired:${o.id}` });
+    await notify({ userId: o.user_id, template: "seat_offer_expired", title: "빈자리 제안 기한이 지났어요", body: "다음 분께 넘겼어요. 신청은 그대로예요", link: `/applications/${o.application_id}`, dedupeKey: `seat_offer_expired:${o.id}` });
   }
   await fillOrReflow(o.table_id, "system");
 }

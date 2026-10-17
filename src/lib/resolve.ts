@@ -242,15 +242,15 @@ export async function keepPassFor(appId: string, actor: string, why: "choice" | 
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "NO_MATCH", actor, reason });
   await db().from("seat_offers").update({ status: "void", responded_at: new Date().toISOString() }).eq("application_id", appId).eq("status", "pending");
   const body = {
-    choice: "다음 일정을 신청할 때 그대로 쓸 수 있어요.",
-    no_answer: "3일 동안 고르지 않으셔서 이용권으로 보관했어요. 결제한 금액은 그대로 남아 있고, 다음 일정에 바로 쓸 수 있어요.",
-    wait_over: "기다리던 동네에 자리가 나지 않아 이용권으로 보관했어요. 다음 일정에 바로 쓸 수 있어요.",
+    choice: "다음 일정에 바로 쓸 수 있어요",
+    no_answer: "3일 동안 고르지 않아 보관했어요",
+    wait_over: "자리가 나지 않아 보관했어요",
   }[why];
   await notify({
     userId: app.user_id,
     template: "kept",
     title: membership ? "이번 일정은 넘겼어요" : "이용권을 보관했어요",
-    body: membership ? "멤버십 기간은 이미 늘려 드렸어요. 기간 안에 다른 일정을 바로 신청할 수 있어요." : body,
+    body: membership ? "기간 안에 다른 일정을 바로 신청할 수 있어요" : body,
     link: "/rounds",
     dedupeKey: `kept:${appId}`,
   });
@@ -273,7 +273,7 @@ export async function startWaiting(appId: string, actor: string): Promise<{ ok: 
     userId: app.user_id,
     template: "waiting",
     title: "자리가 나면 바로 알려 드릴게요",
-    body: `${fmtSlot(until.toISOString())}까지 ${app.near_ok ? "고른 동네나 같은 날 바로 옆 동네" : "고른 동네·날짜"}에 자리가 나면 먼저 여쭤볼게요. 그때까지 자리가 없으면 이용권으로 보관해 드려요.`,
+    body: `${fmtSlot(until.toISOString())}까지 기다려요`,
     link: `/applications/${appId}`,
     dedupeKey: `waiting:${appId}`,
   });
