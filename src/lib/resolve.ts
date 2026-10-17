@@ -38,6 +38,10 @@ export function likedAreas(app: Pick<AppRow, "areas" | "application_slots">): st
 }
 
 /** 매칭 실패로 바뀐 시각 (가장 최근) */
+/**
+ * '3일 안에 고르기' 기한을 재는 실패 시각. 지표·match_resolutions 뷰의 failed_at(첫 실패 기록)과 달리
+ * 가장 최근 실패를 쓰고(다시 실패 안내를 받으면 기한도 다시), 시연용 시계 보정을 위해 매칭 시각보다 앞서지 않게 한다.
+ */
 export async function failedAt(appId: string): Promise<Date | null> {
   const [{ data }, { data: app }] = await Promise.all([
     db()
