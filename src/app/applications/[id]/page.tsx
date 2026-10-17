@@ -102,7 +102,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH") && (
             <Link href="/rounds" className="mt-4 flex h-12 w-fit items-center rounded-[14px] bg-accent px-5 text-[15px] font-bold text-white">다른 일정 보기</Link>
           )}
-          {!matched && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
+          {["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status) && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
             <>
               <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-muted">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>
             </>

@@ -22,6 +22,8 @@ export default async function Rounds() {
     .eq("status", "open")
     .gt("apply_deadline", t.toISOString())
     .order("apply_deadline");
+  // 안내 문구의 동네 수는 실제로 열린 일정에서 센다 (문구와 목록이 어긋나지 않게)
+  const openRegions = new Set((rounds ?? []).flatMap((r) => (r.slots ?? []).map((s) => s.region)));
   const { data: mineRaw } = me
     ? await db().from("applications").select("id,round_id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at)").eq("user_id", me.id).order("created_at", { ascending: false })
     : { data: [] };
@@ -99,7 +101,7 @@ export default async function Rounds() {
         )
       )}
       <p className="mt-6 text-center text-[13px] text-muted">
-        지금은 서울 네 곳에서 먼저 모여요. <Link href="/wish" className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">다른 동네 원해요</Link>
+        {openRegions.size ? `지금은 서울 ${openRegions.size === 4 ? "네 " : openRegions.size}곳에서 먼저 모여요.` : "지금은 서울에서 먼저 모여요."} <Link href="/wish" className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">다른 동네 원해요</Link>
       </p>
       {!me && <p className="mt-5 text-center text-[13px] text-muted"><Link href="/login" className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">로그인</Link>하면 바로 신청할 수 있어요.</p>}
     </TabScreen>
