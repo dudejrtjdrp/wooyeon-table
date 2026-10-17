@@ -78,7 +78,9 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
   const counts = new Map<string, number>();
   for (const e of rows ?? []) counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1);
   // 본인이 '참석했어요'라고 알린 노쇼 후보는 확인만 하면 끝나니 위로 올린다
-  const data = (k ? (rows ?? []).filter((e) => e.kind === k) : rows ?? []).sort((a, b) => Number(b.kind === "no_show" && isClaimed(b.reason)) - Number(a.kind === "no_show" && isClaimed(a.reason)));
+  // 아직 열린 '본인 참석 알림' 노쇼 건을 맨 위로 (확인만 하면 끝나는 건)
+  const claimedFirst = (e: { status: string; kind: string; reason: string | null }) => Number(e.status === "open" && e.kind === "no_show" && isClaimed(e.reason));
+  const data = (k ? (rows ?? []).filter((e) => e.kind === k) : rows ?? []).sort((a, b) => claimedFirst(b) - claimedFirst(a));
   const qs = (kind?: string) => { const p = new URLSearchParams(); if (all) p.set("all", "1"); if (kind) p.set("k", kind); const x = p.toString(); return `/admin/exceptions${x ? `?${x}` : ""}`; };
   const back = qs(k);
 
