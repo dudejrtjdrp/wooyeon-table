@@ -6,6 +6,8 @@ import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { dateKey, fmtDay } from "@/lib/format";
 import { db } from "@/lib/supabase";
+import { after } from "next/server";
+import { maybeTick } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,8 @@ function ago(iso: string, at: Date) {
 /** C4 알림 */
 export default async function Notifications() {
   const me = await requireMe();
+  // 예약 실행(GitHub Actions)이 몇 시간씩 밀릴 때가 있어, 모임 화면을 열 때도 밀린 일(시작 콘텐츠·체크인 안내·리마인드)을 돌린다
+  after(() => maybeTick().catch(() => null));
   const t = await now();
   const nowIso = t.toISOString();
   const { data } = await db()

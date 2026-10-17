@@ -77,7 +77,10 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
   const [{ data: rows }, t] = await Promise.all([q, now()]);
   const counts = new Map<string, number>();
   for (const e of rows ?? []) counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1);
-  const data = k ? (rows ?? []).filter((e) => e.kind === k) : rows ?? [];
+  // 본인이 '참석했어요'라고 알린 노쇼 후보는 확인만 하면 끝나니 위로 올린다
+  // 아직 열린 '본인 참석 알림' 노쇼 건을 맨 위로 (확인만 하면 끝나는 건)
+  const claimedFirst = (e: { status: string; kind: string; reason: string | null }) => Number(e.status === "open" && e.kind === "no_show" && isClaimed(e.reason));
+  const data = (k ? (rows ?? []).filter((e) => e.kind === k) : rows ?? []).sort((a, b) => claimedFirst(b) - claimedFirst(a));
   const qs = (kind?: string) => { const p = new URLSearchParams(); if (all) p.set("all", "1"); if (kind) p.set("k", kind); const x = p.toString(); return `/admin/exceptions${x ? `?${x}` : ""}`; };
   const back = qs(k);
 
@@ -154,6 +157,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
             <li key={e.id} className={`shadow-card rounded-[20px] bg-card p-6 ring-1 ${e.status === "open" ? TONE[e.kind] ?? "ring-line" : "ring-line"}`}>
               <div className="flex flex-wrap items-center gap-3">
                 <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${PILL[e.kind] ?? "bg-danger/10 text-danger"}`}>{LABEL[e.kind] ?? "기타 예외"}</span>
+                {e.kind === "no_show" && isClaimed(e.reason) && <span className="rounded-full bg-accent-soft px-3 py-1 text-[14px] font-semibold text-accent">본인 참석 알림</span>}
                 <span className="text-[14px] text-muted">{fmtDateTime(e.created_at)} 올라옴{e.status === "open" ? ` · ${since(e.created_at, t)}` : ""}</span>
               </div>
               <dl className="mt-3 grid gap-x-4 gap-y-1.5 text-[15px] sm:grid-cols-[72px_1fr]">

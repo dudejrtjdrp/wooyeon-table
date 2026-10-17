@@ -12,12 +12,16 @@ import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
 import { checkIn, claimAttended } from "./actions";
 import { canClaimAttended } from "@/lib/attendance-rules";
+import { after } from "next/server";
+import { maybeTick } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
 
 /** E11 매칭 확정: 초록 헤더 + 흰 시트 */
 export default async function TablePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string; m?: string }> }) {
   const me = await requireMe();
+  // 예약 실행(GitHub Actions)이 몇 시간씩 밀릴 때가 있어, 모임 화면을 열 때도 밀린 일(시작 콘텐츠·체크인 안내·리마인드)을 돌린다
+  after(() => maybeTick().catch(() => null));
   const { id } = await params;
   const { e, m: toast } = await searchParams;
 

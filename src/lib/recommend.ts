@@ -49,13 +49,24 @@ export function pickSlotFor<S extends { region: string; starts_at: string }>(slo
       // 식당이 별로였던 동네는 '동네가 맞음'으로 치지 않는다
       const regionHit = Boolean(r && !r.low);
       const dayHit = prefs.day !== null && kstDay(s.starts_at) === prefs.day;
-      return { s, regionHit, dayHit, order: regionHit ? order(s.region) : 99 };
+      return { s, regionHit, dayHit, low: Boolean(r?.low), order: regionHit ? order(s.region) : 99 };
     })
-    .filter((x) => x.regionHit || x.dayHit)
+    // 요일만 맞아도 식당이 별로였던 동네는 권하지 않는다
+    .filter((x) => x.regionHit || (x.dayHit && !x.low))
     .sort((a, b) => Number(b.regionHit) - Number(a.regionHit) || a.order - b.order || Number(b.dayHit) - Number(a.dayHit) || a.s.starts_at.localeCompare(b.s.starts_at));
   const best = scored[0];
   if (!best) return { slot: null, kind: "any" };
   return { slot: best.s, kind: best.regionHit && best.dayHit ? "both" : best.regionHit ? "region" : "day" };
+}
+
+/** 그 동네(·요일)에 실제로 두 번 이상 갔을 때만 '늘/자주'라고 쓴다. 다른 동네에 한 번씩 간 사람에게는 붙이지 않는다 */
+function isOften(pick: SlotPick<{ region: string; starts_at: string }>, prefs: Prefs): boolean {
+  if (!pick.slot) return false;
+  const region = pick.slot.region;
+  const regionCount = prefs.regions.find((r) => r.region === region)?.count ?? 0;
+  if (pick.kind === "both") return regionCount > 1 && prefs.dayCount > 1;
+  if (pick.kind === "region") return regionCount > 1;
+  return prefs.dayCount > 1;
 }
 
 /** 추천 알림 문구 */
@@ -63,10 +74,10 @@ export function recommendBody(title: string, pick: SlotPick<{ region: string; st
   // 알림 본문은 한 줄로: 무엇이 열렸는지만 쓰고 자세한 일정은 신청 화면에서 본다
   if (!pick.slot) return `${title} 신청을 받아요`;
   const day = `${DAYS[kstDay(pick.slot.starts_at)]}요일`;
-  const often = prefs.visits > 1;
-  if (pick.kind === "both") return `${often ? "자주 오신" : "지난번처럼"} ${day} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
+  const often = isOften(pick, prefs);
+  if (pick.kind === "both") return `${often ? "늘 오시던" : "지난번처럼"} ${day} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
   if (pick.kind === "region") return `${often ? "자주 오신" : "지난번에 오신"} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
-  return `${often ? "자주 오신" : "지난번과 같은"} ${day} · ${when(pick.slot.starts_at)} ${pick.slot.region}`;
+  return `${often ? "늘 오시던" : "지난번과 같은"} ${day} · ${when(pick.slot.starts_at)} ${pick.slot.region}`;
 }
 
 /**
@@ -79,5 +90,30 @@ export function membershipNudge(paidBefore: number, hasUsablePass: boolean, sing
   const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
   const lead = paidBefore === 1 ? "두 번째 신청이에요." : "다시 와 주셨네요.";
   return { key: "m1", note: `${lead} 한 달에 네 번 오면 1회권 ${won(four)}, 멤버십은 ${won(monthly)}이에요.` };
+}
+
+export type OpenRound = { id: string; title: string; apply_deadline: string; slots: { region: string; starts_at: string }[] | null };
+export type NextPick = { roundId: string; roundTitle: string; deadline: string; why: string };
+
+/**
+ * 홈 추천 카드·후기 직후 화면의 다음 일정 하나 (알림 추천과 같은 기준: visitPrefs + pickSlotFor).
+ * 마감이 가까운 회차부터 보고, 동네·요일이 맞는 일정이 있는 첫 회차를 고른다. 없으면 가장 가까운 회차.
+ */
+export function pickNext(rounds: OpenRound[], visits: Visit[]): NextPick | null {
+  if (!rounds.length) return null;
+  const prefs = visitPrefs(visits);
+  for (const r of rounds) {
+    const pick = pickSlotFor(r.slots ?? [], prefs);
+    if (!pick.slot) continue;
+    const often = isOften(pick, prefs);
+    const day = `${DAYS[kstDay(pick.slot.starts_at)]}요일`;
+    const why =
+      pick.kind === "both" ? `${often ? "늘 오시던" : "지난번처럼"} ${day} ${pick.slot.region}, 이번에도 어때요?`
+      : pick.kind === "region" ? `${pick.slot.region}에서 새로운 사람들과 한 번 더 앉아 볼까요?`
+      : `${day} 저녁, 이번엔 ${pick.slot.region} 어때요?`;
+    return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why };
+  }
+  const r = rounds[0];
+  return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why: visits.length ? "다음 테이블도 저희가 꾸려 드릴게요." : "이번 주 저녁, 새로운 사람들과 어때요?" };
 }
 
