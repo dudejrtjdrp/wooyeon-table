@@ -17,8 +17,10 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
     : { data: [] };
   const rows = (data ?? []) as unknown as { id: string; attendance_status: string | null; table_id: string | null; users: { name: string }; dining_tables: { id: string; slots: { starts_at: string; region: string } } | null }[];
   const count = (s: string) => rows.filter((x) => x.attendance_status === s).length;
-  const { data: noshow } = await db().from("exceptions").select("ref_id").eq("kind", "no_show").eq("status", "open");
+  const { data: noshow } = await db().from("exceptions").select("ref_id,reason").eq("kind", "no_show").eq("status", "open");
   const candidates = new Set((noshow ?? []).map((n) => n.ref_id));
+  // 본인이 '참석했는데 체크인을 못 했어요'라고 알린 후보
+  const claimed = new Set((noshow ?? []).filter((n) => (n.reason ?? "").includes("체크인을 못 했어요")).map((n) => n.ref_id));
   const byTable = new Map<string, typeof rows>();
   for (const a of rows.filter((x) => x.dining_tables)) {
     const k = a.dining_tables!.id;
@@ -48,6 +50,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
                     <Link href={`/admin/applicants/${m.id}`} className="hover:underline">{m.users.name}</Link>
                     <span className="flex items-center gap-1.5">
                       {candidates.has(m.id) && <Badge v={["노쇼 후보", "danger"]} />}
+                      {claimed.has(m.id) && <Badge v={["본인 참석 알림", "accent"]} />}
                       <Badge v={label(ATTEND, m.attendance_status)} />
                     </span>
                   </li>

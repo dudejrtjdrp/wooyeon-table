@@ -3,17 +3,12 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/auth";
+import { normalizeLoginId } from "@/lib/login-id";
 import { idvEnabled } from "@/lib/identity";
 import { db } from "@/lib/supabase";
 import { clearSession, setSession } from "@/lib/session";
 
-// 번호 모양(010 1234 5678, 010.1234.5678, +82 10-…)이면 숫자만 남긴다. admin·test-… 같은 아이디는 그대로 둔다
-const normalize = (s: string) => {
-  const v = s.trim();
-  if (!/^\+?[\d\s.\-()]+$/.test(v)) return v;
-  const d = v.replace(/\D/g, "");
-  return d.startsWith("82") && d.length >= 11 ? `0${d.slice(2)}` : d; // +82 10-1234-5678 → 01012345678
-};
+const normalize = normalizeLoginId;
 
 export async function login(form: FormData) {
   const id = normalize(String(form.get("login_id") ?? ""));

@@ -8,6 +8,7 @@ import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { canClaimAttended } from "@/lib/attendance-rules";
 import { logStatus } from "@/lib/events";
+import { fmtDateTime } from "@/lib/format";
 import { ensureRoom } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { postSystem } from "@/lib/delivery";
@@ -105,7 +106,7 @@ export async function claimAttended(form: FormData) {
   // 이미 알린 사람은 다시 기록하지 않는다 (두 번 눌러도 한 번)
   const { data: prev } = await db().from("status_events").select("id").eq("entity_id", m.id).eq("field", "attendance_claim").limit(1);
   if (prev?.length) redirect(`/tables/${tableId}`);
-  const when = `${n.getMonth() + 1}/${n.getDate()} ${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+  const when = fmtDateTime(n.toISOString()); // 서버 시간대와 상관없이 서울 시각
   const note = `${me.name}님 체크인 기록이 없어요 · 본인이 '참석했는데 체크인을 못 했어요'라고 알림(${when})`;
   const { data: ex } = await db().from("exceptions").select("id,status").eq("dedupe_key", `noshow:${m.id}`).maybeSingle();
   if (ex) {

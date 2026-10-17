@@ -16,7 +16,7 @@ const LABEL: Record<string, string> = {
 };
 
 // 처음 온 운영자도 바로 고를 수 있게, 건마다 누구·어디를 넣어 먼저 해 볼 일을 적는다
-function adviceFor(e: { kind: string; ref_type: string }, c: Ctx, sug: MoveSuggestion | null | undefined): string | undefined {
+function adviceFor(e: { kind: string; ref_type: string; reason?: string | null }, c: Ctx, sug: MoveSuggestion | null | undefined): string | undefined {
   const who = c.who ?? "이 참가자";
   const where = c.where ? `${c.where} ` : "";
   switch (e.kind) {
@@ -39,7 +39,9 @@ function adviceFor(e: { kind: string; ref_type: string }, c: Ctx, sug: MoveSugge
     case "no_show":
       return e.ref_type === "user"
         ? `${who}은(는) 최근 90일 안에 노쇼가 세 번이에요. 소명이 있었으면 제한을 풀고, 없으면 영구 제한해요. 그 전까지 신청은 막혀 있어요.`
-        : `${who}의 체크인 기록이 없어요. 테이블 단체방과 '늦을 것 같아요' 기록을 보고 고르세요. 노쇼로 확정하면 횟수에 따라 경고·신청 제한이 자동으로 걸려요.`;
+        : e.reason?.includes("체크인을 못 했어요")
+          ? `${who}이(가) 직접 '참석했는데 체크인을 못 했어요'라고 알렸어요. 단체방 대화와 같은 테이블 분들 체크인을 보고 맞으면 '참석으로 정정'을 눌러요. 정정하면 후기 요청이 자동으로 가요.`
+          : `${who}의 체크인 기록이 없어요. 테이블 단체방과 '늦을 것 같아요' 기록을 보고 고르세요. 노쇼로 확정하면 횟수에 따라 경고·신청 제한이 자동으로 걸려요.`;
     case "safety":
       return `신고 내용을 보고 조치를 골라요. 두 사람은 신고가 들어온 순간부터 같은 테이블에 앉지 않아요. 지금 같은 테이블이면 '긴급 수정 열기'에서 한 사람을 옮겨요.`;
     case "reservation":
