@@ -1,3 +1,4 @@
+import { isClaimed } from "@/lib/attendance-rules";
 import Link from "next/link";
 import { Badge, PageHeader, Panel, RoundPicker, Stat } from "@/components/admin-ui";
 import { roundsAndCurrent } from "@/lib/admin-data";
@@ -20,7 +21,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
   const { data: noshow } = await db().from("exceptions").select("ref_id,reason").eq("kind", "no_show").eq("status", "open");
   const candidates = new Set((noshow ?? []).map((n) => n.ref_id));
   // 본인이 '참석했는데 체크인을 못 했어요'라고 알린 후보
-  const claimed = new Set((noshow ?? []).filter((n) => (n.reason ?? "").includes("체크인을 못 했어요")).map((n) => n.ref_id));
+  const claimed = new Set((noshow ?? []).filter((n) => isClaimed(n.reason)).map((n) => n.ref_id));
   const byTable = new Map<string, typeof rows>();
   for (const a of rows.filter((x) => x.dining_tables)) {
     const k = a.dining_tables!.id;

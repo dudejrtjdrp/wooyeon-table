@@ -11,3 +11,7 @@ export const canClaimAttended = (status: string | null | undefined, end: Date, t
 
 /** 매칭 실패 시각: 감사 로그(실제 시각)와 그 회차 매칭 시각 중 늦은 쪽. 시연용 시계를 앞당겨도 실패 직후 바로 기한이 지나지 않게 */
 export const failureMoment = (logged: Date, matchAt?: string | null) => (matchAt && new Date(matchAt) > logged ? new Date(matchAt) : logged);
+
+/** 본인이 '참석했는데 체크인을 못 했어요'라고 알린 노쇼 후보를 사유 문장에서 알아보는 표시 (화면 세 곳이 같은 값을 쓴다) */
+export const CLAIM_MARK = "체크인을 못 했어요";
+export const isClaimed = (reason: string | null | undefined) => (reason ?? "").includes(CLAIM_MARK);
