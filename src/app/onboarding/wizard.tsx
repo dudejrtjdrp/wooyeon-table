@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { PrimaryButton } from "@/components/client";
 import { PrivacyBody, TermsBody } from "@/components/legal";
 import { PassButton } from "./pass-button";
+import { useStepHistory } from "@/lib/use-step-history";
 
 type Profile = {
   birth_year?: number | null; gender?: string | null; job?: string | null; mbti?: string | null;
@@ -179,13 +180,16 @@ export function OnboardingWizard({
         setStep(Math.max(first, Math.min(s.step ?? first, LAST)));
       }
     } catch {}
-    restored.current = true;
+    // 같은 순간에 도는 저장이 아직 비어 있는 초기값으로 저장해 둔 내용을 덮어쓰지 않게, 불러온 값이 반영된 뒤부터 저장한다
+    queueMicrotask(() => { restored.current = true; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     if (!restored.current) return;
     try { sessionStorage.setItem(storeKey, JSON.stringify({ v, step })); } catch {}
   }, [v, step, storeKey]);
+  // 휴대폰 뒤로 가기가 가입 첫 화면이 아니라 바로 앞 단계로 가게
+  const nav = useStepHistory(step, setStep, [first, LAST]);
 
   const set = <K extends keyof Values>(k: K, val: Values[K]) => setV((cur) => ({ ...cur, [k]: val }));
   const toggle = (k: "interests" | "my_traits" | "wanted_traits", x: string, max: number) =>
@@ -224,8 +228,9 @@ export function OnboardingWizard({
   const goNext = () => {
     const e = check(step);
     setMsg(e);
-    if (!e) go(step + 1);
+    if (!e) { nav.push(step + 1); window.scrollTo({ top: 0 }); }
   };
+  const goPrev = () => { setMsg(null); nav.back(step - 1); window.scrollTo({ top: 0 }); };
 
   const verifyHref = `/verify/phone?next=${encodeURIComponent(`/onboarding?next=${encodeURIComponent(next)}`)}`;
   const hiddenGender = verified?.gender === "M" ? "남성" : verified?.gender === "F" ? "여성" : v.gender;
@@ -257,7 +262,7 @@ export function OnboardingWizard({
         )}
         <div className="flex items-center justify-between px-3 pt-2.5">
           {step > first ? (
-            <button type="button" aria-label="이전 단계" onClick={() => go(step - 1)} className="flex size-11 items-center justify-center text-ink"><ChevronLeft size={26} /></button>
+            <button type="button" aria-label="이전 단계" onClick={goPrev} className="flex size-11 items-center justify-center text-ink"><ChevronLeft size={26} /></button>
           ) : editing ? (
             <Link href={next} aria-label="닫기" className="flex size-11 items-center justify-center text-ink"><X size={22} /></Link>
           ) : <span className="size-11" />}

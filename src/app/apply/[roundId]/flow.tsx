@@ -2,9 +2,10 @@
 
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PrimaryButton } from "@/components/client";
 import { neighborsOf } from "@/lib/regions";
+import { stepFromUrl, useStepHistory } from "@/lib/use-step-history";
 
 type Area = { name: string; open: boolean };
 type Slot = { id: string; region: string; sido: string | null; day: string; label: string; startsAt: string };
@@ -46,6 +47,33 @@ export function ApplyFlow({
   const [pass, setPass] = useState(owned ? "owned" : passes[0]?.key ?? "single");
   const [agree, setAgree] = useState(false);
   const [msg, setMsg] = useState<string | null>(error ?? null);
+
+  // 결제 화면이나 오류에서 뒤로 돌아와도 고른 동네·날짜·이용권과 단계를 이어 간다
+  const storeKey = `apply:${round.id}`;
+  const restored = useRef(false);
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(storeKey);
+      const back = stepFromUrl() !== null;
+      if (saved && (back || error)) {
+        const s = JSON.parse(saved) as { picked: string[]; days: string[]; pass: string; near: boolean; step: number };
+        setPicked(s.picked ?? []);
+        setDays(s.days ?? []);
+        if (s.pass) setPass(s.pass);
+        setNear(s.near ?? true);
+        if (error) setStep(Math.min(Math.max(s.step ?? 1, 1), 3));
+      }
+    } catch {}
+    // 같은 순간에 도는 저장이 아직 비어 있는 초기값으로 저장해 둔 내용을 덮어쓰지 않게, 불러온 값이 반영된 뒤부터 저장한다
+    queueMicrotask(() => { restored.current = true; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!restored.current) return;
+    try { sessionStorage.setItem(storeKey, JSON.stringify({ picked, days, pass, near, step })); } catch {}
+  }, [picked, days, pass, near, step, storeKey]);
+  // 휴대폰 뒤로 가기가 신청 첫 단계나 일정 목록이 아니라 바로 앞 단계로 가게
+  const nav = useStepHistory(step, setStep, [1, 3]);
 
   const sidoOf = (a: string) => (a.endsWith(" 전체") ? a.replace(/ 전체$/, "") : sidos.find((s) => s.areas.some((x) => x.name === a))?.name ?? "");
   const expanded = useMemo(() => {
@@ -89,7 +117,7 @@ export function ApplyFlow({
     if (step === 1 && !mineSlots.length) return setMsg("고른 동네에는 이번 일정 테이블이 없어요. 다른 동네를 더 골라 주세요");
     if (step === 2 && !days.length) return setMsg("갈 수 있는 날을 하나 이상 골라주세요");
     setMsg(null);
-    setStep(step + 1);
+    nav.push(step + 1);
     window.scrollTo({ top: 0 });
   };
 
@@ -108,7 +136,7 @@ export function ApplyFlow({
           {step === 1 ? (
             <Link href="/rounds" aria-label="닫기" className="flex size-11 items-center justify-center text-ink"><X size={22} /></Link>
           ) : (
-            <button type="button" aria-label="이전 단계" onClick={() => { setMsg(null); setStep(step - 1); }} className="flex size-11 items-center justify-center text-ink"><ChevronLeft size={26} /></button>
+            <button type="button" aria-label="이전 단계" onClick={() => { setMsg(null); nav.back(step - 1); window.scrollTo({ top: 0 }); }} className="flex size-11 items-center justify-center text-ink"><ChevronLeft size={26} /></button>
           )}
           <span className="pr-3 text-[14px] tabular-nums text-muted">신청 {step} / 3</span>
         </div>

@@ -1,6 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { type PassType } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
@@ -29,7 +29,8 @@ export async function pay(form: FormData) {
   const appId = String(form.get("app_id"));
   await load(appId, me.id);
   await markPaid(appId, me.id, { provider: "mock", method: String(form.get("method") ?? "card"), reason: "모의 결제 승인" });
-  redirect(`/applications/${appId}`);
+  // 결제 화면 기록을 내 신청으로 바꾼다: 뒤로 가기가 이미 끝난 결제 화면(곧장 다시 넘어감)에 걸리지 않게
+  redirect(`/applications/${appId}`, RedirectType.replace);
 }
 
 /** 시연용: 결제 실패를 일부러 일으킨다 */
