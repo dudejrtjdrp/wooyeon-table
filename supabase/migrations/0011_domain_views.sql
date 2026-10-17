@@ -4,6 +4,7 @@
 -- 따로 테이블을 두면 같은 값을 두 곳에 써야 하고, 한쪽만 바뀌는 충돌이 생긴다.
 --
 -- 운영 DB에 2026-10-17 적용했다. 앱 체크인(tables/[id]/actions.ts)과 시연용 자동 체크인(admin/demo-actions.ts)이 checked_in_at을 함께 채운다.
+-- 운영자가 노쇼 후보를 '참석으로 정정'한 경우는 앱 체크인이 아니므로 checked_in_at이 비어 있다(감사 로그에 운영자 정정으로 남는다).
 
 -- 1) 체크인 시각. 지금은 status_events(field=attendance_status, to=ATTENDED)의 created_at으로 알 수 있고, 앞으로는 이 컬럼에 바로 남긴다
 alter table applications add column if not exists checked_in_at timestamptz;
