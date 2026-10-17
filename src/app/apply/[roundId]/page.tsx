@@ -39,7 +39,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   })).sort((a, b) => b.score - a.score || a.order - b.order);
   const hot = [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).filter(([, n]) => n >= 2).map(([a]) => a);
 
-  // 두 번째 신청부터 멤버십을 권한다: 다른 회차에서 결제까지 한 신청이 있는지
+  // 두 번째 신청부터 멤버십을 권한다: 다른 회차에서 결제까지 한 신청이 있는지 (가진 이용권으로만 낸 신청은 결제가 아니라 세지 않는다)
   const { count: paidBefore } = await db().from("applications").select("id", { count: "exact", head: true }).eq("user_id", me.id).neq("round_id", roundId).not("payment_id", "is", null).eq("payment_status", "PAID"); // 환불만 받은 신청은 세지 않는다
   const nudge = membershipNudge(paidBefore ?? 0, Boolean(owned), PASSES.single.amount, PASSES.m1.amount);
 
