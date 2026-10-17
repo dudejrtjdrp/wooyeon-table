@@ -10,7 +10,8 @@ import { mapLinks } from "@/lib/maps";
 import { refundCutoff } from "@/lib/policy";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
-import { checkIn } from "./actions";
+import { checkIn, claimAttended } from "./actions";
+import { canClaimAttended } from "@/lib/attendance-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,11 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   // 주소를 누르면 지도 앱이 바로 열리게: 네이버 지도·카카오맵 (앱 없으면 웹 지도)
   const maps = t.venues ? mapLinks(t.venues.name, t.venues.address, t.venues.map_url) : null;
   const done = t.status === "DONE";
+  // 갔는데 체크인을 못 한 사람이 끝난 뒤 48시간 안에 알릴 수 있게
+  const missedCheckIn = canClaimAttended(mine?.attendance_status, end, n);
+  const claimed = missedCheckIn
+    ? Boolean((await db().from("status_events").select("id").eq("entity_id", mine!.id).eq("field", "attendance_claim").limit(1)).data?.length)
+    : false;
 
   // 테이블 요약: 성비·나이대·겹치는 관심사
   const ps = mems.map((m) => m.users.profiles).filter((x): x is P => Boolean(x));
@@ -160,6 +166,22 @@ export default async function TablePage({ params, searchParams }: { params: Prom
             </form>
           ) : mine?.attendance_status === "ATTENDED" && done ? (
             <LinkButton href={`/tables/${id}/feedback`}>오늘 모임 후기 남기기</LinkButton>
+          ) : missedCheckIn ? (
+            <>
+              <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
+                {claimed
+                  ? "알려 주신 내용을 운영팀이 확인하고 있어요. 참석으로 바뀌면 후기를 남길 수 있어요."
+                  : "체크인 기록이 없어 지금은 노쇼 후보로 올라가 있어요. 참석했다면 알려 주세요. 운영팀이 확인하면 참석으로 바뀌고 후기를 남길 수 있어요."}
+              </p>
+              {claimed ? (
+                <LinkButton href={`/tables/${id}/chat`}>단체방 다시 보기</LinkButton>
+              ) : (
+                <form action={claimAttended}>
+                  <input type="hidden" name="table_id" value={id} />
+                  <PrimaryButton pendingText="알리는 중">참석했는데 체크인을 못 했어요</PrimaryButton>
+                </form>
+              )}
+            </>
           ) : (
             <>
               {!done && (

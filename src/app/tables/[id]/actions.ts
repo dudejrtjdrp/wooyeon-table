@@ -6,7 +6,9 @@ import { pushToUsers } from "@/lib/push";
 import { redirect } from "next/navigation";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
+import { CLAIM_MARK, canClaimAttended } from "@/lib/attendance-rules";
 import { logStatus } from "@/lib/events";
+import { fmtDateTime } from "@/lib/format";
 import { ensureRoom } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { postSystem } from "@/lib/delivery";
@@ -87,3 +89,33 @@ export async function checkIn(form: FormData) {
   }
   revalidatePath(`/tables/${tableId}`);
 }
+
+/**
+ * 갔는데 체크인을 깜빡한 사람: 모임이 끝나고 48시간 안에 '참석했어요'라고 알린다.
+ * 바로 참석으로 바꾸지 않고(노쇼를 가릴 수 없어서) 노쇼 후보 예외에 본인 확인을 붙여 운영자가 정한다.
+ */
+export async function claimAttended(form: FormData) {
+  const me = await requireMe();
+  const tableId = String(form.get("table_id"));
+  const m = await membership(tableId, me.id);
+  if (!m) redirect("/");
+  const { data: t } = await db().from("dining_tables").select("slots(ends_at)").eq("id", tableId).single();
+  const end = new Date((t as unknown as { slots: { ends_at: string } }).slots.ends_at);
+  const n = await now();
+  if (!canClaimAttended(m.attendance_status, end, n)) redirect(`/tables/${tableId}`);
+  // 이미 알린 사람은 다시 기록하지 않는다 (두 번 눌러도 한 번)
+  const { data: prev } = await db().from("status_events").select("id").eq("entity_id", m.id).eq("field", "attendance_claim").limit(1);
+  if (prev?.length) redirect(`/tables/${tableId}`);
+  const when = fmtDateTime(n.toISOString()); // 서버 시간대와 상관없이 서울 시각
+  const note = `${me.name}님 체크인 기록이 없어요 · 본인이 '참석했는데 ${CLAIM_MARK}'라고 알림(${when})`;
+  const { data: ex } = await db().from("exceptions").select("id,status").eq("dedupe_key", `noshow:${m.id}`).maybeSingle();
+  if (ex) {
+    if (ex.status === "open") await db().from("exceptions").update({ reason: note }).eq("id", ex.id);
+  } else {
+    await db().from("exceptions").insert({ kind: "no_show", ref_type: "application", ref_id: m.id, reason: note, dedupe_key: `noshow:${m.id}` });
+  }
+  await logStatus({ entityType: "application", entityId: m.id, field: "attendance_claim", from: "SCHEDULED", to: "CLAIMED", actor: `user:${me.id}`, reason: "참석했는데 체크인을 못 했다고 알림" });
+  revalidatePath(`/tables/${tableId}`);
+  redirect(`/tables/${tableId}?m=${encodeURIComponent("알려 주셔서 고마워요. 운영팀이 확인하면 참석으로 바뀌고 후기를 남길 수 있어요")}`);
+}
+

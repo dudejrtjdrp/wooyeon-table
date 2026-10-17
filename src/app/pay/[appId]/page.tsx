@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { ChevronDown, Clock3, Ticket } from "lucide-react";
-import { ErrorText, PageTitle, Screen } from "@/components/ui";
+import { ErrorText, LinkButton, PageTitle, Screen } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
 import { PASSES, REFUND_POLICY, type PassType, won } from "@/lib/constants";
 import { fmtSlot } from "@/lib/format";
+import { now } from "@/lib/clock";
 import { db } from "@/lib/supabase";
 import { tossClientKey, tossLive } from "@/lib/toss";
 import { failPayment, pay } from "./actions";
@@ -22,6 +23,15 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
   if (!app || app.user_id !== me.id) redirect("/");
   if (app.payments.status === "PAID") redirect(`/applications/${appId}`);
   const passDef = PASSES[app.payments.pass_type] ?? PASSES.single;
+  // 매칭 시각이 지난 뒤에는 결제를 받지 않는다. 받으면 이미 끝난 매칭에 돈만 내게 된다
+  if (new Date(app.rounds.match_at) <= (await now())) {
+    return (
+      <Screen title="결제" back={`/applications/${appId}`}>
+        <PageTitle className="mt-4" title="이 일정은" accent="신청이 마감됐어요" sub={`${app.rounds.title}은 ${fmtSlot(app.rounds.match_at)}에 테이블을 꾸렸어요. 결제 전이라 빠져나간 돈은 없어요.`} />
+        <div className="mt-8"><LinkButton href="/rounds">모집 중인 일정 보기</LinkButton></div>
+      </Screen>
+    );
+  }
 
   return (
     <Screen title="결제" back={`/applications/${appId}`}>

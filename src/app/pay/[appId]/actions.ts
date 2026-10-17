@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { type PassType } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
 import { markPaid } from "@/lib/payments";
+import { now } from "@/lib/clock";
 import { db } from "@/lib/supabase";
 
 async function load(appId: string, userId: string) {
@@ -14,6 +15,7 @@ async function load(appId: string, userId: string) {
     .eq("id", appId)
     .maybeSingle();
   if (!app || app.user_id !== userId) redirect("/");
+  if (new Date((app as unknown as { rounds: { match_at: string } }).rounds.match_at) <= (await now())) redirect(`/pay/${appId}`);
   return app as unknown as {
     id: string; payment_id: string; payment_status: string;
     rounds: { title: string; match_at: string };

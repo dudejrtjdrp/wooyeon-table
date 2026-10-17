@@ -3,11 +3,12 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { safeNext } from "@/lib/auth";
+import { normalizeLoginId } from "@/lib/login-id";
 import { idvEnabled } from "@/lib/identity";
 import { db } from "@/lib/supabase";
 import { clearSession, setSession } from "@/lib/session";
 
-const normalize = (s: string) => s.trim().replace(/-/g, "");
+const normalize = normalizeLoginId;
 
 export async function login(form: FormData) {
   const id = normalize(String(form.get("login_id") ?? ""));

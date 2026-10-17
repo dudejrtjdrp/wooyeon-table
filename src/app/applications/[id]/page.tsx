@@ -41,7 +41,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   if (!app || app.user_id !== me.id) redirect("/");
 
   const t = await now();
-  const h = headline(app);
+  const h = headline(app, t);
   const slots = app.application_slots.map((x) => x.slots).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const paid = !["PENDING", "FAILED"].includes(app.payment_status);
   const matched = app.match_status === "CONFIRMED";
@@ -49,7 +49,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const matchDone = !["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status) && paid;
   const steps = [
     { label: "신청", done: true, when: app.submitted_at ? fmtSlot(app.submitted_at) : "", note: "신청이 완료됐어요." },
-    { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : "결제를 마쳐야 매칭에 들어가요." },
+    { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : new Date(app.rounds.match_at) <= t ? "결제 전에 마감됐어요. 빠져나간 돈은 없어요." : "결제를 마쳐야 매칭에 들어가요." },
     { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: "신청 인원을 모아 테이블을 꾸려요." },
     { label: "테이블 확정 · 안내", done: matched, when: "", note: "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
     { label: "모임", done: app.attendance_status === "ATTENDED", when: "", note: "정해진 식당에서 저녁을 함께 먹어요." },
@@ -59,7 +59,10 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const moved = matched && app.attendance_status === "SCHEDULED" && app.table_id ? await wasReallocatedTo(app.id, app.table_id) : false;
   // 매칭을 기다리는 동안에는 참가자가 할 일이 없으므로 주 버튼을 두지 않는다 (같은 화면으로 내려가는 버튼은 할 일이 아님)
   const unpaid = app.payment_status === "PENDING" || app.payment_status === "FAILED";
-  const cta: [string, string] | null = unpaid
+  const payClosed = unpaid && new Date(app.rounds.match_at) <= t;
+  const cta: [string, string] | null = payClosed
+    ? ["모집 중인 일정 보기", "/rounds"]
+    : unpaid
     ? ["결제 이어서 하기", `/pay/${app.id}`]
     : matched && app.table_id
       ? ["테이블과 단체방 보기", `/tables/${app.table_id}`]
@@ -90,7 +93,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         <div className="relative p-6">
           <Pill tone={h.tone}>{h.label}</Pill>
           <p className="mt-4 max-w-[62%] text-[24px] font-black leading-[1.35] text-ink">{app.rounds.title}</p>
-          <p className="mt-3 max-w-[60%] text-[15px] leading-relaxed text-ink2">{app.match_reason ?? h.desc}</p>
+          <p className="mt-3 max-w-[60%] text-[15px] leading-relaxed text-ink2">{payClosed ? "결제 전에 매칭 시각이 지나 이번 테이블에는 들어가지 못했어요. 빠져나간 돈은 없어요." : app.match_reason ?? h.desc}</p>
           {money && <p className="mt-3 inline-flex rounded-full bg-paper px-3 py-1.5 text-[14px] font-bold text-ink">{money}</p>}
           {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH") && (
             <Link href="/rounds" className="mt-4 flex h-12 w-fit items-center rounded-[14px] bg-accent px-5 text-[15px] font-bold text-white">다른 일정 보기</Link>

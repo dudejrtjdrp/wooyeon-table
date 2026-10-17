@@ -5,10 +5,14 @@ export type AppRow = {
   match_status: string;
   attendance_status: string | null;
   resolution?: string | null;
+  rounds?: { match_at?: string } | null;
 };
 
-export function headline(a: AppRow): { label: string; tone: "muted" | "accent" | "leaf" | "ink" | "candle" | "danger"; desc: string } {
+/** t(지금)를 넘기면 결제 전에 매칭 시각이 지난 신청을 '결제 전 마감'으로 보여 준다 (화면마다 '결제 대기'로 남던 문제) */
+export function headline(a: AppRow, t?: Date): { label: string; tone: "muted" | "accent" | "leaf" | "ink" | "candle" | "danger"; desc: string } {
   if (a.application_status === "CANCELED") return { label: "신청 취소", tone: "muted", desc: "취소한 신청이에요." };
+  if (t && a.rounds?.match_at && new Date(a.rounds.match_at) <= t && (a.payment_status === "PENDING" || a.payment_status === "FAILED"))
+    return { label: "결제 전 마감", tone: "muted", desc: "결제 전에 매칭 시각이 지나 이번 테이블에는 들어가지 못했어요. 빠져나간 돈은 없어요." };
   if (a.payment_status === "PENDING") return { label: "결제 대기", tone: "candle", desc: "결제를 마쳐야 매칭 대상이 돼요." };
   if (a.payment_status === "FAILED") return { label: "결제 실패", tone: "danger", desc: "결제가 되지 않았어요. 다시 시도해 주세요." };
   if (a.payment_status === "REFUND_REQUESTED" || a.payment_status === "REFUND_PROCESSING")

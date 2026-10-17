@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { logStatus } from "@/lib/events";
 import { markPaid } from "@/lib/payments";
+import { now } from "@/lib/clock";
 import { db } from "@/lib/supabase";
 import { confirmToss, methodLabel } from "@/lib/toss";
 
@@ -28,8 +29,8 @@ export async function GET(req: NextRequest) {
 
   const me = await getMe();
   if (!me) return to(`/login?next=/pay/${appId}`);
-  const { data } = await db().from("applications").select("id,user_id,payment_id,payments(id,status,amount)").eq("id", appId).maybeSingle();
-  const app = data as unknown as { id: string; user_id: string; payment_id: string; payments: { id: string; status: string; amount: number } } | null;
+  const { data } = await db().from("applications").select("id,user_id,payment_id,rounds(match_at),payments(id,status,amount)").eq("id", appId).maybeSingle();
+  const app = data as unknown as { id: string; user_id: string; payment_id: string; rounds: { match_at: string }; payments: { id: string; status: string; amount: number } } | null;
   if (!app || app.user_id !== me.id) return to("/");
   if (app.payments.status === "PAID") return to(`/applications/${appId}`);
   // 결제창에서 넘어온 값은 바뀔 수 있으니 서버 기록과 맞는지 먼저 본다
@@ -42,6 +43,8 @@ export async function GET(req: NextRequest) {
     return fail("결제 금액이 맞지 않아요. 다시 결제해 주세요");
   }
 
+  // 결제창을 연 사이 매칭 시각이 지났으면 승인하지 않는다(승인 전이라 돈이 빠져나가지 않는다)
+  if (new Date(app.rounds.match_at) <= (await now())) return to(`/pay/${appId}`);
   const r = await confirmToss(paymentKey, orderId, amount);
   if (!r.ok) {
     await db().from("payments").update({ status: "FAILED", pg_order_id: orderId }).eq("id", app.payment_id).eq("status", "PENDING");

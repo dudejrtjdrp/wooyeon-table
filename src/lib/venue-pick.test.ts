@@ -34,4 +34,14 @@ describe("식당 고르기 (G2)", () => {
     expect(pickVenue(options, need({ used: new Map([["A", 1]]) }))?.venueId).toBe("B");
     expect(rankVenues([...options].reverse(), need())).toEqual(rankVenues(options, need()));
   });
+
+  it("같은 등급 식당이면 테이블 사람들 가격대에 맞는 곳을 먼저, 등급이 높은 식당이 가격보다 앞선다", () => {
+    const cheap = v("골목", { rating: 4.6, priceRange: "1만 원대" });
+    const mid = v("둥근", { rating: 4.5, priceRange: "2만 원대" });
+    const phone = v("전화", { rating: 4.8, channel: "phone", priceRange: "2만 원대" });
+    const prices = ["2만 원대", "2만 원대", "상관없어요", "1만 원대"];
+    expect(rankVenues([cheap, mid, phone], need({ prices })).map((x) => x.venueId)).toEqual(["둥근", "골목", "전화"]);
+    // 가격대를 모르면 예전처럼 평점 순
+    expect(pickVenue([cheap, mid], need())?.venueId).toBe("골목");
+  });
 });

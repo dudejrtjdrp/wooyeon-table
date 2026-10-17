@@ -1,6 +1,6 @@
 // 식당 고르기 (INF-02, PRD 15장 '식당 배정 실패'). DB 없이 계산하는 부분만 따로 둬서 테스트로 바로 확인한다.
 // 순서: 같은 지역·일정에서 자리가 남고 인원이 앉을 수 있는 식당만 → 평점 4.3 이상 + 자동 예약 채널(네이버·캐치테이블)을 먼저
-// → 평점 높은 순 → 이 일정에 덜 쓴 식당 → 이름 순(같은 입력이면 같은 결과).
+// → 테이블 사람들 가격대에 맞는 곳 → 평점 높은 순 → 이 일정에 덜 쓴 식당 → 이름 순(같은 입력이면 같은 결과).
 // 예약이 3번 실패한 식당은 exclude로 빼고 다시 고른다. 후보가 하나도 안 남을 때만 운영자 예외.
 
 /** 배정할 때 먼저 고르는 평점 (운영사 Q&A: 리뷰 평점이 좋은 곳) */
@@ -18,6 +18,8 @@ export type VenueOption = {
   seats: number;
   /** 이 일정에 이 식당이 받을 수 있는 테이블 수 */
   tablesAvailable: number;
+  /** 식당 가격대 (예: "2만 원대") */
+  priceRange?: string | null;
 };
 
 export type VenueNeed = {
@@ -27,7 +29,13 @@ export type VenueNeed = {
   used: Map<string, number>;
   /** 이미 시도했다가 예약이 안 된 식당 */
   exclude?: Set<string>;
+  /** 테이블 사람들이 프로필에 고른 한 끼 가격대. 같은 등급 식당끼리는 맞는 사람이 많은 곳을 먼저 (PRD에 없는 우리 결정, 2026-10-18) */
+  prices?: (string | null)[];
 };
+
+/** 이 식당 가격대가 맞는 사람 수 ('상관없어요'는 어디든 맞음) */
+export const priceFit = (o: Pick<VenueOption, "priceRange">, prices: (string | null)[] = []) =>
+  prices.filter((p) => !p || p === "상관없어요" || p === o.priceRange).length;
 
 export const isAutoChannel = (c: string | null | undefined) => (AUTO_CHANNELS as readonly string[]).includes(c ?? "");
 
@@ -45,6 +53,7 @@ export function rankVenues(options: VenueOption[], need: VenueNeed): VenueOption
     .sort(
       (a, b) =>
         venueGrade(b) - venueGrade(a) ||
+        priceFit(b, need.prices) - priceFit(a, need.prices) ||
         (b.rating ?? 0) - (a.rating ?? 0) ||
         used(a.venueId) - used(b.venueId) ||
         a.name.localeCompare(b.name) ||

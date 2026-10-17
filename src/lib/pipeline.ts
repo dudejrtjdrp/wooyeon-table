@@ -3,6 +3,7 @@ import { REFUND_POLICY } from "./constants";
 import { logStatus } from "./events";
 import { fmtSlot } from "./format";
 import { notify } from "./notify";
+import { shouldNudgeCheckIn } from "./attendance-rules";
 import { pushNotifications } from "./push";
 import { MAX_TRIES, postSystem, retryPushes, retrySystemMessages } from "./delivery";
 import { chooseContents, loadContentRules, tableTypes } from "./contents";
@@ -57,17 +58,19 @@ export async function ensureRoom(tableId: string): Promise<string> {
 
 /** 이 테이블에 배정할 수 있는 식당 후보와 인원 (같은 일정의 식당 재고) */
 async function venueContext(t: TableRow) {
-  const [{ data: options }, { count: party }, { data: used }] = await Promise.all([
-    db().from("venue_slots").select("venue_id,tables_available,venues(id,name,address,active,region,rating,booking_channel,seats_per_table)").eq("slot_id", t.slot_id),
-    db().from("applications").select("id", { count: "exact", head: true }).eq("table_id", t.id).eq("match_status", "CONFIRMED"),
+  const [{ data: options }, { data: who }, { data: used }] = await Promise.all([
+    db().from("venue_slots").select("venue_id,tables_available,venues(id,name,address,active,region,rating,booking_channel,seats_per_table,price_range)").eq("slot_id", t.slot_id),
+    db().from("applications").select("id,users(profiles(price_range))").eq("table_id", t.id).eq("match_status", "CONFIRMED"),
     db().from("dining_tables").select("venue_id").eq("slot_id", t.slot_id).not("venue_id", "is", null).neq("status", "DISSOLVED"),
   ]);
   const usedCount = new Map<string, number>();
   for (const u of used ?? []) usedCount.set(u.venue_id, (usedCount.get(u.venue_id) ?? 0) + 1);
-  const list: VenueOption[] = ((options ?? []) as unknown as { venue_id: string; tables_available: number; venues: { name: string; active: boolean; region: string; rating: number | null; booking_channel: string | null; seats_per_table: number } | null }[])
+  const list: VenueOption[] = ((options ?? []) as unknown as { venue_id: string; tables_available: number; venues: { name: string; active: boolean; region: string; rating: number | null; booking_channel: string | null; seats_per_table: number; price_range: string | null } | null }[])
     .filter((o) => o.venues)
-    .map((o) => ({ venueId: o.venue_id, name: o.venues!.name, region: o.venues!.region, active: o.venues!.active, rating: o.venues!.rating === null ? null : Number(o.venues!.rating), channel: o.venues!.booking_channel, seats: o.venues!.seats_per_table, tablesAvailable: o.tables_available }));
-  return { options: list, party: party ?? 0, used: usedCount };
+    .map((o) => ({ venueId: o.venue_id, name: o.venues!.name, region: o.venues!.region, active: o.venues!.active, rating: o.venues!.rating === null ? null : Number(o.venues!.rating), channel: o.venues!.booking_channel, seats: o.venues!.seats_per_table, tablesAvailable: o.tables_available, priceRange: o.venues!.price_range }));
+  const members = (who ?? []) as unknown as { users: { profiles: { price_range: string | null } | null } | null }[];
+  const prices = members.map((m) => m.users?.profiles?.price_range ?? null);
+  return { options: list, party: members.length, used: usedCount, prices };
 }
 
 /** 예약이 안 돼 이 테이블에서 뺀 식당 (status_events dining_table · venue_failed) */
@@ -85,7 +88,7 @@ export async function assignVenue(tableId: string): Promise<boolean> {
   const t = await loadTable(tableId);
   if (t.venue_id) return true;
   const [ctx, tried] = await Promise.all([venueContext(t), triedVenues(tableId)]);
-  const pick = pickVenue(ctx.options, { region: t.slots.region, party: ctx.party, used: ctx.used, exclude: tried });
+  const pick = pickVenue(ctx.options, { region: t.slots.region, party: ctx.party, used: ctx.used, exclude: tried, prices: ctx.prices });
 
   if (!pick) {
     await db().from("exceptions").upsert(
@@ -156,7 +159,7 @@ export async function reassignVenue(tableId: string, failedVenueId: string, why:
   if (t.venue_id !== failedVenueId || !["CONFIRMED", "VENUE_ASSIGNED", "READY"].includes(t.status)) return null;
   const [ctx, tried] = await Promise.all([venueContext(t), triedVenues(tableId)]);
   tried.add(failedVenueId);
-  const pick = pickVenue(ctx.options, { region: t.slots.region, party: ctx.party, used: ctx.used, exclude: tried });
+  const pick = pickVenue(ctx.options, { region: t.slots.region, party: ctx.party, used: ctx.used, exclude: tried, prices: ctx.prices });
   if (!pick) return null;
 
   const { data: moved } = await db().from("dining_tables").update({ venue_id: pick.venueId }).eq("id", tableId).eq("venue_id", failedVenueId).select("id");
@@ -420,6 +423,14 @@ export async function tick() {
       );
       const { data: up } = await db().from("dining_tables").update({ status: "IN_PROGRESS" }).eq("id", tb.id).in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY"]).select("id");
       if (up?.length) await logStatus({ entityType: "dining_table", entityId: tb.id, field: "status", from: tb.status, to: "IN_PROGRESS", actor: "system", reason: "모임 시작 시각" });
+    }
+
+    // 시작 20분이 지나도 체크인하지 않은 사람에게 한 번 알린다 (갔는데 체크인을 깜빡해 노쇼 후보가 되는 일을 줄인다)
+    if (shouldNudgeCheckIn(start, end, t)) {
+      const ms = await members(tb.id);
+      for (const m of ms.filter((x) => x.attendance_status === "SCHEDULED")) {
+        await notify({ userId: m.user_id, template: "checkin_nudge", ...render("checkin_nudge", {}, tpl), link: `/tables/${tb.id}`, dedupeKey: `checkin:${m.id}` });
+      }
     }
 
     if (t >= end) {
