@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { PrimaryButton } from "@/components/client";
 import { PrivacyBody, TermsBody } from "@/components/legal";
 import { PassButton } from "./pass-button";
+import { useStepHistory } from "@/lib/use-step-history";
 
 type Profile = {
   birth_year?: number | null; gender?: string | null; job?: string | null; mbti?: string | null;
@@ -123,7 +124,7 @@ function parseFood(s: string | null | undefined, avoidList: readonly string[]) {
 }
 
 export function OnboardingWizard({
-  action, profile: p, name, phone, next, error, prefill, lists, editing, verified, idvOn, userKey, phoneVerified,
+  action, profile: p, name, phone, next, error, prefill, lists, editing, verified, idvOn, userKey, phoneVerified, initialStep,
 }: {
   action: (f: FormData) => void | Promise<void>;
   profile: Profile;
@@ -138,6 +139,8 @@ export function OnboardingWizard({
   idvOn: boolean;
   userKey: string;
   phoneVerified: boolean;
+  /** 주소의 ?step= (뒤로 가기로 돌아왔을 때 첫 단계가 깜빡이지 않게) */
+  initialStep?: number;
 }) {
   // 0: 약관(처음 가입할 때만), 1~6: 프로필
   const first = editing ? 1 : 0;
@@ -164,7 +167,7 @@ export function OnboardingWizard({
     agree_marketing: Boolean(p?.marketing_opt_in),
   };
   const [v, setV] = useState<Values>(initial);
-  const [step, setStep] = useState(first);
+  const [step, setStep] = useState(Math.max(first, Math.min(initialStep ?? first, LAST)));
   const [msg, setMsg] = useState<string | null>(error ?? null);
   const [doc, setDoc] = useState<"terms" | "privacy" | null>(null);
   const restored = useRef(false);
@@ -172,20 +175,26 @@ export function OnboardingWizard({
   // 휴대폰 인증처럼 화면을 잠깐 떠났다 돌아와도 입력한 내용과 단계를 이어 간다
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem(storeKey);
+      // 저장하다 오류로 돌아온 경우(?e=)엔 보내기 직전 내용을, 아니면 보내고 남은 사본은 지운다
+      const sent = sessionStorage.getItem(`${storeKey}:sent`);
+      sessionStorage.removeItem(`${storeKey}:sent`);
+      const saved = sessionStorage.getItem(storeKey) ?? (error ? sent : null);
       if (saved) {
         const s = JSON.parse(saved) as { v: Values; step: number };
         setV((cur) => ({ ...cur, ...s.v, name: verified?.name ?? (s.v.name || cur.name) }));
         setStep(Math.max(first, Math.min(s.step ?? first, LAST)));
       }
     } catch {}
-    restored.current = true;
+    // 같은 순간에 도는 저장이 아직 비어 있는 초기값으로 저장해 둔 내용을 덮어쓰지 않게, 불러온 값이 반영된 뒤부터 저장한다
+    queueMicrotask(() => { restored.current = true; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     if (!restored.current) return;
     try { sessionStorage.setItem(storeKey, JSON.stringify({ v, step })); } catch {}
   }, [v, step, storeKey]);
+  // 휴대폰 뒤로 가기가 가입 첫 화면이 아니라 바로 앞 단계로 가게
+  const nav = useStepHistory(step, setStep, [first, LAST]);
 
   const set = <K extends keyof Values>(k: K, val: Values[K]) => setV((cur) => ({ ...cur, [k]: val }));
   const toggle = (k: "interests" | "my_traits" | "wanted_traits", x: string, max: number) =>
@@ -224,8 +233,9 @@ export function OnboardingWizard({
   const goNext = () => {
     const e = check(step);
     setMsg(e);
-    if (!e) go(step + 1);
+    if (!e) { nav.push(step + 1); window.scrollTo({ top: 0 }); }
   };
+  const goPrev = () => { setMsg(null); nav.back(step - 1); window.scrollTo({ top: 0 }); };
 
   const verifyHref = `/verify/phone?next=${encodeURIComponent(`/onboarding?next=${encodeURIComponent(next)}`)}`;
   const hiddenGender = verified?.gender === "M" ? "남성" : verified?.gender === "F" ? "여성" : v.gender;
@@ -257,7 +267,7 @@ export function OnboardingWizard({
         )}
         <div className="flex items-center justify-between px-3 pt-2.5">
           {step > first ? (
-            <button type="button" aria-label="이전 단계" onClick={() => go(step - 1)} className="flex size-11 items-center justify-center text-ink"><ChevronLeft size={26} /></button>
+            <button type="button" aria-label="이전 단계" onClick={goPrev} className="flex size-11 items-center justify-center text-ink"><ChevronLeft size={26} /></button>
           ) : editing ? (
             <Link href={next} aria-label="닫기" className="flex size-11 items-center justify-center text-ink"><X size={22} /></Link>
           ) : <span className="size-11" />}
@@ -272,7 +282,7 @@ export function OnboardingWizard({
 
       <form
         action={action}
-        onSubmit={() => { try { sessionStorage.removeItem(storeKey); } catch {} }}
+        onSubmit={() => { try { const cur = sessionStorage.getItem(storeKey); if (cur) sessionStorage.setItem(`${storeKey}:sent`, cur); sessionStorage.removeItem(storeKey); } catch {} }}
         className="flex flex-1 flex-col pb-36"
         noValidate
       >

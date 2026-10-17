@@ -6,9 +6,9 @@ import { db } from "@/lib/supabase";
 import { saveProfile } from "./actions";
 import { OnboardingWizard } from "./wizard";
 
-export default async function Onboarding({ searchParams }: { searchParams: Promise<{ e?: string; m?: string; next?: string; by?: string; g?: string }> }) {
+export default async function Onboarding({ searchParams }: { searchParams: Promise<{ e?: string; m?: string; next?: string; by?: string; g?: string; step?: string }> }) {
   const me = await requireMe();
-  const { e, m, next, by, g } = await searchParams;
+  const { e, m, next, by, g, step } = await searchParams;
   const [{ data: p }, { data: u }] = await Promise.all([
     db().from("profiles").select("*").eq("user_id", me.id).maybeSingle(),
     db().from("users").select("name,phone,birth_date,verified_gender,identity_verified_at,phone_verified_at").eq("id", me.id).single(),
@@ -33,6 +33,7 @@ export default async function Onboarding({ searchParams }: { searchParams: Promi
       idvOn={idvEnabled()}
       userKey={me.id.slice(0, 8)}
       phoneVerified={Boolean(u?.phone_verified_at)}
+      initialStep={step !== undefined && Number.isInteger(Number(step)) ? Number(step) : undefined}
     />
     </>
   );

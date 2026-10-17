@@ -6,6 +6,7 @@ import { LEGACY_PASS_LABEL, PASSES, REFUND_POLICY, isMembership } from "@/lib/co
 import { fmtDay, fmtSlot } from "@/lib/format";
 import { membershipNudge } from "@/lib/recommend";
 import { SIDOS, kstDay } from "@/lib/regions";
+import { LinkButton, Screen } from "@/components/ui";
 import { db } from "@/lib/supabase";
 import { submitApplication } from "./actions";
 import { ApplyFlow } from "./flow";
@@ -13,18 +14,35 @@ import { ApplyFlow } from "./flow";
 export const dynamic = "force-dynamic";
 
 /** 신청 3단계: 지역(E07) → 날짜(E08) → 이용권·결제(E09) */
-export default async function Apply({ params, searchParams }: { params: Promise<{ roundId: string }>; searchParams: Promise<{ e?: string }> }) {
+export default async function Apply({ params, searchParams }: { params: Promise<{ roundId: string }>; searchParams: Promise<{ e?: string; step?: string }> }) {
   const me = await requireProfile();
   const t = await now();
   const owned = await usablePass(me.id, t);
   const { roundId } = await params;
-  const { e } = await searchParams;
+  const { e, step } = await searchParams;
   const { data: round } = await db()
     .from("rounds")
     .select("id,title,apply_deadline,match_at,slots(id,region,sido,starts_at)")
     .eq("id", roundId)
     .maybeSingle();
   if (!round) notFound();
+
+  // 이미 신청한 회차(결제를 마치고 뒤로 온 경우 등): 신청 폼을 다시 보여 주지 않고 내 신청으로 안내한다
+  const { data: mine } = await db().from("applications").select("id,payment_status").eq("user_id", me.id).eq("round_id", roundId).neq("application_status", "CANCELED").limit(1).maybeSingle();
+  if (mine) {
+    // 결제 화면에서 뒤로 온 경우: 신청은 이미 만들어졌으니 결제만 이어서 하게 한다
+    const payLeft = (mine.payment_status === "PENDING" || mine.payment_status === "FAILED") && new Date(round.match_at) > t;
+    return (
+      <Screen title="신청" back="/rounds">
+        <div className="px-6 pt-10 text-center">
+          <p className="text-[20px] font-extrabold text-ink">{payLeft ? "결제만 남았어요" : "이미 신청한 일정이에요"}</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-muted">{payLeft ? `${round.title} 신청은 받아 뒀어요. 결제를 마치면 매칭 대상이 돼요.` : `${round.title} 신청 상태는 내 신청에서 볼 수 있어요.`}</p>
+          <LinkButton href={payLeft ? `/pay/${mine.id}` : `/applications/${mine.id}`} className="mt-8">{payLeft ? "결제 이어서 하기" : "내 신청 보기"}</LinkButton>
+          {payLeft && <LinkButton href={`/applications/${mine.id}`} tone="outline" className="mt-2.5">내 신청 보기</LinkButton>}
+        </div>
+      </Screen>
+    );
+  }
 
   // 많이 고르는 묶음과 시·도를 앞에 둔다 (이번 회차 신청 기준)
   const { data: picks } = await db().from("applications").select("areas").eq("round_id", roundId).neq("application_status", "CANCELED");
@@ -57,6 +75,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       refund={REFUND_POLICY}
       nudge={nudge}
       error={e}
+      initialStep={Math.min(Math.max(Number(step) || 1, 1), 3)}
     />
   );
 }
