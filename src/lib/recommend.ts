@@ -68,3 +68,16 @@ export function recommendBody(title: string, pick: SlotPick<{ region: string; st
   if (pick.kind === "region") return `${often ? "자주 오신" : "지난번에 오신"} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
   return `${often ? "자주 오신" : "지난번과 같은"} ${day} · ${when(pick.slot.starts_at)} ${pick.slot.region}`;
 }
+
+/**
+ * 두 번째 신청부터 멤버십 1개월을 권한다 (성효님 결정, 2026-10-18). 이미 쓸 수 있는 이용권이나 멤버십이 있으면 권하지 않는다.
+ * 기본 선택은 바꾸지 않고 '추천' 표시와 계산만 보여 준다(고르는 건 참가자).
+ */
+export function membershipNudge(paidBefore: number, hasUsablePass: boolean, single: number, monthly: number): { key: "m1"; note: string } | null {
+  if (hasUsablePass || paidBefore < 1) return null;
+  const four = single * 4;
+  const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
+  const lead = paidBefore === 1 ? "두 번째 신청이에요." : "다시 와 주셨네요.";
+  return { key: "m1", note: `${lead} 한 달에 네 번 오면 1회권 ${won(four)}, 멤버십은 ${won(monthly)}이에요.` };
+}
+

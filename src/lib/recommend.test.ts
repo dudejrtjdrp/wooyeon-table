@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickSlotFor, recommendBody, visitPrefs } from "./recommend";
+import { membershipNudge, pickSlotFor, recommendBody, visitPrefs } from "./recommend";
 
 // 금요일: 10월 2·9·23·30일, 토요일: 10월 17·31일 (모두 저녁, 한국 시간)
 const FRI = (d: number) => `2026-10-${String(d).padStart(2, "0")}T10:30:00Z`;
@@ -41,3 +41,19 @@ describe("다음 일정 추천 (F9)", () => {
     expect(recommendBody("11월 첫째 주", none, prefs, () => "")).toBe("11월 첫째 주 신청을 받아요");
   });
 });
+
+describe("두 번째 신청 멤버십 권유", () => {
+  it("한 번이라도 결제한 사람에게만, 쓸 이용권이 없을 때만", () => {
+    expect(membershipNudge(0, false, 9900, 35000)).toBeNull();
+    expect(membershipNudge(1, true, 9900, 35000)).toBeNull();
+    const n = membershipNudge(1, false, 9900, 35000);
+    expect(n?.key).toBe("m1");
+    expect(n?.note).toContain("39,600원");
+    expect(n?.note).toContain("35,000원");
+    expect(n?.note).toMatch(/^두 번째 신청이에요/);
+    // 세 번째부터는 횟수를 말하지 않는다
+    expect(membershipNudge(2, false, 9900, 35000)?.note).toMatch(/^다시 와 주셨네요/);
+    expect(membershipNudge(3, false, 9900, 35000)?.note).toMatch(/^다시 와 주셨네요/);
+  });
+});
+

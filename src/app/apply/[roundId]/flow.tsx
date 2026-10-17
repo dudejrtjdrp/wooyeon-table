@@ -24,7 +24,7 @@ const CHECK = (
 );
 
 export function ApplyFlow({
-  action, round, sidos, hot, slots, passes, owned, refund, error,
+  action, round, sidos, hot, slots, passes, owned, refund, error, nudge = null,
 }: {
   action: (f: FormData) => void | Promise<void>;
   round: { id: string; title: string; deadline: string; today: string };
@@ -35,6 +35,8 @@ export function ApplyFlow({
   owned: { label: string; remaining: number; unlimited: boolean; until: string | null } | null;
   refund: string[];
   error?: string;
+  /** 두 번째 신청부터 멤버십 권유 (추천 표시와 계산만, 기본 선택은 그대로) */
+  nudge?: { key: string; note: string } | null;
 }) {
   const [step, setStep] = useState(1);
   const [picked, setPicked] = useState<string[]>([]); // 묶음 이름 또는 "서울 전체"
@@ -250,12 +252,13 @@ export function ApplyFlow({
             <div className="px-6 pt-2">
               <h1 className="text-[26px] font-extrabold leading-[1.38]">이용권을 골라주세요</h1>
             </div>
+            {nudge && <p className="mx-6 mt-3 rounded-[14px] bg-accent-soft px-4 py-3 text-[14px] leading-relaxed text-accent-text">{nudge.note}</p>}
             <div className="flex flex-col gap-2 px-4 pt-[22px]" role="radiogroup" aria-label="이용권">
               {owned && (
                 <PassRow on={pass === "owned"} onClick={() => setPass("owned")} title="가지고 있는 이용권" sub={`${owned.label} ${owned.unlimited ? "기간 안 무제한" : `남은 ${owned.remaining}회`}${owned.until ? ` · ${owned.until}까지` : ""}`} price="0원" />
               )}
               {passes.map((p) => (
-                <PassRow key={p.key} on={pass === p.key} onClick={() => setPass(p.key)} title={p.label} sub={p.desc} price={won(p.amount)} />
+                <PassRow key={p.key} on={pass === p.key} onClick={() => setPass(p.key)} title={p.label} sub={p.desc} price={won(p.amount)} badge={nudge?.key === p.key ? "추천" : undefined} />
               ))}
             </div>
             <dl className="mx-6 mt-[18px]">
@@ -317,12 +320,12 @@ export function ApplyFlow({
     </div>
   );
 
-  function PassRow({ on, onClick, title, sub, price }: { on: boolean; onClick: () => void; title: string; sub: string; price: string }) {
+  function PassRow({ on, onClick, title, sub, price, badge }: { on: boolean; onClick: () => void; title: string; sub: string; price: string; badge?: string }) {
     return (
       <button type="button" role="radio" aria-checked={on} onClick={onClick} className={`flex items-center gap-3 rounded-[18px] p-[18px] text-left transition ${on ? "bg-accent-soft" : "bg-row"}`}>
         <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${on ? "bg-accent" : "bg-dot"}`}>{on && CHECK}</span>
         <span className="min-w-0 flex-1">
-          <span className={`block text-[17px] ${on ? "font-extrabold text-accent-text" : "font-bold"}`}>{title}</span>
+          <span className={`flex items-center gap-1.5 text-[17px] ${on ? "font-extrabold text-accent-text" : "font-bold"}`}>{title}{badge && <span className="rounded-[5px] bg-accent px-1.5 py-[2px] text-[11px] font-bold text-white">{badge}</span>}</span>
           <span className={`mt-0.5 block text-[13px] ${on ? "text-[#4a5a51]" : "text-muted"}`}>{sub}</span>
         </span>
         <span className={`shrink-0 text-[17px] ${on ? "font-extrabold text-accent-text" : "font-bold"}`}>{price}</span>

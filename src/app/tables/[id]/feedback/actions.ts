@@ -46,7 +46,8 @@ export async function submitFeedback(form: FormData) {
     }
   }
   await logStatus({ entityType: "application", entityId: app.id, field: "feedback", to: "SUBMITTED", actor: `user:${me.id}`, reason: "후기 제출" });
-  redirect(`/?m=${encodeURIComponent("후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요")}`);
+  // 만족한 순간에 다음 일정을 바로 권한다
+  redirect(`/tables/${tableId}/feedback/done`);
 }
 
 /** 신고·차단 (SAF-01). 신고 내용은 상대에게 보이지 않는다 */
