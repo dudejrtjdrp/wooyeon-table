@@ -49,7 +49,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const matchDone = !["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status) && paid;
   const steps = [
     { label: "신청", done: true, when: app.submitted_at ? fmtSlot(app.submitted_at) : "", note: "신청이 완료됐어요." },
-    { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : "결제를 마쳐야 매칭에 들어가요." },
+    { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : new Date(app.rounds.match_at) <= t ? "결제 전에 마감됐어요. 빠져나간 돈은 없어요." : "결제를 마쳐야 매칭에 들어가요." },
     { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: "신청 인원을 모아 테이블을 꾸려요." },
     { label: "테이블 확정 · 안내", done: matched, when: "", note: "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
     { label: "모임", done: app.attendance_status === "ATTENDED", when: "", note: "정해진 식당에서 저녁을 함께 먹어요." },
