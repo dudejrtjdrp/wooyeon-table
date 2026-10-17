@@ -7,14 +7,16 @@ export async function nextPick(userId: string) {
   const [{ data: rounds }, { data: mine }, { data: past }] = await Promise.all([
     db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t).order("apply_deadline").limit(4),
     db().from("applications").select("round_id").eq("user_id", userId).neq("application_status", "CANCELED"),
-    db().from("applications").select("dining_tables(slots(region,starts_at))").eq("user_id", userId).eq("attendance_status", "ATTENDED").limit(5),
+    db().from("applications").select("dining_tables(slots(region,starts_at))").eq("user_id", userId).eq("attendance_status", "ATTENDED").limit(20),
   ]);
   const applied = new Set((mine ?? []).map((a) => a.round_id));
   const open = (rounds ?? []).filter((r) => !applied.has(r.id));
   if (!open.length) return null;
   const pastSlots = ((past ?? []) as unknown as { dining_tables: { slots: { region: string; starts_at: string } } | null }[])
     .map((p) => p.dining_tables?.slots)
-    .filter((x): x is { region: string; starts_at: string } => !!x);
+    .filter((x): x is { region: string; starts_at: string } => !!x)
+    // '지난번'은 가장 최근에 간 모임이다
+    .sort((a, b) => b.starts_at.localeCompare(a.starts_at));
   const day = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600_000).getUTCDay();
   const DAYS = "일월화수목금토";
   for (const r of open) {

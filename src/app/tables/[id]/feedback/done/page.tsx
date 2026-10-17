@@ -18,6 +18,9 @@ export default async function FeedbackDone({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const { data: mine } = await db().from("applications").select("id").eq("table_id", id).eq("user_id", me.id).maybeSingle();
   if (!mine) redirect("/");
+  // 후기를 아직 안 보냈으면 후기 화면으로
+  const { data: fb } = await db().from("feedbacks").select("application_id").eq("application_id", mine.id).maybeSingle();
+  if (!fb) redirect(`/tables/${id}/feedback`);
   const next = await nextPick(me.id);
 
   return (

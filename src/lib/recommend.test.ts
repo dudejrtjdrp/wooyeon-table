@@ -50,6 +50,9 @@ describe("두 번째 신청 멤버십 권유", () => {
     expect(n?.key).toBe("m1");
     expect(n?.note).toContain("39,600원");
     expect(n?.note).toContain("35,000원");
+    expect(n?.note).toMatch(/^두 번째 신청이에요/);
+    // 세 번째부터는 횟수를 말하지 않는다
+    expect(membershipNudge(3, false, 9900, 35000)?.note).toMatch(/^다시 와 주셨네요/);
   });
 });
 

@@ -202,8 +202,3 @@ function StatusCard({ a, t }: { a: ActiveRow; t: Date }) {
     </section>
   );
 }
-
-/**
- * 다음 일정 추천 (RET-02). 아직 신청 안 한 모집 중 차수 가운데,
- * 지난번에 참석한 동네·요일과 맞는 일정을 먼저 고른다.
- */

@@ -77,6 +77,7 @@ export function membershipNudge(paidBefore: number, hasUsablePass: boolean, sing
   if (hasUsablePass || paidBefore < 1) return null;
   const four = single * 4;
   const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
-  return { key: "m1", note: `두 번째 신청이에요. 한 달에 네 번 오면 1회권 ${won(four)}, 멤버십은 ${won(monthly)}이에요.` };
+  const lead = paidBefore === 1 ? "두 번째 신청이에요." : "다시 와 주셨네요.";
+  return { key: "m1", note: `${lead} 한 달에 네 번 오면 1회권 ${won(four)}, 멤버십은 ${won(monthly)}이에요.` };
 }
 
