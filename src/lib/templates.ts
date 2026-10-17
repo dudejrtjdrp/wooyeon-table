@@ -26,6 +26,7 @@ export const TEMPLATES = {
   refunded: { label: "환불 완료", when: "환불이 끝났을 때", channel: "푸시·알림함", title: "환불이 끝났어요", body: "{amount}을 돌려드렸어요", vars: ["amount"] },
   refund_retry: { label: "환불 다시 시도", when: "결제사에서 환불이 한 번 실패했을 때", channel: "알림함(푸시 없음)", title: "환불을 다시 시도하고 있어요", body: "{amount} · 따로 하실 일은 없어요", vars: ["amount"] },
   refund_failed: { label: "환불 운영팀 처리", when: "자동 환불이 세 번 실패했을 때", channel: "푸시·알림함", title: "환불은 운영팀이 처리해요", body: "{amount} · 처리되면 알려 드릴게요", vars: ["amount"] },
+  checkin_nudge: { label: "체크인 안내", when: "모임 시작 20분 뒤에도 체크인하지 않은 참석 예정자에게 1회", channel: "푸시·알림함", title: "도착했다면 체크인해 주세요", body: "체크인해야 참석으로 남고 후기를 쓸 수 있어요", vars: [] },
   feedback: { label: "후기 요청", when: "모임 종료 직후 (참석자만)", channel: "푸시·알림함", title: "오늘 저녁 어땠어요?", body: "1분이면 후기를 남길 수 있어요", vars: [] },
   transferred: { label: "일정 이동 완료", when: "매칭 실패 뒤 다른 일정으로 옮긴 직후", channel: "알림함(푸시 없음)", title: "일정을 옮겼어요", body: "{round} · {match_at}에 결과를 알려 드려요", vars: ["round", "match_at"] },
   next_round: { label: "다음 모집 시작", when: "새 회차 모집이 열렸을 때 (새 일정 소식 받기에 동의한 지난 참가자)", channel: "푸시·알림함", title: "다음 식탁이 열렸어요", body: "{recommendation}", vars: ["recommendation", "deadline"] },

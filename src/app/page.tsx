@@ -22,12 +22,16 @@ type ActiveRow = {
   id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; resolution: string | null;
   table_id: string | null; areas: string[] | null; dates: string[] | null;
   rounds: { title: string; match_at: string };
-  dining_tables: { slots: { starts_at: string; region: string } | null; venues: { name: string } | null } | null;
+  dining_tables: { slots: { starts_at: string; ends_at: string; region: string } | null; venues: { name: string } | null } | null;
 };
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
   const me = await getMe();
-  if (!me) return <AuthChooser />;
+  if (!me) {
+    // 처음 온 사람에게 가장 가까운 모임 시각을 보여 준다
+    const { data: soon } = await db().from("slots").select("starts_at,rounds!inner(status,apply_deadline)").eq("rounds.status", "open").gt("rounds.apply_deadline", (await now()).toISOString()).order("starts_at").limit(1);
+    return <AuthChooser upcoming={soon?.[0] ? fmtSlot(soon[0].starts_at) : null} />;
+  }
   const { m } = await searchParams;
   // 마감·리마인드·모임 시작 같은 시간 이벤트를 화면을 열 때도 처리한다 (크론 보조)
   // 밀린 일(마감·리마인드·종료)은 화면을 먼저 보낸 뒤 처리한다
@@ -36,14 +40,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(slots(starts_at,region),venues(name))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(slots(starts_at,ends_at,region),venues(name))")
     .eq("user_id", me.id)
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .limit(10);
   const list = (apps ?? []) as unknown as ActiveRow[];
   // 진행 중인 신청(결제 대기 포함)을 먼저 보여준다. 다시 신청하면 같은 줄을 되살리므로 생성 시각이 아니라 제출 시각으로 고른다
-  const live = list.filter((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED"));
-  const ongoing = live.filter((a) => !["ATTENDED", "NO_SHOW"].includes(a.attendance_status ?? ""));
+  // 결제하지 않은 채 매칭 시각이 지난 신청은 이번 매칭에서 빠졌으니 홈에 '결제 이어서 하기'로 남기지 않는다
+  const unpaidClosed = (a: ActiveRow) => ["PENDING", "FAILED"].includes(a.payment_status) && new Date(a.rounds.match_at) <= t;
+  const live = list.filter((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED") && !unpaidClosed(a));
+  // 모임이 끝난 테이블은 체크인을 안 했어도 진행 중으로 보지 않는다 (지난 모임 카드가 'D-day'로 계속 남던 문제)
+  const ended = (a: ActiveRow) => Boolean(a.dining_tables?.slots && new Date(a.dining_tables.slots.ends_at) <= t);
+  const ongoing = live.filter((a) => !["ATTENDED", "NO_SHOW"].includes(a.attendance_status ?? "") && !ended(a));
   const active = ongoing[0] ?? live[0];
   const finished = !ongoing.length;
   const next = me.hasProfile && finished ? await nextPick(me.id) : null;

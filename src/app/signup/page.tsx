@@ -20,7 +20,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
             <input name="name" autoComplete="name" placeholder="이름" required minLength={2} className={inputCls} />
           </Field>
           <Field label="휴대폰 번호" required>
-            <input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="010-1234-5678" required pattern="01[0-9][\-\s]?[0-9]{3,4}[\-\s]?[0-9]{4}" title="010-1234-5678처럼 적어 주세요" className={inputCls} />
+            <input name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="010-1234-5678" required pattern="\s*01[0-9][\-\s.]?[0-9]{3,4}[\-\s.]?[0-9]{4}\s*" title="010-1234-5678처럼 적어 주세요" className={inputCls} />
           </Field>
           <div>
             <Field label="비밀번호" required>

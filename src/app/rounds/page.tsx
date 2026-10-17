@@ -6,6 +6,7 @@ import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { dateKey, dday, ddayLabel, fmtSlot } from "@/lib/format";
 import { sidoOf } from "@/lib/regions";
+import { PASSES, won } from "@/lib/constants";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
 
@@ -61,7 +62,8 @@ export default async function Rounds() {
                   {times.map((iso) => <li key={iso} className="font-extrabold">{fmtSlot(iso)}</li>)}
                 </ul>
               </div>
-              <dl className="mt-4 space-y-1.5 rounded-[14px] bg-field px-4 py-3 text-[13px]">
+              <p className="mt-3 text-[13px] text-muted">1회 {won(PASSES.single.amount)} · 식사비는 현장에서 각자 계산해요</p>
+              <dl className="mt-3 space-y-1.5 rounded-[14px] bg-field px-4 py-3 text-[13px]">
                 {[...bySido.entries()].map(([sd, areas]) => (
                   <div key={sd} className="flex gap-2">
                     <dt className="w-8 shrink-0 font-bold text-muted">{sd}</dt>

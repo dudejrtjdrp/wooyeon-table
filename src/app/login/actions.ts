@@ -7,7 +7,8 @@ import { idvEnabled } from "@/lib/identity";
 import { db } from "@/lib/supabase";
 import { clearSession, setSession } from "@/lib/session";
 
-const normalize = (s: string) => s.trim().replace(/-/g, "");
+// 010 1234 5678, 010.1234.5678처럼 쳐도 숫자만 남긴다 (입력칸은 띄어쓰기를 받아 주는데 여기서 거절하면 입력이 다 지워졌다)
+const normalize = (s: string) => s.replace(/\D/g, "");
 
 export async function login(form: FormData) {
   const id = normalize(String(form.get("login_id") ?? ""));

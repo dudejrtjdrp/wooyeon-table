@@ -2,6 +2,7 @@ import Link from "next/link";
 import { enabledProviders } from "@/lib/oauth";
 import { RoundTable } from "./brand";
 import { ErrorText } from "./ui";
+import { PASSES, won } from "@/lib/constants";
 
 const KakaoIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
@@ -22,7 +23,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export function AuthChooser({ next = "/", error, notice }: { next?: string; error?: string; notice?: string }) {
+export function AuthChooser({ next = "/", error, notice, upcoming }: { next?: string; error?: string; notice?: string; upcoming?: string | null }) {
   const on = enabledProviders();
   const q = next !== "/" ? `?next=${encodeURIComponent(next)}` : "";
   const social = on.kakao || on.naver || on.google;
@@ -42,6 +43,11 @@ export function AuthChooser({ next = "/", error, notice }: { next?: string; erro
             처음 보는 4~6명이 모여
             <br />
             저녁 한 끼를 같이 먹어요.
+          </p>
+          {/* 가입 전에 가장 많이 궁금한 것: 언제·얼마인지 (100명 시뮬레이션에서 첫 화면 이탈 이유 1위) */}
+          <p className="animate-rise mt-3 text-[15px] font-bold leading-relaxed text-white" style={{ animationDelay: ".1s" }}>
+            {upcoming ? `다음 모임 ${upcoming}` : "저녁 모임"} · 1회 {won(PASSES.single.amount)}
+            <span className="block text-[13px] font-medium text-on-accent">식사비는 현장에서 각자 계산해요</span>
           </p>
           <ul className="mt-5 flex flex-wrap gap-1.5 text-[13px] font-bold text-[#ddf0e5]">
             {["나이 차 8살 안", "성비 맞춰서", "자동 확정"].map((t) => (
