@@ -18,7 +18,7 @@ describe("다음 일정 추천 (F9)", () => {
     const pick = pickSlotFor(slots, prefs);
     expect(pick.kind).toBe("both");
     expect(pick.slot).toEqual({ region: "홍대·합정·연남", starts_at: FRI(30) });
-    expect(recommendBody("10월 다섯째 주", pick, prefs, () => "10월 30일(금) 저녁 7:30")).toContain("자주 오신 금요일 홍대·합정·연남");
+    expect(recommendBody("10월 다섯째 주", pick, prefs, () => "10월 30일(금) 저녁 7:30")).toContain("늘 오시던 금요일 홍대·합정·연남");
   });
 
   it("식당 점수가 낮았던 동네는 많이 갔어도 순위가 내려간다", () => {
@@ -72,6 +72,13 @@ describe("홈·후기 직후 다음 일정 추천 (알림과 같은 기준)", ()
     const pick = pickNext([round("r1", [{ region: "을지로·종로·광화문", starts_at: FRI(30) }]), round("r2", [{ region: "잠실·송파", starts_at: FRI(30) }])], v);
     expect(pick?.roundId).toBe("r2");
     expect(pick?.why).toMatch(/잠실/);
+  });
+  it("'늘 오시던'은 그 동네·요일에 두 번 이상 갔을 때만, 다른 동네에 한 번씩이면 '지난번처럼'", () => {
+    const slots = [{ region: "을지로·종로·광화문", starts_at: FRI(30) }];
+    const twice = pickNext([round("r1", slots)], [{ region: "을지로·종로·광화문", startsAt: FRI(16) }, { region: "을지로·종로·광화문", startsAt: FRI(23) }]);
+    expect(twice?.why).toBe("늘 오시던 금요일 을지로·종로·광화문, 이번에도 어때요?");
+    const mixed = pickNext([round("r1", slots)], [{ region: "잠실·송파", startsAt: SAT(17) }, { region: "을지로·종로·광화문", startsAt: FRI(23) }]);
+    expect(mixed?.why).toMatch(/^지난번처럼/);
   });
   it("모집 중인 일정이 없으면 null, 이력이 없으면 가장 가까운 회차", () => {
     expect(pickNext([], [])).toBeNull();

@@ -51,7 +51,7 @@ export const SAMPLE_VARS: Record<string, string> = {
   round: "10월 넷째 주 저녁", areas: "홍대·합정·연남", days: "10월 23일(금)·10월 24일(토)", cutoff: "10월 20일(화) 밤 12시", deadline: "10월 20일(화) 밤 12시",
   match_at: "10월 21일(수) 오전 9시", remaining: "2", reservation_line: "예약명은 '우연한식탁 2032'이에요.",
   venue_info: "",
-  recommendation: "자주 오신 금요일 홍대·합정·연남 · 10월 30일(금) 저녁 7:30", alternatives: "옮길 수 있는 일정: 10월 다섯째 주 저녁(10월 30일(금)·10월 31일(토), 홍대·합정·연남·강남·역삼·선릉). ",
+  recommendation: "늘 오시던 금요일 홍대·합정·연남 · 10월 30일(금) 저녁 7:30", alternatives: "옮길 수 있는 일정: 10월 다섯째 주 저녁(10월 30일(금)·10월 31일(토), 홍대·합정·연남·강남·역삼·선릉). ",
 };
 
 /** 단체방 하루 전 공지의 {reservation_line}. 식당이 아직 없으면 예약명 대신 테이블 화면 안내 */

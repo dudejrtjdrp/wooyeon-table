@@ -59,15 +59,25 @@ export function pickSlotFor<S extends { region: string; starts_at: string }>(slo
   return { slot: best.s, kind: best.regionHit && best.dayHit ? "both" : best.regionHit ? "region" : "day" };
 }
 
+/** 그 동네(·요일)에 실제로 두 번 이상 갔을 때만 '늘/자주'라고 쓴다. 다른 동네에 한 번씩 간 사람에게는 붙이지 않는다 */
+function isOften(pick: SlotPick<{ region: string; starts_at: string }>, prefs: Prefs): boolean {
+  if (!pick.slot) return false;
+  const region = pick.slot.region;
+  const regionCount = prefs.regions.find((r) => r.region === region)?.count ?? 0;
+  if (pick.kind === "both") return regionCount > 1 && prefs.dayCount > 1;
+  if (pick.kind === "region") return regionCount > 1;
+  return prefs.dayCount > 1;
+}
+
 /** 추천 알림 문구 */
 export function recommendBody(title: string, pick: SlotPick<{ region: string; starts_at: string }>, prefs: Prefs, when: (iso: string) => string): string {
   // 알림 본문은 한 줄로: 무엇이 열렸는지만 쓰고 자세한 일정은 신청 화면에서 본다
   if (!pick.slot) return `${title} 신청을 받아요`;
   const day = `${DAYS[kstDay(pick.slot.starts_at)]}요일`;
-  const often = prefs.visits > 1;
-  if (pick.kind === "both") return `${often ? "자주 오신" : "지난번처럼"} ${day} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
+  const often = isOften(pick, prefs);
+  if (pick.kind === "both") return `${often ? "늘 오시던" : "지난번처럼"} ${day} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
   if (pick.kind === "region") return `${often ? "자주 오신" : "지난번에 오신"} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
-  return `${often ? "자주 오신" : "지난번과 같은"} ${day} · ${when(pick.slot.starts_at)} ${pick.slot.region}`;
+  return `${often ? "늘 오시던" : "지난번과 같은"} ${day} · ${when(pick.slot.starts_at)} ${pick.slot.region}`;
 }
 
 /**
@@ -92,13 +102,13 @@ export type NextPick = { roundId: string; roundTitle: string; deadline: string; 
 export function pickNext(rounds: OpenRound[], visits: Visit[]): NextPick | null {
   if (!rounds.length) return null;
   const prefs = visitPrefs(visits);
-  const often = prefs.visits > 1;
   for (const r of rounds) {
     const pick = pickSlotFor(r.slots ?? [], prefs);
     if (!pick.slot) continue;
+    const often = isOften(pick, prefs);
     const day = `${DAYS[kstDay(pick.slot.starts_at)]}요일`;
     const why =
-      pick.kind === "both" ? `${often ? "자주 오신" : "지난번처럼"} ${day} ${pick.slot.region}, 이번에도 어때요?`
+      pick.kind === "both" ? `${often ? "늘 오시던" : "지난번처럼"} ${day} ${pick.slot.region}, 이번에도 어때요?`
       : pick.kind === "region" ? `${pick.slot.region}에서 새로운 사람들과 한 번 더 앉아 볼까요?`
       : `${day} 저녁, 이번엔 ${pick.slot.region} 어때요?`;
     return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why };
