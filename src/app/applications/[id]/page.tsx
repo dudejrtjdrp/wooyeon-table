@@ -13,6 +13,8 @@ import { REFUND_POLICY, isMembership, won } from "@/lib/constants";
 import { Toast } from "@/components/ui";
 import { OfferBanner } from "@/components/offer-banner";
 import { cancelApplication, cancelAttendanceAction, declineReallocationAction } from "./actions";
+import { after } from "next/server";
+import { maybeTick } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +22,8 @@ type Slot = { id: string; region: string; starts_at: string };
 
 export default async function ApplicationDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string; m?: string }> }) {
   const me = await requireProfile();
+  // 예약 실행(GitHub Actions)이 몇 시간씩 밀릴 때가 있어, 모임 화면을 열 때도 밀린 일(시작 콘텐츠·체크인 안내·리마인드)을 돌린다
+  after(() => maybeTick().catch(() => null));
   const { id } = await params;
   const { e, m } = await searchParams;
   const { data } = await db()

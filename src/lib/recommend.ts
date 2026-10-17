@@ -81,3 +81,28 @@ export function membershipNudge(paidBefore: number, hasUsablePass: boolean, sing
   return { key: "m1", note: `${lead} 한 달에 네 번 오면 1회권 ${won(four)}, 멤버십은 ${won(monthly)}이에요.` };
 }
 
+export type OpenRound = { id: string; title: string; apply_deadline: string; slots: { region: string; starts_at: string }[] | null };
+export type NextPick = { roundId: string; roundTitle: string; deadline: string; why: string };
+
+/**
+ * 홈 추천 카드·후기 직후 화면의 다음 일정 하나 (알림 추천과 같은 기준: visitPrefs + pickSlotFor).
+ * 마감이 가까운 회차부터 보고, 동네·요일이 맞는 일정이 있는 첫 회차를 고른다. 없으면 가장 가까운 회차.
+ */
+export function pickNext(rounds: OpenRound[], visits: Visit[]): NextPick | null {
+  if (!rounds.length) return null;
+  const prefs = visitPrefs(visits);
+  const often = prefs.visits > 1;
+  for (const r of rounds) {
+    const pick = pickSlotFor(r.slots ?? [], prefs);
+    if (!pick.slot) continue;
+    const day = `${DAYS[kstDay(pick.slot.starts_at)]}요일`;
+    const why =
+      pick.kind === "both" ? `${often ? "자주 오신" : "지난번처럼"} ${day} ${pick.slot.region}, 이번에도 어때요?`
+      : pick.kind === "region" ? `${pick.slot.region}에서 새로운 사람들과 한 번 더 앉아 볼까요?`
+      : `${day} 저녁, 이번엔 ${pick.slot.region} 어때요?`;
+    return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why };
+  }
+  const r = rounds[0];
+  return { roundId: r.id, roundTitle: r.title, deadline: r.apply_deadline, why: visits.length ? "다음 테이블도 저희가 꾸려 드릴게요." : "이번 주 저녁, 새로운 사람들과 어때요?" };
+}
+

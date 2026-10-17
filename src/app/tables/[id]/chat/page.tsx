@@ -10,12 +10,16 @@ import { db } from "@/lib/supabase";
 import { lateNotice, sendMessage } from "../actions";
 import { Composer } from "../composer";
 import { Refresher } from "../refresher";
+import { after } from "next/server";
+import { maybeTick } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
 
 /** 단체방: 우연한 식탁이 올리는 안내·대화 질문 카드와 참가자 대화 */
 export default async function ChatPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string; m?: string }> }) {
   const me = await requireMe();
+  // 예약 실행(GitHub Actions)이 몇 시간씩 밀릴 때가 있어, 모임 화면을 열 때도 밀린 일(시작 콘텐츠·체크인 안내·리마인드)을 돌린다
+  after(() => maybeTick().catch(() => null));
   const { id } = await params;
   const { e, m: toast } = await searchParams;
 
