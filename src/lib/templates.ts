@@ -29,7 +29,7 @@ export const TEMPLATES = {
   feedback: { label: "후기 요청", when: "모임 종료 직후 (참석자만)", channel: "푸시·알림함", title: "오늘 저녁 어땠어요?", body: "1분이면 후기를 남길 수 있어요", vars: [] },
   transferred: { label: "일정 이동 완료", when: "매칭 실패 뒤 다른 일정으로 옮긴 직후", channel: "알림함(푸시 없음)", title: "일정을 옮겼어요", body: "{round} · {match_at}에 결과를 알려 드려요", vars: ["round", "match_at"] },
   next_round: { label: "다음 모집 시작", when: "새 회차 모집이 열렸을 때 (새 일정 소식 받기에 동의한 지난 참가자)", channel: "푸시·알림함", title: "다음 식탁이 열렸어요", body: "{recommendation}", vars: ["recommendation", "deadline"] },
-  feedback_remind: { label: "후기 리마인드", when: "종료 24시간 뒤까지 후기가 없을 때 1회", channel: "푸시·알림함", title: "어제 식탁, 한 줄만 남겨 주세요", body: "다음 테이블을 꾸리는 데 써요", vars: [] },
+  feedback_remind: { label: "후기 리마인드", when: "종료 24시간 뒤까지 후기가 없을 때 1회", channel: "푸시·알림함", title: "어제 식탁, 한 줄만 남겨 주세요", body: "남겨 주신 후기는 다음 테이블에 반영돼요", vars: [] },
 } as const;
 export type TemplateKey = keyof typeof TEMPLATES;
 
@@ -64,7 +64,7 @@ export async function loadTemplates(): Promise<Record<string, { title?: string; 
 
 // 빈 값이 들어간 자리의 공백은 정리한다 ("홍대 {venue}." → 식당이 아직 없으면 "홍대.")
 const fill = (s: string, vars: Record<string, string>) =>
-  s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "").replace(/ +(에서|[.,])/g, "$1").replace(/ {2,}/g, " ").replace(/[ ·]+$/, "").trim();
+  s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "").replace(/ · 예약명 ''/g, "").replace(/( · )+(?= · |$)/g, "").replace(/ +(에서|[.,])/g, "$1").replace(/ {2,}/g, " ").replace(/[ ·]+$/, "").trim();
 
 /** 템플릿을 실제 문구로. overrides는 loadTemplates() 결과(여러 번 보낼 때 한 번만 읽으려고 받는다) */
 export function render(key: TemplateKey, vars: Record<string, string>, overrides: Record<string, { title?: string; body?: string }> = {}) {

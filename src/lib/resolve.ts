@@ -212,7 +212,7 @@ export async function joinTable(appId: string, tableId: string, actor: string): 
   await postSystem(room, `빈자리에 새로운 분이 합류했어요. ${me?.name ?? ""}님 반가워요!`);
   await notify({
     userId: app.user_id,
-    template: "confirmed",
+    template: "joined",
     ...render("joined", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "" }, await loadTemplates()),
     link: `/tables/${tableId}`,
     dedupeKey: `join:${appId}:${tableId}`,

@@ -48,7 +48,7 @@ export async function cancelApplication(form: FormData) {
 
   await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
   await releaseUse(appId, `user:${me.id}`, "매칭 전 취소");
-  await notify({ userId: me.id, template: "canceled", title: "신청을 취소했어요", body: app.rounds.title, link: "/rounds", dedupeKey: `canceled:${appId}` });
+  await notify({ userId: me.id, template: "canceled", title: "신청을 취소했어요", body: "환불·이용권 결과는 내 신청 화면에서 볼 수 있어요", link: `/applications/${appId}`, dedupeKey: `canceled:${appId}` });
   redirect(`/applications/${appId}`);
 }
 

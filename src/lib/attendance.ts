@@ -379,7 +379,7 @@ export async function respondOffer(offerId: string, userId: string, accept: bool
   await postSystem(room, `빈자리에 새로운 분이 합류했어요. ${me!.name}님 반가워요!`);
   await notify({
     userId,
-    template: "confirmed",
+    template: "joined",
     ...render("joined", { ...slotVars(tb!.slots.starts_at), region: tb!.slots.region, venue: tb!.venues?.name ?? "" }, await loadTemplates()),
     link: `/tables/${o.table_id}`,
     dedupeKey: `seat_accept:${o.id}`,
