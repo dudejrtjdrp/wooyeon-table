@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fmtSlot } from "./format";
-import { QUIET_TEMPLATES, SAMPLE_VARS, TEMPLATES, type TemplateKey, render, slotVars } from "./templates";
+import { QUIET_TEMPLATES, SAMPLE_VARS, TEMPLATES, type TemplateKey, render, reservationLine, slotVars } from "./templates";
 
 describe("알림 템플릿 (G10)", () => {
   it("날짜·시각은 fmtSlot과 같은 표기로 들어간다", () => {
@@ -55,5 +55,13 @@ describe("알림 템플릿 (G10)", () => {
     expect(render("reminder", SAMPLE_VARS).body).toBe("저녁 7:30 · 홍대 둥근식탁 · 예약명 '우연한식탁 2032'");
     expect(render("reminder", { ...SAMPLE_VARS, venue: "식당은 테이블 화면에서", reservation: "" }).body).toBe("저녁 7:30 · 식당은 테이블 화면에서");
     expect(render("reminder", SAMPLE_VARS).title).toContain("당일 취소");
+  });
+
+  it("단체방 하루 전 공지: 식당이 없으면 빈 예약명 대신 테이블 화면을 안내한다", () => {
+    const base = { ...SAMPLE_VARS, region: "홍대·합정·연남" };
+    expect(render("reminder_chat", { ...base, reservation_line: reservationLine("우연한식탁 2032") }).body).toContain("홍대 둥근식탁에서 만나요. 예약명은 '우연한식탁 2032'이에요.");
+    const none = render("reminder_chat", { ...base, venue: "", reservation: "", reservation_line: reservationLine(null) }).body;
+    expect(none).toContain("홍대·합정·연남에서 만나요. 식당과 예약명은 테이블 화면에서 확인해 주세요.");
+    expect(none).not.toContain("''");
   });
 });

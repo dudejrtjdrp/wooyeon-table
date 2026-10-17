@@ -6,7 +6,7 @@ import { notify } from "./notify";
 import { pushNotifications } from "./push";
 import { MAX_TRIES, postSystem, retryPushes, retrySystemMessages } from "./delivery";
 import { chooseContents, loadContentRules, tableTypes } from "./contents";
-import { loadTemplates, render, slotVars, venueInfo } from "./templates";
+import { loadTemplates, render, reservationLine, slotVars, venueInfo } from "./templates";
 import { type VenueOption, pickVenue } from "./venue-pick";
 import { type Visit, pickSlotFor, recommendBody, visitPrefs } from "./recommend";
 import { db } from "./supabase";
@@ -400,7 +400,7 @@ export async function tick() {
     if (t.getTime() >= start.getTime() - 24 * 60 * 60 * 1000 && t < start) {
       await systemMessage(
         roomId,
-        render("reminder_chat", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "", reservation: tb.reservation_name ?? "" }, tpl).body.replace(/ 예약명은 ''이에요\./, " 식당과 예약명은 테이블 화면에서 확인해 주세요."),
+        render("reminder_chat", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "", reservation: tb.reservation_name ?? "", reservation_line: reservationLine(tb.reservation_name) }, tpl).body,
         `remind:${tb.id}`,
         { type: "reminder" },
       );

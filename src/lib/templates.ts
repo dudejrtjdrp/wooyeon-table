@@ -18,7 +18,7 @@ export const TEMPLATES = {
   alternative: { label: "매칭 실패", when: "재배치까지 실패한 직후", channel: "푸시·알림함", title: "이번엔 테이블이 꾸려지지 않았어요", body: "3일 안에 다음 방법을 골라 주세요", vars: ["reason", "alternatives"] },
   alternative_remind: { label: "매칭 실패 다시 알림", when: "실패 안내 2일 뒤까지 고르지 않았을 때 1회", channel: "푸시·알림함", title: "내일까지 다음 방법을 골라 주세요", body: "고르지 않으면 이번 일정은 넘겨요", vars: [] },
   reminder: { label: "하루 전 안내", when: "모임 24시간 전", channel: "푸시·알림함", title: "내일 모임, 당일 취소는 안 돼요", body: "{time} · {venue} · 예약명 '{reservation}'", vars: ["date", "time", "region", "venue", "reservation"] },
-  reminder_chat: { label: "하루 전 단체방 공지", when: "모임 24시간 전", channel: "단체방", title: "", body: "내일 {time}, {region} {venue}에서 만나요. 예약명은 '{reservation}'이에요.\n당일 취소와 단체방 나가기는 할 수 없어요. 늦을 것 같으면 이 방의 '늦을 것 같아요'로 미리 알려 주세요. 연락 없이 오지 않으면 노쇼로 기록돼요.", vars: ["time", "region", "venue", "reservation"] },
+  reminder_chat: { label: "하루 전 단체방 공지", when: "모임 24시간 전", channel: "단체방", title: "", body: "내일 {time}, {region} {venue}에서 만나요. {reservation_line}\n당일 취소와 단체방 나가기는 할 수 없어요. 늦을 것 같으면 이 방의 '늦을 것 같아요'로 미리 알려 주세요. 연락 없이 오지 않으면 노쇼로 기록돼요.", vars: ["time", "region", "venue", "reservation", "reservation_line"] },
   reallocating: { label: "자동 재배치 중", when: "확정된 테이블 인원이 4명 아래로 줄었을 때 남은 분들께", channel: "알림함(푸시 없음)", title: "다른 자리를 찾고 있어요", body: "정해지면 바로 알려 드릴게요", vars: ["date", "time", "region"] },
   reallocated: { label: "자동 재배치 완료", when: "인원이 모자란 테이블에서 다른 테이블로 옮겼을 때", channel: "푸시·알림함", title: "테이블이 바뀌었어요", body: "{date} {time} · {region}", vars: ["date", "time", "region"] },
   venue_changed: { label: "식당 변경", when: "처음 식당 예약이 세 번 안 돼 같은 동네 다른 식당으로 바꿨을 때", channel: "푸시·알림함·단체방", title: "모임 식당이 바뀌었어요", body: "{date} {time} · {venue}", vars: ["date", "time", "venue"] },
@@ -48,10 +48,14 @@ export const SAMPLE_VARS: Record<string, string> = {
   date: "10월 23일(금)", time: "저녁 7:30", region: "홍대·합정·연남", venue: "홍대 둥근식탁", reservation: "우연한식탁 2032", amount: "9,900원",
   reason: "고른 일정에 4명이 모이지 않았어요.",
   round: "10월 넷째 주 저녁", areas: "홍대·합정·연남", days: "10월 23일(금)·10월 24일(토)", cutoff: "10월 20일(화) 밤 12시", deadline: "10월 20일(화) 밤 12시",
-  match_at: "10월 21일(수) 오전 9시", remaining: "2",
+  match_at: "10월 21일(수) 오전 9시", remaining: "2", reservation_line: "예약명은 '우연한식탁 2032'이에요.",
   venue_info: "",
   recommendation: "자주 오신 금요일 홍대·합정·연남 · 10월 30일(금) 저녁 7:30", alternatives: "옮길 수 있는 일정: 10월 다섯째 주 저녁(10월 30일(금)·10월 31일(토), 홍대·합정·연남·강남·역삼·선릉). ",
 };
+
+/** 단체방 하루 전 공지의 {reservation_line}. 식당이 아직 없으면 예약명 대신 테이블 화면 안내 */
+export const reservationLine = (reservation: string | null | undefined) =>
+  reservation ? `예약명은 '${reservation}'이에요.` : "식당과 예약명은 테이블 화면에서 확인해 주세요.";
 
 /** 확정 알림의 {venue_info}. 식당이 정해졌으면 예약명, 아직이면 언제 알려 주는지 */
 export const venueInfo = (venue: string | null | undefined, reservation: string | null | undefined) =>
