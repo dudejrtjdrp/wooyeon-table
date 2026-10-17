@@ -34,12 +34,12 @@ export async function applyNoShowPolicy(userId: string, appId: string, actor: st
   if (step === "warn") {
     await db().from("users").update({ account_status: "warned" }).eq("id", userId).eq("account_status", "active");
     await logStatus({ entityType: "user", entityId: userId, field: "account_status", to: "warned", actor, reason: `노쇼 ${count}회(최근 ${NOSHOW_WINDOW_DAYS}일): 경고` });
-    await notify({ userId, template: "noshow_warn", title: "지난 모임에 오지 않으셨어요", body: `연락 없이 오지 않으면 테이블의 다른 분들이 기다리게 돼요. ${NOSHOW_WINDOW_DAYS}일 안에 한 번 더 이러면 ${RESTRICT_DAYS}일 동안 신청이 막혀요. 사정이 있었다면 문의로 알려 주세요.`, link: "/help", dedupeKey: `noshow:${appId}` });
+    await notify({ userId, template: "noshow_warn", title: "지난 모임에 오지 않으셨어요", body: `${NOSHOW_WINDOW_DAYS}일 안에 한 번 더 이러면 ${RESTRICT_DAYS}일 동안 신청이 막혀요`, link: "/help", dedupeKey: `noshow:${appId}` });
   } else if (step === "restrict") {
     const until = new Date(at.getTime() + RESTRICT_DAYS * 86400_000).toISOString();
     await db().from("users").update({ account_status: "restricted", restricted_until: until }).eq("id", userId).neq("account_status", "banned");
     await logStatus({ entityType: "user", entityId: userId, field: "account_status", to: "restricted", actor, reason: `노쇼 ${count}회(최근 ${NOSHOW_WINDOW_DAYS}일): ${RESTRICT_DAYS}일 신청 제한` });
-    await notify({ userId, template: "noshow_restrict", title: `${RESTRICT_DAYS}일 동안 신청이 막혔어요`, body: `최근 ${NOSHOW_WINDOW_DAYS}일 안에 두 번 연락 없이 오지 않으셨어요. ${fmtDay(until)}부터 다시 신청할 수 있어요.`, link: "/help", dedupeKey: `noshow:${appId}` });
+    await notify({ userId, template: "noshow_restrict", title: `${RESTRICT_DAYS}일 동안 신청이 막혔어요`, body: `${fmtDay(until)}부터 다시 신청할 수 있어요`, link: "/help", dedupeKey: `noshow:${appId}` });
   } else {
     await db().from("exceptions").upsert(
       { kind: "no_show", ref_type: "user", ref_id: userId, reason: `최근 ${NOSHOW_WINDOW_DAYS}일 노쇼 ${count}회: 영구 제한을 검토해 주세요`, dedupe_key: `noshow-review:${userId}:${count}` },

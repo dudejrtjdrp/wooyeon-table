@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { fmtSlot } from "./format";
-import { SAMPLE_VARS, TEMPLATES, type TemplateKey, render, slotVars, venueInfo } from "./templates";
+import { QUIET_TEMPLATES, SAMPLE_VARS, TEMPLATES, type TemplateKey, render, reservationLine, slotVars } from "./templates";
 
 describe("알림 템플릿 (G10)", () => {
   it("날짜·시각은 fmtSlot과 같은 표기로 들어간다", () => {
     const iso = "2026-11-06T10:30:00Z";
     const m = render("confirmed", { ...slotVars(iso), region: "홍대·합정·연남" });
-    expect(m.body.startsWith(`${fmtSlot(iso)} 홍대·합정·연남에서 만나요`)).toBe(true);
+    expect(m.body.startsWith(`${fmtSlot(iso)} · 홍대·합정·연남`)).toBe(true);
     expect(fmtSlot(iso)).toBe("11월 6일(금) 저녁 7:30");
   });
 
@@ -14,9 +14,12 @@ describe("알림 템플릿 (G10)", () => {
     for (const k of ["reallocating", "reallocated", "refund_requested", "refunded", "refund_retry", "refund_failed", "venue_changed"] as TemplateKey[]) {
       expect(TEMPLATES[k]).toBeTruthy();
     }
-    expect(render("reallocating", SAMPLE_VARS).body).toContain("지금은 하실 일이 없어요");
-    expect(render("reallocated", SAMPLE_VARS).body).toContain("다른 방법 고르기");
+    expect(render("reallocating", SAMPLE_VARS).body).toContain("알려 드릴게요");
+    expect(render("reallocated", SAMPLE_VARS).body).toContain("홍대·합정·연남");
     expect(render("refund_requested", SAMPLE_VARS).body).toContain("9,900원");
+    // 참가자가 할 일이 없는 안내는 휴대폰 푸시 없이 알림함에만
+    for (const k of ["reallocating", "refund_requested", "refund_retry", "applied", "paid"]) expect(QUIET_TEMPLATES.has(k), k).toBe(true);
+    for (const k of ["confirmed", "alternative", "reminder", "reallocated", "refunded", "feedback"]) expect(QUIET_TEMPLATES.has(k), k).toBe(false);
   });
 
   it("예시 값으로 채우면 모든 템플릿에 빈 {자리}가 남지 않는다", () => {
@@ -26,21 +29,39 @@ describe("알림 템플릿 (G10)", () => {
     }
   });
 
-  it("확정 알림에 식당명·집합 시간·단체방 안내가 들어가고, 식당이 아직이면 언제 알려 주는지 쓴다", () => {
+  it("확정 알림은 한 줄로 날짜·시각·동네·식당만 쓴다 (자세한 건 눌러서 테이블 화면에서)", () => {
     const iso = "2026-11-06T10:30:00Z";
-    const withVenue = render("confirmed", { ...slotVars(iso), region: "홍대·합정·연남", venue: "홍대 둥근식탁", venue_info: venueInfo("홍대 둥근식탁", "우연한식탁 2032") }).body;
-    expect(withVenue).toContain("저녁 7:30 홍대·합정·연남 홍대 둥근식탁에서 만나요");
-    expect(withVenue).toContain("예약명은 '우연한식탁 2032'");
-    expect(withVenue).toContain("단체방");
-    const noVenue = render("confirmed", { ...slotVars(iso), region: "홍대·합정·연남", venue: "", venue_info: venueInfo(null, null) }).body;
-    expect(noVenue).toContain("홍대·합정·연남에서 만나요");
-    expect(noVenue).toContain("식당은 정해지는 대로");
+    expect(render("confirmed", { ...slotVars(iso), region: "홍대·합정·연남", venue: "홍대 둥근식탁" }).body).toBe("11월 6일(금) 저녁 7:30 · 홍대·합정·연남 홍대 둥근식탁");
+    expect(render("confirmed", { ...slotVars(iso), region: "홍대·합정·연남", venue: "" }).body).toBe("11월 6일(금) 저녁 7:30 · 홍대·합정·연남");
+  });
+
+  it("알림 본문은 모두 한 줄 요약이다 (예시 값으로 45자 이하)", () => {
+    for (const k of Object.keys(TEMPLATES) as TemplateKey[]) {
+      if (k === "reminder_chat") continue; // 단체방 공지는 자세히 둔다
+      const b = render(k, SAMPLE_VARS).body;
+      expect(b.length, `${k}: ${b}`).toBeLessThanOrEqual(45);
+      expect(b, k).not.toContain("\n");
+    }
   });
 
   it("14장 알림 11개 시점마다 템플릿이 있다", () => {
     const need: TemplateKey[] = ["applied", "payment_pending", "paid", "reallocating", "confirmed", "alternative", "transferred", "refund_requested", "refunded", "reminder", "feedback", "next_round"];
     for (const k of need) expect(TEMPLATES[k], k).toBeTruthy();
-    expect(render("applied", SAMPLE_VARS).body).toMatch(/내 신청 화면에서 취소하고 다시 신청/);
-    expect(render("feedback", SAMPLE_VARS).body).toContain("신고");
+    expect(render("applied", SAMPLE_VARS).body).toContain("결제");
+    expect(render("feedback", SAMPLE_VARS).body).toContain("후기");
+  });
+
+  it("하루 전 푸시에 시각·식당·예약명이 들어가고(INF-07), 식당이 없으면 테이블 화면으로 안내한다", () => {
+    expect(render("reminder", SAMPLE_VARS).body).toBe("저녁 7:30 · 홍대 둥근식탁 · 예약명 '우연한식탁 2032'");
+    expect(render("reminder", { ...SAMPLE_VARS, venue: "식당은 테이블 화면에서", reservation: "" }).body).toBe("저녁 7:30 · 식당은 테이블 화면에서");
+    expect(render("reminder", SAMPLE_VARS).title).toContain("당일 취소");
+  });
+
+  it("단체방 하루 전 공지: 식당이 없으면 빈 예약명 대신 테이블 화면을 안내한다", () => {
+    const base = { ...SAMPLE_VARS, region: "홍대·합정·연남" };
+    expect(render("reminder_chat", { ...base, reservation_line: reservationLine("우연한식탁 2032") }).body).toContain("홍대 둥근식탁에서 만나요. 예약명은 '우연한식탁 2032'이에요.");
+    const none = render("reminder_chat", { ...base, venue: "", reservation: "", reservation_line: reservationLine(null) }).body;
+    expect(none).toContain("홍대·합정·연남에서 만나요. 식당과 예약명은 테이블 화면에서 확인해 주세요.");
+    expect(none).not.toContain("''");
   });
 });

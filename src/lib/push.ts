@@ -70,7 +70,10 @@ export async function pushToUsers(userIds: string[], payload: Payload | ((uid: s
 export async function pushNotifications(ids: string[]) {
   if (!ids.length) return;
   const { recordPushFailure, recordPushRecovered } = await import("./delivery");
-  const { data } = await db().from("notifications").select("id,user_id,title,body,link,attempts,last_error").in("id", ids);
+  const { QUIET_TEMPLATES } = await import("./templates");
+  const { data: rows } = await db().from("notifications").select("id,user_id,template,title,body,link,attempts,last_error").in("id", ids);
+  // 알림함에만 남기는 알림(방금 직접 한 일의 확인 등)은 휴대폰으로 보내지 않는다
+  const data = (rows ?? []).filter((n) => !QUIET_TEMPLATES.has(n.template));
   // 아이콘 배지에 띄울 안 읽은 알림 수 (사람별)
   const users = [...new Set((data ?? []).map((n) => n.user_id))];
   const unread = new Map<string, number>();

@@ -60,10 +60,11 @@ export function pickSlotFor<S extends { region: string; starts_at: string }>(slo
 
 /** 추천 알림 문구 */
 export function recommendBody(title: string, pick: SlotPick<{ region: string; starts_at: string }>, prefs: Prefs, when: (iso: string) => string): string {
-  if (!pick.slot) return `${title} 모집을 시작했어요. 새로운 사람들과 한 번 더 앉아 볼까요?`;
+  // 알림 본문은 한 줄로: 무엇이 열렸는지만 쓰고 자세한 일정은 신청 화면에서 본다
+  if (!pick.slot) return `${title} 신청을 받아요`;
   const day = `${DAYS[kstDay(pick.slot.starts_at)]}요일`;
   const often = prefs.visits > 1;
-  if (pick.kind === "both") return `${often ? "자주 오신" : "지난번처럼"} ${day} ${pick.slot.region} 일정이 열렸어요. ${when(pick.slot.starts_at)}, 이번에도 어때요?`;
-  if (pick.kind === "region") return `${often ? "자주 오신" : "지난번에 오신"} ${pick.slot.region}에서 새 식탁이 열렸어요. ${when(pick.slot.starts_at)} 일정을 확인해 보세요.`;
-  return `${often ? "자주 오신" : "지난번과 같은"} ${day} 저녁 일정이 열렸어요. ${when(pick.slot.starts_at)} ${pick.slot.region}, 새 동네에서 앉아 볼까요?`;
+  if (pick.kind === "both") return `${often ? "자주 오신" : "지난번처럼"} ${day} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
+  if (pick.kind === "region") return `${often ? "자주 오신" : "지난번에 오신"} ${pick.slot.region} · ${when(pick.slot.starts_at)}`;
+  return `${often ? "자주 오신" : "지난번과 같은"} ${day} · ${when(pick.slot.starts_at)} ${pick.slot.region}`;
 }

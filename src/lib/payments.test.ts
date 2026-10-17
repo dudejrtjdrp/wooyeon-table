@@ -91,7 +91,8 @@ describe("환불 실패 자동 재시도 (D7)", () => {
     expect(failures()).toBe(2);
     expect(tables.exceptions ?? []).toHaveLength(0);
     expect(tables.applications[0].payment_status).toBe("REFUND_FAILED");
-    expect(sent.map((n) => n.template)).toEqual(["refund_retry"]);
+    // '다시 시도 중' 알림은 보내지 않는다(참가자가 할 일이 없음)
+    expect(sent.map((n) => n.template)).toEqual([]);
     // 방금 실패했으니 곧바로 다시 부르면 건너뛴다
     expect(await retryRefunds()).toEqual({ retried: 0, done: 0 });
   });

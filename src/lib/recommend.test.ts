@@ -38,6 +38,6 @@ describe("다음 일정 추천 (F9)", () => {
     expect(pickSlotFor([{ region: "잠실·송파", starts_at: FRI(30) }], prefs).kind).toBe("day");
     const none = pickSlotFor([{ region: "잠실·송파", starts_at: SAT(31) }], prefs);
     expect(none.kind).toBe("any");
-    expect(recommendBody("11월 첫째 주", none, prefs, () => "")).toContain("모집을 시작했어요");
+    expect(recommendBody("11월 첫째 주", none, prefs, () => "")).toBe("11월 첫째 주 신청을 받아요");
   });
 });

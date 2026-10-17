@@ -65,7 +65,7 @@ export async function createRound(form: FormData) {
   // 이 동네가 열리길 기다리던 사람에게 알린다 (지역 수요 조사)
   const { data: waiting } = await db().from("region_demands").select("id,user_id,area").in("area", regions).is("notified_at", null);
   for (const w of waiting ?? []) {
-    await notify({ userId: w.user_id, template: "region_open", title: `${w.area}에 테이블이 열렸어요`, body: `남겨 주신 동네에서 '${title}' 신청을 받아요. 마감 전에 신청해 주세요.`, link: `/apply/${round!.id}`, dedupeKey: `region_open:${w.id}:${round!.id}` });
+    await notify({ userId: w.user_id, template: "region_open", title: `${w.area}에 테이블이 열렸어요`, body: `'${title}' 신청을 받아요`, link: `/apply/${round!.id}`, dedupeKey: `region_open:${w.id}:${round!.id}` });
     await db().from("region_demands").update({ notified_at: new Date().toISOString() }).eq("id", w.id);
   }
   revalidatePath("/admin/rounds");

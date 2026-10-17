@@ -147,7 +147,7 @@ export async function refundPayment(paymentId: string, appId: string, actor: str
         await tell("refund_failed", `refund_gave_up:${appId}`);
         return { ok: false, message: "자동 환불이 세 번 되지 않아 운영팀이 직접 처리해 드릴게요. 따로 하실 일은 없어요." };
       }
-      if (notifyUser) await tell("refund_retry", `refund_retry:${paymentId}`);
+      // 다시 시도 중이라는 알림은 보내지 않는다(참가자가 할 일이 없음). 상태는 내 신청 화면에 보인다
       return { ok: false, message: "결제사에서 환불이 한 번에 되지 않았어요. 10분 뒤 자동으로 다시 시도할게요. 따로 하실 일은 없어요." };
     }
     await db().from("payments").update({ status: "REFUNDED", refunded_at: new Date().toISOString(), pg_raw: r.data }).eq("id", paymentId);

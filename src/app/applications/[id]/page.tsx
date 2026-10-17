@@ -9,7 +9,7 @@ import { fmtSlot } from "@/lib/format";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
 import { cancelRule, wasReallocatedTo } from "@/lib/attendance";
-import { REFUND_POLICY } from "@/lib/constants";
+import { REFUND_POLICY, isMembership, won } from "@/lib/constants";
 import { Toast } from "@/components/ui";
 import { OfferBanner } from "@/components/offer-banner";
 import { cancelApplication, cancelAttendanceAction, declineReallocationAction } from "./actions";
@@ -25,7 +25,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const { data } = await db()
     .from("applications")
     .select(
-      "id,user_id,application_status,payment_status,match_status,attendance_status,resolution,match_reason,realloc_count,table_id,submitted_at,payments(paid_at),dining_tables(slots(starts_at))," +
+      "id,user_id,application_status,payment_status,match_status,attendance_status,resolution,match_reason,realloc_count,table_id,submitted_at,payments(paid_at,amount,pass_type),dining_tables(slots(starts_at))," +
         "rounds(id,title,match_at,apply_deadline),application_slots(slots(id,region,starts_at))",
     )
     .eq("id", id)
@@ -33,7 +33,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const app = data as unknown as {
     id: string; user_id: string; application_status: string; payment_status: string; match_status: string;
     attendance_status: string | null; resolution: string | null; match_reason: string | null; realloc_count: number; table_id: string | null; submitted_at: string | null;
-    payments: { paid_at: string | null } | null;
+    payments: { paid_at: string | null; amount: number; pass_type: string } | null;
     dining_tables: { slots: { starts_at: string } } | null;
     rounds: { id: string; title: string; match_at: string; apply_deadline: string };
     application_slots: { slots: Slot }[];
@@ -66,6 +66,18 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       : app.match_status === "ALTERNATIVE_OFFERED"
         ? [app.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${app.id}/resolve`]
         : null;
+  // 취소·환불 뒤 돈이 어떻게 됐는지 한 줄로 (알림은 짧게, 결과는 여기서 본다)
+  const pay = app.payments;
+  const money = (() => {
+    const ps = app.payment_status;
+    if (app.application_status === "CANCELED" && ["PENDING", "FAILED"].includes(ps)) return "결제 전이라 빠져나간 돈은 없어요";
+    if (!pay) return null;
+    const used = pay.amount === 0 || pay.pass_type === "subscription";
+    if (ps === "REFUNDED") return isMembership(pay.pass_type) ? "멤버십 · 횟수 차감 없이 취소됐어요" : used ? "쓴 이용권 1회를 돌려드렸어요" : `${won(pay.amount)} 환불 완료`;
+    if (ps === "REFUND_REQUESTED" || ps === "REFUND_PROCESSING") return `${won(pay.amount)} 환불 처리 중`;
+    if (ps === "REFUND_FAILED") return `${won(pay.amount)} 환불 다시 처리 중 · 따로 하실 일은 없어요`;
+    return null;
+  })();
   const idle = !cta && paid && ["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status);
 
   return (
@@ -79,6 +91,10 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           <Pill tone={h.tone}>{h.label}</Pill>
           <p className="mt-4 max-w-[62%] text-[24px] font-black leading-[1.35] text-ink">{app.rounds.title}</p>
           <p className="mt-3 max-w-[60%] text-[15px] leading-relaxed text-ink2">{app.match_reason ?? h.desc}</p>
+          {money && <p className="mt-3 inline-flex rounded-full bg-paper px-3 py-1.5 text-[14px] font-bold text-ink">{money}</p>}
+          {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH") && (
+            <Link href="/rounds" className="mt-4 flex h-12 w-fit items-center rounded-[14px] bg-accent px-5 text-[15px] font-bold text-white">다른 일정 보기</Link>
+          )}
           {!matched && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
             <>
               <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-muted">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>
@@ -174,6 +190,9 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           </Row>
         ))}
       </List>
+      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
+        <p className="mt-2 px-1 text-[13px] leading-relaxed text-muted">동네나 날짜를 바꾸려면 아래에서 신청을 취소하고 다시 신청해 주세요. 매칭 시각 전이라 결제한 금액은 그대로 돌려드려요.</p>
+      )}
 
       {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
         <div className="mt-8 text-center">
