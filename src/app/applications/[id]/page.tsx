@@ -92,6 +92,9 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           <p className="mt-4 max-w-[62%] text-[24px] font-black leading-[1.35] text-ink">{app.rounds.title}</p>
           <p className="mt-3 max-w-[60%] text-[15px] leading-relaxed text-ink2">{app.match_reason ?? h.desc}</p>
           {money && <p className="mt-3 inline-flex rounded-full bg-paper px-3 py-1.5 text-[14px] font-bold text-ink">{money}</p>}
+          {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH") && (
+            <Link href="/rounds" className="mt-4 flex h-12 w-fit items-center rounded-[14px] bg-accent px-5 text-[15px] font-bold text-white">다른 일정 보기</Link>
+          )}
           {!matched && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
             <>
               <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-muted">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>

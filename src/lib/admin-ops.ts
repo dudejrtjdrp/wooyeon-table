@@ -78,7 +78,7 @@ async function rescheduleFor(appId: string, userId: string, from: string, to: Tb
   const at = new Date(new Date(to.slots.starts_at).getTime() - 24 * 3600_000);
   if (at > new Date()) {
     // 운영자가 '자동 메시지'에서 고친 하루 전 안내 문구를 그대로 쓴다
-    const msg = render("reminder", { date: fmtDate(to.slots.starts_at), time: fmtTime(to.slots.starts_at), region: to.slots.region, venue: to.venues?.name ?? "", reservation: to.reservation_name ?? "" }, await loadTemplates());
+    const msg = render("reminder", { date: fmtDate(to.slots.starts_at), time: fmtTime(to.slots.starts_at), region: to.slots.region, venue: to.venues?.name ?? "식당은 테이블 화면에서", reservation: to.reservation_name ?? "" }, await loadTemplates());
     await notify({ userId, template: "reminder", title: msg.title, body: msg.body, link: `/tables/${to.id}`, dedupeKey: `remind:${appId}:${to.id}`, scheduledAt: at });
   }
 }
