@@ -95,7 +95,8 @@ export async function submitApplication(form: FormData) {
     template: "applied",
     title: ap.title,
     body: ap.body,
-    link: owned ? `/applications/${app!.id}` : `/pay/${app!.id}`,
+    // 신청 내용(고른 동네·날짜·취소 방법)은 내 신청 화면에 있다. 결제 전이면 그 화면 맨 위 버튼이 결제로 이어진다
+    link: `/applications/${app!.id}`,
     dedupeKey: `applied:${app!.id}:${payment!.id}`,
   });
   if (owned) {

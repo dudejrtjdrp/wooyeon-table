@@ -17,7 +17,7 @@ export const TEMPLATES = {
   venue_set: { label: "식당 확정", when: "식당이 늦게 정해졌을 때(첫 안내에 식당이 없던 테이블)", channel: "푸시·알림함·단체방", title: "식당이 정해졌어요", body: "{date} {time} · {venue}", vars: ["date", "time", "venue", "reservation"] },
   alternative: { label: "매칭 실패", when: "재배치까지 실패한 직후", channel: "푸시·알림함", title: "이번엔 테이블이 꾸려지지 않았어요", body: "3일 안에 다음 방법을 골라 주세요", vars: ["reason", "alternatives"] },
   alternative_remind: { label: "매칭 실패 다시 알림", when: "실패 안내 2일 뒤까지 고르지 않았을 때 1회", channel: "푸시·알림함", title: "내일까지 다음 방법을 골라 주세요", body: "고르지 않으면 이번 일정은 넘겨요", vars: [] },
-  reminder: { label: "하루 전 안내", when: "모임 24시간 전", channel: "푸시·알림함", title: "내일 모임이 있어요", body: "{time} · {venue} · 당일 취소는 안 돼요", vars: ["date", "time", "region", "venue", "reservation"] },
+  reminder: { label: "하루 전 안내", when: "모임 24시간 전", channel: "푸시·알림함", title: "내일 모임, 당일 취소는 안 돼요", body: "{time} · {venue} · 예약명 '{reservation}'", vars: ["date", "time", "region", "venue", "reservation"] },
   reminder_chat: { label: "하루 전 단체방 공지", when: "모임 24시간 전", channel: "단체방", title: "", body: "내일 {time}, {region} {venue}에서 만나요. 예약명은 '{reservation}'이에요.\n당일 취소와 단체방 나가기는 할 수 없어요. 늦을 것 같으면 이 방의 '늦을 것 같아요'로 미리 알려 주세요. 연락 없이 오지 않으면 노쇼로 기록돼요.", vars: ["time", "region", "venue", "reservation"] },
   reallocating: { label: "자동 재배치 중", when: "확정된 테이블 인원이 4명 아래로 줄었을 때 남은 분들께", channel: "알림함(푸시 없음)", title: "다른 자리를 찾고 있어요", body: "정해지면 바로 알려 드릴게요", vars: ["date", "time", "region"] },
   reallocated: { label: "자동 재배치 완료", when: "인원이 모자란 테이블에서 다른 테이블로 옮겼을 때", channel: "푸시·알림함", title: "테이블이 바뀌었어요", body: "{date} {time} · {region}", vars: ["date", "time", "region"] },
