@@ -18,7 +18,7 @@ export function Wordmark({ animate = false, font = "batang", className, title = 
         <path d={L.sik} className={animate ? "wm-rise" : undefined} {...d(1.14)} />
       </g>
       {/* 리본은 글자 위에: '연'처럼 ㅇ이 다른 획과 붙은 글꼴은 리본이 그 ㅇ을 덮는다 */}
-      <path d={L.ribbon} pathLength={1} fill="none" stroke="var(--accent)" strokeWidth={L.sw} strokeLinecap="round" strokeLinejoin="round" className={animate ? "wm-ribbon" : undefined} />
+      <path d={L.ribbon} pathLength={1} fill="none" stroke="var(--ribbon)" strokeWidth={L.sw} strokeLinecap="round" strokeLinejoin="round" className={animate ? "wm-ribbon" : undefined} />
     </svg>
   );
 }

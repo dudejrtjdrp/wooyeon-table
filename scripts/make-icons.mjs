@@ -1,11 +1,11 @@
-// 앱 아이콘 만들기: 첫 장면 로고(고운바탕)의 리본 ㅇㅇ(src/components/logo-data.ts)을 주홍 바탕에 놓는다.
+// 앱 아이콘 만들기: 첫 장면 로고(고운바탕)의 리본 ㅇㅇ(src/components/logo-data.ts)을 미색 바탕에 다홍으로 놓는다.
 // 실행: node scripts/make-icons.mjs  → public/ 아래 아이콘과 src/app/favicon.ico 를 다시 만든다.
 import { readFileSync, writeFileSync } from "node:fs";
 import sharp from "sharp";
 
 const data = readFileSync("src/components/logo-data.ts", "utf8").match(/batang: (\{.*\}),/)[1];
 const { ribbon: RIBBON, sw: SW } = JSON.parse(data);
-const ACCENT = "#b23d17", PAPER = "#fffdf9";
+const RIBBON_COLOR = "#e0532a", PAPER = "#fffdf9"; // 다홍 리본 + 미색 바탕 (성효님이 색 시안 중 고름)
 // 마크가 차지하는 영역(선 굵기 포함)을 실제로 그려서 잰다
 async function measure() {
   const big = `<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="-100 -100 400 400"><path d="${RIBBON}" fill="none" stroke="#000" stroke-width="${SW}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -17,7 +17,7 @@ async function measure() {
 }
 const MARK = await measure();
 
-function svg({ size, markW, stroke = MARK.sw, bg = ACCENT, fg = PAPER, radius = 0 }) {
+function svg({ size, markW, stroke = MARK.sw, bg = PAPER, fg = RIBBON_COLOR, radius = 0 }) {
   const k = markW / MARK.w;
   const tx = size / 2 - MARK.cx * k, ty = size / 2 - MARK.cy * k;
   const back = bg ? `<rect width="${size}" height="${size}" rx="${radius}" fill="${bg}"/>` : "";
