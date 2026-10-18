@@ -16,10 +16,10 @@ export function Splash() {
         <Wordmark animate className="w-full max-w-[300px]" />
         <p className="splash-tag mt-6 text-[14px] font-medium text-muted">처음 만나는 사람들과 저녁 한 끼</p>
       </div>
-      {/* 기다리기 싫으면 아무 데나 누르거나 키를 쳐서 바로 닫는다. 손을 뗄 때 닫고, 그 손짓이 아래 버튼까지 눌리지 않게 클릭 한 번을 막는다 */}
+      {/* 기다리기 싫으면 아무 데나 누르거나 키를 쳐서 바로 닫는다. 손을 뗄 때 닫고, 그 손짓이 아래 버튼까지 눌리지 않게 잠깐(0.4초) 클릭을 막는다(iOS는 손을 뗀 뒤 클릭을 따로 보낸다) */}
       <script
         dangerouslySetInnerHTML={{
-          __html: `try{var s=document.getElementById('splash');if(s){var c=function(){if(s.style.display==='none')return;s.style.display='none';document.removeEventListener('keydown',c)};s.addEventListener('pointerup',function(e){e.preventDefault();c()});s.addEventListener('click',function(e){e.preventDefault();e.stopPropagation()},true);document.addEventListener('keydown',c)}}catch(e){}`,
+          __html: `try{var s=document.getElementById('splash');if(s){var b=function(e){e.preventDefault();e.stopPropagation()};var c=function(){document.removeEventListener('keydown',c);if(s.style.display==='none')return;s.style.display='none';document.addEventListener('click',b,true);setTimeout(function(){document.removeEventListener('click',b,true)},400)};s.addEventListener('pointerup',c);s.addEventListener('animationend',function(e){if(e.target===s)document.removeEventListener('keydown',c)});document.addEventListener('keydown',c)}}catch(e){}`,
         }}
       />
     </>
