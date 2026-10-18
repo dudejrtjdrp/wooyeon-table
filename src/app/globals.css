@@ -30,6 +30,7 @@
 }
 
 /* 운영자 어드민은 기존 흰 바탕·초록 그대로 둔다 */
+body:has(.admin-theme) { background: #ffffff; }
 .admin-theme {
   --paper: #ffffff; --card: #ffffff; --field: #f4f6f5; --row: #f7f9f8;
   --ink: #17201b; --ink2: #33413a; --muted: #5a6a61; --faint: #5f6d66;

@@ -138,16 +138,24 @@ export default async function TablePage({ params, searchParams }: { params: Prom
             {others.length > preview.length && (
               <li>
                 <Link href={`/tables/${id}/people`} className="flex min-h-[52px] items-center justify-between text-[14px] text-muted">
-                  외 {others.length - preview.length}명{mine ? ", 그리고 나" : ""}
+                  {mine ? `나 포함 ${mems.length}명` : `${mems.length}명`} 모두 보기
                   <ChevronRight size={18} aria-hidden="true" />
                 </Link>
               </li>
             )}
           </ul>
-          {(shared.length > 0 || (t.explanation?.reasons?.length ?? 0) > 0) && (
-            <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="이렇게 모였어요">
+          <p className="mt-2 px-1 text-[12px] text-muted">이름과 하는 일만 보여요. 연락처는 공개되지 않아요.</p>
+          {shared.length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="이 테이블이 겹치는 것">
               {shared.map((x) => <li key={x} className="flex h-[30px] items-center rounded-full bg-accent-soft px-3 text-[13px] font-semibold text-accent-text">{x}</li>)}
-              {(t.explanation?.reasons ?? []).slice(0, 3).map((r) => <li key={r} className="flex h-[30px] items-center rounded-full bg-field px-3 text-[13px] text-ink2">{r.replace(/(이에요|예요|었어요|했어요)$/, "")}</li>)}
+            </ul>
+          )}
+          {(t.explanation?.reasons?.length ?? 0) > 0 && (
+            // 이렇게 모였어요: 맞추기 어려웠던 점(타협 사유)을 먼저, 문장은 자르지 않는다
+            <ul className="mt-3 space-y-1 text-[14px] leading-relaxed text-ink2" aria-label="이렇게 모였어요">
+              {[...(t.explanation?.reasons ?? [])].sort((a, b) => Number(/어려웠|못했|대신/.test(b)) - Number(/어려웠|못했|대신/.test(a))).slice(0, 3).map((r) => (
+                <li key={r} className="flex gap-2"><span aria-hidden="true" className="mt-[9px] size-1.5 shrink-0 rounded-full bg-accent" />{r}</li>
+              ))}
             </ul>
           )}
         </section>

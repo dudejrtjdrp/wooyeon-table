@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { after } from "next/server";
 import { AuthChooser } from "@/components/auth-chooser";
+import { PushToggle } from "@/components/push-toggle";
 import { OfferBanner } from "@/components/offer-banner";
 import { RoundTable } from "@/components/brand";
 import { Card, LinkButton, SectionTitle, TabScreen, Toast } from "@/components/ui";
@@ -57,7 +58,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   const ongoing = live.filter((a) => !["ATTENDED", "NO_SHOW"].includes(a.attendance_status ?? "") && !ended(a));
   const active = ongoing[0] ?? null;
   const next = me.hasProfile && !active ? await nextPick(me.id) : null;
-  const past = list.find((a) => a.attendance_status === "ATTENDED" && a.dining_tables?.slots);
+  // 체크인을 못 한 채 끝난 모임도 지난 식탁에 남긴다: 테이블 화면에서 '참석했는데 체크인을 못 했어요'로 알릴 수 있게
+  const past = list.find((a) => a.table_id && a.dining_tables?.slots && (a.attendance_status === "ATTENDED" || ended(a)));
 
   // 확정된 테이블이면 같이 앉는 사람 수와 이름 첫 글자를 보여 준다
   const members = active?.match_status === "CONFIRMED" && active.table_id
@@ -103,6 +105,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
         <>
           <Greeting>{greetingFor(active, firstName)}</Greeting>
           <StatusCard a={active} t={t} members={members.map((x) => x.users?.name ?? "")} meId={me.id} memberIds={members.map((x) => x.user_id)} />
+          {/* 확정·하루 전 안내를 휴대폰으로 받으려면 알림을 켜야 해서, 진행 중인 신청이 있을 때 한 번 보여 준다 */}
+          <div className="mt-3"><PushToggle variant="card" /></div>
         </>
       ) : next ? (
         // 신청을 마친 사람에게는 맞춤 추천 하나만 주 버튼으로 보여준다 (일반 '신청하기'와 경쟁하지 않게)
@@ -156,9 +160,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
       )}
 
       {me.hasProfile && !owned && (
-        <Link href="/rounds" className="mt-6 flex items-center justify-between gap-3 rounded-[18px] bg-navy px-5 py-4 text-paper active:opacity-90">
+        <Link href="/rounds" className="mt-6 flex items-center justify-between gap-3 rounded-[18px] bg-accent-soft px-5 py-4 text-accent-text active:opacity-90">
           <span>
-            <span className="block text-[13px] text-[#e9dccb]">한 달에 네 번 오면 1회권 {won(PASSES.single.amount * 4)}</span>
+            <span className="block text-[13px] text-accent-text">한 달에 네 번 오면 1회권 {won(PASSES.single.amount * 4)}</span>
             <span className="mt-0.5 block text-[16px] font-bold">멤버십은 {won(PASSES.m1.amount)}로 무제한</span>
           </span>
           <ChevronRight size={20} aria-hidden="true" />

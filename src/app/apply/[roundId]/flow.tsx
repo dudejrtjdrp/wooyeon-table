@@ -253,7 +253,7 @@ export function ApplyFlow({
                           aria-pressed={on}
                           aria-label={`${m}월 ${d}일${isOpen ? "" : ", 열린 테이블 없음"}`}
                           onClick={() => { setMsg(null); setDays((cur) => (cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key])); }}
-                          className={`flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-paper font-extrabold text-ink" : "font-medium text-[#9a8c7e]"} ${today && !on ? "ring-[1.5px] ring-inset ring-ink" : ""}`}
+                          className={`flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-paper font-extrabold text-ink" : "font-medium text-muted line-through decoration-1"} ${today && !on ? "ring-[1.5px] ring-inset ring-ink" : ""}`}
                         >
                           {d}
                         </button>
@@ -305,13 +305,15 @@ export function ApplyFlow({
               ))}
             </dl>
             {/* 환불 규정: 핵심 한 줄만 보이고 나머지는 펼쳐 본다 (동의 전에 읽을 수 있게 그대로 둔다) */}
-            <details className="group/refund mx-6 mt-3.5 rounded-[14px] bg-card px-4 text-[13px] leading-[1.7] text-ink2">
-              <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3">
-                <span><b className="text-ink">환불 규정</b> · {refund[0]}</span>
-                <span className="shrink-0 text-[13px] font-semibold text-accent group-open/refund:hidden">펼치기</span>
-              </summary>
-              <div className="pb-4">{refund.slice(1).map((r) => <p key={r}>{r}</p>)}</div>
+            {/* 결제 전에는 환불 마감·당일 취소·노쇼 세 줄을 늘 보여 주고, 나머지만 접는다 (details 안의 summary 앞 내용은 접히면 안 보여서 밖에 둔다) */}
+            <div className="mx-6 mt-3.5 rounded-[14px] bg-card px-4 pt-3.5 text-[13px] leading-[1.7] text-ink2">
+              <p className="font-bold text-ink">환불 규정</p>
+              {[0, 2, 3].map((i) => refund[i] && <p key={i}>{refund[i]}</p>)}
+            <details className="group/refund">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center text-[13px] font-semibold text-accent group-open/refund:hidden">나머지 규정 보기</summary>
+              <div className="pb-4">{refund.filter((_, i) => ![0, 2, 3].includes(i)).map((r) => <p key={r}>{r}</p>)}</div>
             </details>
+            </div>
             <button type="button" role="checkbox" aria-checked={agree} onClick={() => setAgree(!agree)} className="mx-6 mt-2 flex min-h-[48px] items-center gap-2.5 text-left text-[15px] font-bold">
               <span className={`flex size-[22px] items-center justify-center rounded-[6px] ${agree ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
               환불 규정을 확인했어요

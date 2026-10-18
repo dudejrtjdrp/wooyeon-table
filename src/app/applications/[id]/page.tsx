@@ -219,17 +219,19 @@ export default async function ApplicationDetail({ params, searchParams }: { para
 
       <SectionTitle>환불 규정</SectionTitle>
       {/* 핵심 한 줄만 먼저, 나머지는 펼쳐 본다 */}
-      <details className="group/refund rounded-[20px] bg-card px-5 text-[13px] leading-relaxed text-muted">
-        <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 text-[14px] text-ink2">
-          {REFUND_POLICY[0]}
-          <span className="shrink-0 font-semibold text-accent group-open/refund:hidden">펼치기</span>
-        </summary>
+      <div className="rounded-[20px] bg-card px-5 text-[13px] leading-relaxed text-muted">
+        <ul className="space-y-1.5 pt-4 text-[14px] text-ink2">
+          {[0, 2, 3].map((i) => <li key={i} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-muted" />{REFUND_POLICY[i]}</li>)}
+        </ul>
+      <details className="group/refund">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center text-[13px] font-semibold text-accent group-open/refund:hidden">나머지 규정 보기</summary>
         <ul className="space-y-1.5 pb-5">
-          {REFUND_POLICY.slice(1).map((r) => (
+          {REFUND_POLICY.filter((_, i) => ![0, 2, 3].includes(i)).map((r) => (
             <li key={r} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-muted" />{r}</li>
           ))}
         </ul>
       </details>
+      </div>
 
       <p className="mt-8 text-center text-[13px] text-muted">
         <Link href="/rounds" className="inline-flex h-11 items-center px-4 underline underline-offset-4">다른 일정 보기</Link>
