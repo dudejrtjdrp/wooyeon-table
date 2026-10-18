@@ -48,6 +48,8 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
   const chatOpen = Boolean(mine) && t.status !== "DONE";
   const dayOf = (iso: string) => fmtDay(iso).replace(/\((.)\)$/, " $1요일");
   let lastDay = "";
+  // 첫 안내(확정 공지: 장소·함께할 분·모인 이유·취소 규정)는 접지 않는다. 그 뒤 안내만 세 줄로 접는다
+  const firstNotice = (msgs ?? []).find((x) => x.kind === "system")?.id;
 
   return (
     <Screen title={`${fmtDay(t.slots.starts_at)} ${t.slots.region} 테이블 · ${mems.length}명`} back={`/tables/${id}`}>
@@ -80,13 +82,14 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
                     {/* 긴 안내(명단·규정)는 세 줄만 먼저 보여 주고 나머지는 펼쳐 본다. 같은 내용은 모임 정보 화면에 정리돼 있다 */}
                     {rest.join("\n").trim() && (() => {
                       const lines = rest.join("\n").trim().split("\n");
+                      const keep = m.id === firstNotice ? lines.length : 3;
                       return (
                         <div className="px-[14px] py-3 text-[14px] leading-relaxed text-ink2">
-                          <p className="whitespace-pre-line">{lines.slice(0, 3).join("\n")}</p>
-                          {lines.length > 3 && (
+                          <p className="whitespace-pre-line">{lines.slice(0, keep).join("\n")}</p>
+                          {lines.length > keep && (
                             <details className="group/more">
                               <summary className="flex h-11 cursor-pointer list-none items-center text-[13px] font-semibold text-accent group-open/more:hidden">전체 보기</summary>
-                              <p className="whitespace-pre-line">{lines.slice(3).join("\n")}</p>
+                              <p className="whitespace-pre-line">{lines.slice(keep).join("\n")}</p>
                             </details>
                           )}
                         </div>

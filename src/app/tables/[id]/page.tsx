@@ -158,6 +158,12 @@ export default async function TablePage({ params, searchParams }: { params: Prom
             <p className="text-[15px] font-semibold">{t.venues?.address ?? "식당이 정해지면 주소를 알려드릴게요"}</p>
             {resv && <p className="mt-1 text-[13px] text-muted">{resv.status === "CONFIRMED" ? `${CHANNEL_LABEL[resv.channel as Channel]} 예약 확정${resv.external_ref ? ` · ${resv.external_ref}` : ""}` : "운영팀이 예약하고 있어요"}</p>}
             {maps && <MapButtons links={maps} />}
+            {(t.reservation_name || t.venues?.price_range) && (
+              <dl className="mt-3 space-y-1.5 border-t border-line2 pt-3 text-[14px]">
+                {t.reservation_name && <div className="flex justify-between gap-3"><dt className="text-muted">예약 이름</dt><dd className="font-semibold">{t.reservation_name}</dd></div>}
+                {t.venues?.price_range && <div className="flex justify-between gap-3"><dt className="text-muted">1인 가격대</dt><dd className="font-semibold">{t.venues.price_range}</dd></div>}
+              </dl>
+            )}
             <p className="mt-3 border-t border-line2 pt-3 text-[13px] text-muted">못 드시는 음식: {myFood || "없어요"}{myFood ? " · 식당을 정할 때 운영팀이 참고해요" : ""}</p>
           </div>
         </section>
