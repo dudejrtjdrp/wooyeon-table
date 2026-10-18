@@ -146,7 +146,7 @@ export function Screen({
   backdrop?: ReactNode | false;
 }) {
   return (
-    <div data-surface="white" className="group/scr relative mx-auto flex min-h-dvh max-w-md flex-col overflow-x-hidden bg-paper">
+    <div data-surface="gray" className="group/scr relative mx-auto flex min-h-dvh max-w-md flex-col overflow-x-hidden bg-paper">
       {backdrop || null}
       {(title || back) && (
         <header className="pt-safe sticky top-0 z-20">
@@ -181,12 +181,12 @@ export async function TabScreen({ title, sub, right, children, backdrop, brand =
     unread = count ?? 0;
   }
   return (
-    <div data-surface="gray" className="group/scr relative mx-auto min-h-dvh max-w-md overflow-x-hidden bg-field pb-28">
+    <div data-surface="gray" className="group/scr relative mx-auto min-h-dvh max-w-md overflow-x-hidden bg-paper pb-28">
       {backdrop || null}
       <main className="relative z-10 px-4">
         {brand && (
           <div className="pt-safe flex h-14 items-center justify-between px-1">
-            <span className="text-[17px] font-black text-accent">우연한 식탁</span>
+            <span className="text-[17px] font-bold text-ink">우연한 식탁</span>
             <Link href="/notifications" aria-label={unread ? `알림 ${unread}개` : "알림"} className="relative -mr-2 flex size-11 items-center justify-center text-faint">
               <Bell size={22} strokeWidth={2} />
               {unread > 0 && <span className="absolute right-2 top-2 min-w-[17px] rounded-full bg-accent px-1 text-center text-[10px] font-extrabold leading-[17px] text-white">{unread > 9 ? "9+" : unread}</span>}
@@ -196,7 +196,7 @@ export async function TabScreen({ title, sub, right, children, backdrop, brand =
         {title && (
           <div className="mt-3 flex items-end justify-between gap-3 px-1">
             <div>
-              <h1 className="text-[26px] font-extrabold leading-[1.38] text-ink">{title}</h1>
+              <h1 className="text-[24px] font-bold leading-[1.38] text-ink">{title}</h1>
               {sub && <p className="mt-1.5 text-[15px] text-muted">{sub}</p>}
             </div>
             {right}
@@ -221,16 +221,16 @@ export function LinkButton({
   className?: string;
 }) {
   const map = {
-    accent: "bg-accent text-white",
-    dark: "bg-accent text-white",
-    ink: "bg-ink text-white",
+    accent: "bg-accent text-accent-ink",
+    dark: "bg-accent text-accent-ink",
+    ink: "bg-ink text-paper",
     light: "bg-field text-ink",
     outline: "bg-accent-soft text-accent-text",
   };
   return (
     <Link
       href={href}
-      className={`flex h-[56px] w-full items-center justify-center gap-1.5 rounded-[14px] text-[17px] font-extrabold transition active:scale-[.985] ${map[tone]} ${className}`}
+      className={`flex h-[54px] w-full items-center justify-center gap-1.5 rounded-[14px] text-[16px] font-bold transition active:scale-[.985] ${map[tone]} ${className}`}
     >
       {children}
     </Link>
@@ -314,8 +314,8 @@ export function List({ children, className = "" }: { children: ReactNode; classN
 
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mb-3 mt-8 flex items-end justify-between px-1">
-      <h2 className="text-[18px] font-extrabold text-ink">{children}</h2>
+    <div className="mb-2 mt-8 flex min-h-11 items-center justify-between px-1">
+      <h2 className="text-[18px] font-bold text-ink">{children}</h2>
       {action}
     </div>
   );
@@ -417,7 +417,7 @@ export function StepScreen({
         <span aria-hidden="true" className="pr-3 text-[14px] tabular-nums text-muted">{prefix ? `${prefix} ` : ""}{step} / {total}</span>
       </div>
       <div className="px-6 pt-3">
-        <h1 className="text-[26px] font-extrabold leading-[1.38] text-ink">{title}</h1>
+        <h1 className="text-[24px] font-bold leading-[1.38] text-ink">{title}</h1>
         {sub && <p className="mt-2.5 text-[15px] leading-relaxed text-muted">{sub}</p>}
       </div>
       <main className={`flex-1 ${footer ? "pb-32" : "pb-10"}`}>{children}</main>
@@ -474,7 +474,7 @@ export function InfoRows({ rows }: { rows: [ReactNode, ReactNode][] }) {
 /** 회색 안내 박스 (환불 규정 등) */
 export function NoteBox({ title, children }: { title?: ReactNode; children: ReactNode }) {
   return (
-    <div className="rounded-[14px] bg-field p-4 text-[13px] leading-[1.7] text-[#4a5a51]">
+    <div className="rounded-[14px] bg-field p-4 text-[13px] leading-[1.7] text-ink2">
       {title && <div className="mb-1 font-extrabold text-ink">{title}</div>}
       {children}
     </div>

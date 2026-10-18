@@ -48,12 +48,14 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
   const chatOpen = Boolean(mine) && t.status !== "DONE";
   const dayOf = (iso: string) => fmtDay(iso).replace(/\((.)\)$/, " $1요일");
   let lastDay = "";
+  // 첫 안내(확정 공지: 장소·함께할 분·모인 이유·취소 규정)는 접지 않는다. 그 뒤 안내만 세 줄로 접는다
+  const firstNotice = (msgs ?? []).find((x) => x.kind === "system")?.id;
 
   return (
     <Screen title={`${fmtDay(t.slots.starts_at)} ${t.slots.region} 테이블 · ${mems.length}명`} back={`/tables/${id}`}>
       <Refresher tableId={id} />
       <Toast msg={toast} />
-      <Link href={`/tables/${id}`} className="mt-1 flex items-center gap-3 rounded-[16px] bg-field px-[14px] py-3">
+      <Link href={`/tables/${id}`} className="mt-1 flex items-center gap-3 rounded-[16px] bg-card px-[14px] py-3">
         <span className="min-w-0 flex-1 text-[13px] leading-[1.45] text-ink2">
           <b className="text-ink">{fmtClock(t.slots.starts_at)}{t.venues ? ` · ${t.venues.name}` : ""}</b>
           <br />
@@ -71,28 +73,43 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
             const node =
               m.kind === "system" ? (
                 <div key={m.id} className="flex gap-2.5">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[12px] bg-accent" aria-hidden="true"><TableMark size={22} tone="white" /></span>
-                  <div className="min-w-0 max-w-[300px] flex-1 overflow-hidden rounded-[6px_20px_20px_20px] bg-field">
-                    <div className="bg-accent px-[18px] py-4 text-white">
-                      <p className="text-[12px] font-bold text-on-accent">우연한 식탁</p>
-                      <p className="mt-1.5 text-[17px] font-extrabold leading-[1.45]">{first}</p>
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[12px] bg-navy" aria-hidden="true"><TableMark size={22} tone="white" /></span>
+                  <div className="min-w-0 max-w-[300px] flex-1 overflow-hidden rounded-[6px_20px_20px_20px] bg-card">
+                    <div className="bg-navy px-[18px] py-3.5 text-paper">
+                      <p className="text-[12px] font-semibold text-[#e9dccb]">우연한 식탁</p>
+                      <p className="mt-1 text-[16px] font-bold leading-[1.45]">{first}</p>
                     </div>
-                    {rest.length > 0 && <p className="whitespace-pre-line px-[14px] py-3 text-[14px] leading-relaxed text-ink2">{rest.join("\n").trim()}</p>}
-                    <p className="px-[14px] pb-2 text-right text-[11px] text-faint">{timeOf(m.created_at)}</p>
+                    {/* 긴 안내(명단·규정)는 세 줄만 먼저 보여 주고 나머지는 펼쳐 본다. 같은 내용은 모임 정보 화면에 정리돼 있다 */}
+                    {rest.join("\n").trim() && (() => {
+                      const lines = rest.join("\n").trim().split("\n");
+                      const keep = m.id === firstNotice ? lines.length : 3;
+                      return (
+                        <div className="px-[14px] py-3 text-[14px] leading-relaxed text-ink2">
+                          <p className="whitespace-pre-line">{lines.slice(0, keep).join("\n")}</p>
+                          {lines.length > keep && (
+                            <details className="group/more">
+                              <summary className="flex h-11 cursor-pointer list-none items-center text-[13px] font-semibold text-accent group-open/more:hidden">전체 보기</summary>
+                              <p className="whitespace-pre-line">{lines.slice(keep).join("\n")}</p>
+                            </details>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    <p className="px-[14px] pb-2 text-right text-[11px] text-muted">{timeOf(m.created_at)}</p>
                   </div>
                 </div>
               ) : m.sender_id === me.id ? (
                 <div key={m.id} className="flex items-end justify-end gap-1.5">
                   <span className="text-[12px] text-muted">{timeOf(m.created_at)}</span>
-                  <p className="max-w-[75%] whitespace-pre-line rounded-[18px_6px_18px_18px] bg-accent px-[14px] py-2.5 text-[15px] text-white">{m.body}</p>
+                  <p className="max-w-[75%] whitespace-pre-line rounded-[18px_6px_18px_18px] bg-accent px-[14px] py-2.5 text-[15px] text-accent-ink">{m.body}</p>
                 </div>
               ) : (
                 <div key={m.id} className="flex items-start gap-2.5">
-                  <span className={`flex size-9 shrink-0 items-center justify-center rounded-[12px] text-[13px] font-extrabold text-white ${AVATAR[Math.max(0, mems.findIndex((x) => x.user_id === m.sender_id)) % AVATAR.length]}`}>{(names.get(m.sender_id ?? "") ?? "참").slice(-2, -1) || "참"}</span>
+                  <span className={`flex size-9 shrink-0 items-center justify-center rounded-[12px] text-[13px] font-bold text-ink ${AVATAR[Math.max(0, mems.findIndex((x) => x.user_id === m.sender_id)) % AVATAR.length]}`}>{(names.get(m.sender_id ?? "") ?? "참").slice(-2, -1) || "참"}</span>
                   <div className="min-w-0">
                     <p className="mb-1 text-[13px] text-muted">{names.get(m.sender_id ?? "") ?? "참가자"}{jobs.get(m.sender_id ?? "") ? ` · ${jobs.get(m.sender_id ?? "")}` : ""}</p>
                     <div className="flex items-end gap-1.5">
-                      <p className="max-w-[70vw] whitespace-pre-line rounded-[6px_18px_18px_18px] bg-field px-[14px] py-2.5 text-[15px] text-ink sm:max-w-[260px]">{m.body}</p>
+                      <p className="max-w-[70vw] whitespace-pre-line rounded-[6px_18px_18px_18px] bg-card px-[14px] py-2.5 text-[15px] text-ink sm:max-w-[260px]">{m.body}</p>
                       <span className="shrink-0 text-[12px] text-muted">{timeOf(m.created_at)}</span>
                     </div>
                   </div>
@@ -117,4 +134,4 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
   );
 }
 
-const AVATAR = ["bg-[#e07a5f]", "bg-[#3d5a80]", "bg-[#81b29a]", "bg-[#9c6644]", "bg-[#2a7357]", "bg-[#b5838d]"];
+const AVATAR = ["bg-[#c9b8a4]", "bg-[#a8b59b]", "bg-[#d8b27a]", "bg-[#9fa9b5]", "bg-[#c4a29a]", "bg-[#b9c2a4]"];

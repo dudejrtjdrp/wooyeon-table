@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { CalendarDays, ChevronRight } from "lucide-react";
-import { RoundTable } from "@/components/brand";
 import { EmptyState, LinkButton, List, Pill, SectionTitle, TabScreen } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
@@ -50,30 +49,22 @@ export default async function Rounds() {
           const appId = applied.get(r.id);
           const href = !me ? `/login?next=${encodeURIComponent(`/apply/${r.id}`)}` : appId ? `/applications/${appId}` : `/apply/${r.id}`;
           return (
-            <article key={r.id} className="animate-rise rounded-[24px] bg-card p-[22px]" style={{ animationDelay: `${i * 0.04}s` }}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-[20px] font-black">{r.title}</h2>
-                  <p className="mt-1 text-[14px] text-muted">{fmtSlot(r.apply_deadline)} 마감 · 마감하면 바로 테이블을 꾸려요</p>
+            <article key={r.id} className="animate-rise overflow-hidden rounded-[20px] bg-card" style={{ animationDelay: `${i * 0.04}s` }}>
+              <div className="flex items-start justify-between gap-3 bg-[#ebe0d1] px-5 pb-4 pt-5">
+                <div className="min-w-0">
+                  <h2 className="text-[19px] font-bold leading-snug">{r.title}</h2>
+                  <p className="mt-1 text-[13px] text-muted">{fmtSlot(r.apply_deadline)} 마감</p>
                 </div>
-                {appId ? <Pill tone="accent">신청했어요</Pill> : <Pill tone="muted">{ddayLabel(dday(times[0] ?? r.apply_deadline, t))}</Pill>}
+                {appId ? <Pill tone="accent">신청했어요</Pill> : <span className="shrink-0 rounded-full bg-ink px-3 py-1 text-[13px] font-semibold text-paper">{ddayLabel(dday(times[0] ?? r.apply_deadline, t))}</span>}
               </div>
-              <div className="mt-4 flex items-center gap-4">
-                <RoundTable size={76} filled={appId ? 1 : 0} me={Boolean(appId)} />
-                <ul className="min-w-0 flex-1 space-y-1 text-[15px]">
-                  {times.map((iso) => <li key={iso} className="font-extrabold">{fmtSlot(iso)}</li>)}
+              <div className="px-5 pb-5 pt-4">
+                <ul className="space-y-1.5">
+                  {times.map((iso) => <li key={iso} className="flex items-center gap-2 text-[16px] font-bold"><span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />{fmtSlot(iso)}</li>)}
                 </ul>
+                {/* 동네 목록은 카드에 다 늘어놓지 않고 개수만: 고르는 건 신청 1단계에서 */}
+                <p className="mt-3 text-[13px] text-muted">{[...bySido.values()].flat().length}개 동네 · 1회 {won(PASSES.single.amount)} · 식사비는 각자 계산</p>
+                <LinkButton href={href} tone={appId ? "light" : "ink"} className="mt-4">{!me ? "로그인하고 신청하기" : appId ? "내 신청 보기" : "이 일정 신청하기"}</LinkButton>
               </div>
-              <p className="mt-3 text-[13px] text-muted">1회 {won(PASSES.single.amount)} · 식사비는 현장에서 각자 계산해요</p>
-              <dl className="mt-3 space-y-1.5 rounded-[14px] bg-field px-4 py-3 text-[13px]">
-                {[...bySido.entries()].map(([sd, areas]) => (
-                  <div key={sd} className="flex gap-2">
-                    <dt className="w-8 shrink-0 font-bold text-muted">{sd}</dt>
-                    <dd className="text-ink2">{areas.join(" · ")}</dd>
-                  </div>
-                ))}
-              </dl>
-              <LinkButton href={href} tone={appId ? "outline" : "accent"} className="mt-4">{!me ? "로그인하고 신청하기" : appId ? "내 신청 보기" : "이 일정 신청하기"}</LinkButton>
             </article>
           );
         })}
@@ -92,7 +83,7 @@ export default async function Rounds() {
                       <span className="mt-0.5 block truncate text-[13px] text-muted">{h.desc}</span>
                     </span>
                     <Pill tone={h.tone}>{h.label}</Pill>
-                    <ChevronRight size={18} className="shrink-0 text-[#b5c0ba]" />
+                    <ChevronRight size={18} className="shrink-0 text-[#9a8c7e]" />
                   </Link>
                 );
               })}

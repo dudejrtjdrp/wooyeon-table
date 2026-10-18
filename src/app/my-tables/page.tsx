@@ -46,7 +46,7 @@ export default async function MyTables() {
         <span className="mt-0.5 block truncate text-[13px] text-muted">{sub}</span>
       </span>
       {pill}
-      <ChevronRight size={18} className="shrink-0 text-[#b5c0ba]" />
+      <ChevronRight size={18} className="shrink-0 text-[#9a8c7e]" />
     </Link>
   );
 
@@ -87,7 +87,7 @@ export default async function MyTables() {
             <span className="block text-[16px] font-extrabold">진행 중인 신청 {pending.length}건</span>
             <span className="mt-0.5 block text-[13px] text-muted">테이블이 정해지면 여기서 단체방이 열려요.</span>
           </span>
-          <ChevronRight size={18} className="shrink-0 text-[#b5c0ba]" />
+          <ChevronRight size={18} className="shrink-0 text-[#9a8c7e]" />
         </Link>
       )}
 

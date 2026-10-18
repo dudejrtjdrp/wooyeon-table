@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { RoundTable } from "@/components/brand";
-import { ErrorText, InfoRows, LinkButton, PrimaryButton, Toast } from "@/components/ui";
+import { ChevronRight } from "lucide-react";
+import { ErrorText, LinkButton, PrimaryButton, Toast } from "@/components/ui";
 import { BackButton, MapButtons } from "@/components/client";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { dday, ddayLabel, fmtSlot } from "@/lib/format";
+import { dday, ddayLabel, fmtDay, fmtDayClock, fmtSlot } from "@/lib/format";
 import { mapLinks } from "@/lib/maps";
 import { refundCutoff } from "@/lib/policy";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
@@ -27,13 +28,13 @@ export default async function TablePage({ params, searchParams }: { params: Prom
 
   const { data: raw } = await db()
     .from("dining_tables")
-    .select("id,status,reservation_name,explanation,slots(region,starts_at,ends_at),venues(name,address,map_url,price_range),rounds(title)")
+    .select("id,status,reservation_name,explanation,slots(region,starts_at,ends_at),venues(name,address,map_url,price_range,rating,review_count),rounds(title)")
     .eq("id", id)
     .maybeSingle();
   const t = raw as unknown as {
     id: string; status: string; reservation_name: string | null; explanation: { reasons?: string[] };
     slots: { region: string; starts_at: string; ends_at: string };
-    venues: { name: string; address: string; map_url: string | null; price_range: string | null } | null;
+    venues: { name: string; address: string; map_url: string | null; price_range: string | null; rating: number | null; review_count: number | null } | null;
     rounds: { title: string };
   } | null;
   if (!t) redirect("/");
@@ -75,93 +76,134 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const twoDays = n >= refundCutoff(t.slots.starts_at);
 
   const status = done ? "모임 끝" : t.status === "IN_PROGRESS" ? "모임 중" : "매칭 확정";
-  const title = done ? "오늘 저녁 어땠어요?" : t.status === "IN_PROGRESS" ? "지금 모임 중이에요" : "테이블이 정해졌어요";
+  const others = mems.filter((m) => m.user_id !== me.id);
+  const preview = others.slice(0, 2);
+  const interestsOf = (m: (typeof mems)[number]) => (m.users.profiles?.interests ?? []).filter((x) => shared.includes(x)).slice(0, 2);
+  const cutoff = refundCutoff(t.slots.starts_at);
+  const dayBefore = new Date(start.getTime() - 24 * 3600_000);
+  const timeline: [Date, string, string][] = [
+    [cutoff, fmtSlot(cutoff.toISOString()), twoDays ? "환불 마감이 지났어요" : "여기까지 취소하면 전액 환불"],
+    [dayBefore, fmtDay(dayBefore.toISOString()), "하루 전 안내 알림"],
+    [start, fmtSlot(t.slots.starts_at), mine?.attendance_status === "ATTENDED" ? "체크인했어요" : "도착하면 체크인 (1시간 전부터)"],
+  ];
+  const [dayLabel, clock] = fmtDayClock(t.slots.starts_at);
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-navy">
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-paper">
       <Toast msg={toast} />
-      <header className="pt-safe px-3 text-white">
-        <div className="flex h-12 items-center [&_button]:text-white"><BackButton href="/my-tables" /></div>
-        <div className="px-3 pb-7">
-          <span className="inline-flex h-7 items-center gap-1.5 rounded-[14px] bg-accent2 px-2.5 text-[13px] font-bold text-[#ddf0e5]">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-            {status}{!done && ` · ${ddayLabel(dday(t.slots.starts_at, n))}`}
-          </span>
-          <h1 className="mt-3.5 text-[28px] font-black leading-[1.36]">{title}</h1>
-          <p className="mt-2 text-[16px] text-on-accent">{fmtSlot(t.slots.starts_at)} · {t.slots.region}</p>
+      {/* 위 색면: 사진 대신 식탁 그림. 뒤로 가기는 떠 있는 동그라미 */}
+      <header className="pt-safe relative h-[210px] overflow-hidden bg-[#ebe0d1]">
+        <div className="relative z-10 flex h-14 items-center px-3"><span className="flex size-11 items-center justify-center rounded-full bg-card"><BackButton href="/my-tables" /></span></div>
+        <div className="pointer-events-none absolute -bottom-12 -right-6" aria-hidden="true">
+          <RoundTable size={230} filled={Math.min(6, mems.length)} seats={Math.max(mems.length, 4)} />
         </div>
       </header>
 
-      <main className="flex-1 rounded-t-[28px] bg-paper px-6 pb-36 pt-7">
-        <div className="flex items-center gap-4">
-          <RoundTable size={112} filled={Math.min(6, mems.length)} seats={Math.max(mems.length, 4)} label={`${mems.length}자리가 찬 테이블`} />
-          <div className="flex flex-col gap-1.5">
-            <p className="text-[20px] font-black">{mems.length}명이 함께 앉아요</p>
-            <p className="text-[14px] leading-[1.55] text-[#4a5a51]">
-              여 {f} · 남 {male}
-              <br />
-              {ages.length ? `${Math.min(...ages)}~${Math.max(...ages)}살` : ""} · 서로 처음 봐요
-            </p>
+      <main className="relative -mt-6 flex-1 rounded-t-[24px] bg-paper px-5 pb-40 pt-6">
+        <span className="inline-flex h-7 items-center rounded-full bg-leaf-soft px-3 text-[13px] font-semibold text-leaf">{status}{!done && ` · ${ddayLabel(dday(t.slots.starts_at, n))}`}</span>
+        <h1 className="mt-3 text-[24px] font-bold leading-snug">{t.venues ? t.venues.name : "식당을 정하고 있어요"}</h1>
+        <p className="mt-1 text-[14px] text-muted">
+          {t.venues?.rating ? `평점 ${t.venues.rating}${t.venues.review_count ? ` · 리뷰 ${t.venues.review_count}` : ""}` : t.rounds.title}
+        </p>
+
+        <section className="mt-5 grid grid-cols-3 rounded-[18px] bg-card" aria-label="핵심 정보">
+          {[
+            ["일시", dayLabel, clock],
+            ["동네", t.slots.region.split("·")[0], t.slots.region.split("·").slice(1).join("·") || " "],
+            ["인원", `${mems.length}명`, ages.length ? `${Math.min(...ages)}~${Math.max(...ages)}살 · 여${f} 남${male}` : " "],
+          ].map(([k, a, b], i) => (
+            <div key={k} className={`flex flex-col items-center gap-0.5 px-2 py-4 text-center ${i < 2 ? "border-r border-line2" : ""}`}>
+              <span className="text-[12px] text-muted">{k}</span>
+              <span className="text-[15px] font-bold">{a}</span>
+              <span className="text-[12px] leading-tight text-muted">{b}</span>
+            </div>
+          ))}
+        </section>
+
+        <section className="mt-8" aria-label="함께하는 사람">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[18px] font-bold">함께하는 사람</h2>
+            <Link href={`/tables/${id}/people`} className="flex h-11 items-center text-[14px] font-bold text-accent">모두 보기</Link>
           </div>
-        </div>
-
-        {shared.length > 0 && (
-          <section className="mt-[22px] rounded-[16px] bg-field px-[18px] py-4" aria-label="이 테이블이 겹치는 것">
-            <p className="text-[13px] text-muted">이 테이블이 겹치는 것</p>
-            <ul className="mt-2.5 flex flex-wrap gap-1.5">
-              {shared.map((x) => (
-                <li key={x} className="flex min-h-[30px] items-center rounded-[15px] bg-paper px-3 text-[14px] font-bold">{x}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {(t.explanation?.reasons?.length ?? 0) > 0 && (
-          <section className="mt-3.5" aria-label="이렇게 모였어요">
-            <p className="text-[14px] font-extrabold text-ink2">이렇게 모였어요</p>
-            <ul className="mt-2 space-y-1.5 text-[14px] leading-[1.6] text-ink2">
-              {t.explanation!.reasons!.map((r) => (
-                <li key={r} className="flex gap-2"><span aria-hidden="true" className="mt-[9px] size-1.5 shrink-0 rounded-full bg-accent" />{r}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <div className="mt-3.5">
-          <InfoRows
-            rows={[
-              ["식당", t.venues ? t.venues.name : "정하고 있어요"],
-              ...(t.venues ? ([["주소", t.venues.address]] as [string, string][]) : []),
-              ...(t.reservation_name ? ([["예약 이름", t.reservation_name]] as [string, string][]) : []),
-              ...(resv ? ([["예약", resv.status === "CONFIRMED" ? <span key="r">{CHANNEL_LABEL[resv.channel as Channel]} 예약 확정{resv.external_ref ? ` · ${resv.external_ref}` : ""}</span> : "운영팀이 예약하고 있어요"]] as [string, React.ReactNode][]) : []),
-              ...(t.venues?.price_range ? ([["1인 가격대", t.venues.price_range]] as [string, string][]) : []),
-              ["못 드시는 음식", myFood ? `${myFood}` : "없어요"],
-            ]}
-          />
-          {maps && <MapButtons links={maps} />}
-          {myFood && <p className="mt-2 text-[12px] text-faint">식당을 정할 때 운영팀이 참고해요.</p>}
-        </div>
-
-        <section className="mt-6" aria-label="함께하는 사람">
-          <p className="text-[14px] font-extrabold text-ink2">함께하는 사람</p>
-          <ul className="mt-2 divide-y divide-line2">
-            {mems.map((m) => (
-              <li key={m.id} className="flex items-center justify-between py-3 text-[15px]">
-                <span className="font-bold">{m.users.name}{m.user_id === me.id && <span className="ml-1.5 text-[12px] font-bold text-accent">나</span>}</span>
-                <span className="flex items-center gap-2 text-muted">
-                  {m.users.profiles?.job}
-                  {m.attendance_status === "ATTENDED" && <span className="text-[12px] font-bold text-accent">도착</span>}
+          <ul className="mt-1 divide-y divide-line2 rounded-[18px] bg-card px-4">
+            {preview.map((m, i) => (
+              <li key={m.id} className="flex min-h-[60px] items-center gap-3 py-2.5">
+                <span style={{ background: ["#c9b8a4", "#a8b59b"][i % 2] }} className="flex size-9 shrink-0 items-center justify-center rounded-full text-[14px] font-bold text-ink" aria-hidden="true">{m.users.name.slice(0, 1)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold">{m.users.name}{m.attendance_status === "ATTENDED" && <span className="ml-1.5 text-[12px] font-bold text-leaf">도착</span>}</span>
+                  <span className="block truncate text-[13px] text-muted">{[m.users.profiles?.job, ...interestsOf(m)].filter(Boolean).join(" · ")}</span>
                 </span>
               </li>
             ))}
+            {others.length > preview.length && (
+              <li>
+                <Link href={`/tables/${id}/people`} className="flex min-h-[52px] items-center justify-between text-[14px] text-muted">
+                  {mine ? `나 포함 ${mems.length}명` : `${mems.length}명`} 모두 보기
+                  <ChevronRight size={18} aria-hidden="true" />
+                </Link>
+              </li>
+            )}
           </ul>
-          <p className="mt-1 text-[12px] text-faint">이름과 하는 일만 보여요. 연락처는 공개되지 않아요.</p>
+          <p className="mt-2 px-1 text-[12px] text-muted">이름과 하는 일만 보여요. 연락처는 공개되지 않아요.</p>
+          {shared.length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="이 테이블이 겹치는 것">
+              {shared.map((x) => <li key={x} className="flex h-[30px] items-center rounded-full bg-accent-soft px-3 text-[13px] font-semibold text-accent-text">{x}</li>)}
+            </ul>
+          )}
+          {(t.explanation?.reasons?.length ?? 0) > 0 && (
+            // 이렇게 모였어요: 맞추기 어려웠던 점(타협 사유)을 먼저, 문장은 자르지 않는다
+            <ul className="mt-3 space-y-1 text-[14px] leading-relaxed text-ink2" aria-label="이렇게 모였어요">
+              {[...(t.explanation?.reasons ?? [])].sort((a, b) => Number(/어려웠|못했|대신/.test(b)) - Number(/어려웠|못했|대신/.test(a))).slice(0, 3).map((r) => (
+                <li key={r} className="flex gap-2"><span aria-hidden="true" className="mt-[9px] size-1.5 shrink-0 rounded-full bg-accent" />{r}</li>
+              ))}
+            </ul>
+          )}
         </section>
+
+        <section className="mt-8" aria-label="찾아가는 길">
+          <h2 className="text-[18px] font-bold">찾아가는 길</h2>
+          <div className="mt-3 rounded-[18px] bg-card p-4">
+            <p className="text-[15px] font-semibold">{t.venues?.address ?? "식당이 정해지면 주소를 알려드릴게요"}</p>
+            {resv && <p className="mt-1 text-[13px] text-muted">{resv.status === "CONFIRMED" ? `${CHANNEL_LABEL[resv.channel as Channel]} 예약 확정${resv.external_ref ? ` · ${resv.external_ref}` : ""}` : "운영팀이 예약하고 있어요"}</p>}
+            {maps && <MapButtons links={maps} />}
+            {(t.reservation_name || t.venues?.price_range) && (
+              <dl className="mt-3 space-y-1.5 border-t border-line2 pt-3 text-[14px]">
+                {t.reservation_name && <div className="flex justify-between gap-3"><dt className="text-muted">예약 이름</dt><dd className="font-semibold">{t.reservation_name}</dd></div>}
+                {t.venues?.price_range && <div className="flex justify-between gap-3"><dt className="text-muted">1인 가격대</dt><dd className="font-semibold">{t.venues.price_range}</dd></div>}
+              </dl>
+            )}
+            <p className="mt-3 border-t border-line2 pt-3 text-[13px] text-muted">못 드시는 음식: {myFood || "없어요"}{myFood ? " · 식당을 정할 때 운영팀이 참고해요" : ""}</p>
+          </div>
+        </section>
+
+        {!done && (
+          <section className="mt-8" aria-label="모임까지">
+            <h2 className="text-[18px] font-bold">모임까지</h2>
+            <ol className="mt-3">
+              {timeline.map(([at, when, what], i) => {
+                const passed = n >= at;
+                return (
+                  <li key={what} className="flex gap-3">
+                    <span className="flex flex-col items-center" aria-hidden="true">
+                      <span className={`mt-1.5 size-2.5 rounded-full ${passed ? "bg-accent" : "border-2 border-accent"}`} />
+                      {i < timeline.length - 1 && <span className="w-0.5 flex-1 bg-line" />}
+                    </span>
+                    <span className="pb-4">
+                      <span className={`block text-[15px] font-semibold ${passed ? "text-muted" : ""}`}>{when}</span>
+                      <span className="block text-[13px] text-muted">{what}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            {mine && <Link href={`/applications/${mine.id}`} className="inline-flex h-11 items-center text-[14px] text-muted underline underline-offset-4">취소·환불 규정 전체 보기</Link>}
+          </section>
+        )}
 
         <div className="mt-4"><ErrorText msg={e} /></div>
       </main>
 
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md bg-paper px-6 pt-3">
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-line bg-paper px-5 pt-3">
         <div className="pb-4">
           {mine && canCheckIn ? (
             <form action={checkIn}>
@@ -188,12 +230,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
             </>
           ) : (
             <>
-              {!done && (
-                <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
-                  하루 전에 한 번 더 알려드릴게요. {twoDays ? "환불 마감(모임 주 화요일 밤 12시)이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 환불돼요."} 당일 취소는 안 되고, 연락 없이 오지 않으면 노쇼로 기록돼요.
-                  {mine?.attendance_status === "ATTENDED" && " 체크인했어요."}
-                </p>
-              )}
+              {!done && <p className="mb-2.5 text-center text-[12px] text-muted">당일 취소는 안 되고, 연락 없이 오지 않으면 노쇼로 기록돼요.</p>}
               <LinkButton href={`/tables/${id}/chat`}>{done ? "단체방 다시 보기" : "단체방 들어가기"}</LinkButton>
             </>
           )}

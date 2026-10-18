@@ -41,7 +41,7 @@ function Row({ on, onClick, children, sub, disabled, right }: { on: boolean; onC
     >
       <span className="min-w-0 flex-1">
         <span className="block">{children}</span>
-        {sub && <span className={`mt-0.5 block text-[13px] font-normal ${on ? "text-[#4a5a51]" : "text-muted"}`}>{sub}</span>}
+        {sub && <span className={`mt-0.5 block text-[13px] font-normal ${on ? "text-ink2" : "text-muted"}`}>{sub}</span>}
       </span>
       {right}
       <span className={`flex size-6 shrink-0 items-center justify-center rounded-full transition ${on ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
@@ -72,7 +72,7 @@ function LineField({ label, children, active }: { label: string; children: React
     </label>
   );
 }
-const lineInput = "h-11 min-w-0 flex-1 border-0 bg-transparent p-0 text-[20px] font-bold text-ink outline-none placeholder:font-medium placeholder:text-[#b5c0ba]";
+const lineInput = "h-11 min-w-0 flex-1 border-0 bg-transparent p-0 text-[20px] font-bold text-ink outline-none placeholder:font-medium placeholder:text-[#9a8c7e]";
 
 function DocSheet({ doc, onClose }: { doc: "terms" | "privacy" | null; onClose: () => void }) {
   if (!doc) return null;
@@ -331,7 +331,7 @@ export function OnboardingWizard({
                 </li>
               ))}
             </ul>
-            <div className="mx-2 mt-3 rounded-[12px] bg-field px-4 py-3.5 text-[13px] leading-relaxed text-[#4a5a51]">
+            <div className="mx-2 mt-3 rounded-[12px] bg-field px-4 py-3.5 text-[13px] leading-relaxed text-ink2">
               모임 주 화요일 밤 12시부터는 환불이 안 되고, 당일에는 취소나 단체방 나가기를 할 수 없어요.
             </div>
           </section>
@@ -343,7 +343,7 @@ export function OnboardingWizard({
               <div className="rounded-[16px] bg-accent-soft px-[18px] py-4">
                 <p className="text-[13px] font-bold text-accent-text">본인인증을 마쳤어요</p>
                 <p className="mt-1 text-[18px] font-extrabold">{verified.name}</p>
-                <p className="text-[14px] text-[#4a5a51]">{verified.birthYear}년생 · {verified.gender === "M" ? "남성" : verified.gender === "F" ? "여성" : ""}</p>
+                <p className="text-[14px] text-ink2">{verified.birthYear}년생 · {verified.gender === "M" ? "남성" : verified.gender === "F" ? "여성" : ""}</p>
               </div>
             ) : idvOn ? (
               <div className="rounded-[16px] bg-field p-[18px]">
@@ -363,7 +363,7 @@ export function OnboardingWizard({
                   <span className="text-[13px] text-muted">성별</span>
                   <div className="mt-2.5 grid grid-cols-2 gap-2.5">
                     {["여성", "남성"].map((x) => (
-                      <button key={x} type="button" aria-pressed={v.gender === x} onClick={() => set("gender", x)} className={`flex h-[52px] items-center justify-center gap-1.5 rounded-[14px] text-[16px] transition ${v.gender === x ? "bg-accent-soft font-extrabold text-accent-text" : "bg-field font-semibold text-[#4a5a51]"}`}>
+                      <button key={x} type="button" aria-pressed={v.gender === x} onClick={() => set("gender", x)} className={`flex h-[52px] items-center justify-center gap-1.5 rounded-[14px] text-[16px] transition ${v.gender === x ? "bg-accent-soft font-extrabold text-accent-text" : "bg-field font-semibold text-ink2"}`}>
                         {v.gender === x && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
                         {x}
                       </button>
@@ -383,7 +383,7 @@ export function OnboardingWizard({
                   <span className="text-[13px] text-muted">휴대폰 번호</span>
                   {phoneVerified ? (
                     <div className="flex items-center justify-between border-b border-line pb-2.5 pt-2">
-                      <span className="text-[20px] font-bold text-[#4a5a51]">{(phone ?? "").replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3")}</span>
+                      <span className="text-[20px] font-bold text-ink2">{(phone ?? "").replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3")}</span>
                       <span className="flex items-center gap-3 text-[13px]"><span className="font-bold text-accent">인증했어요</span><Link href={verifyHref} className="-mr-2 flex h-11 items-center px-2 text-faint underline underline-offset-2">바꾸기</Link></span>
                     </div>
                   ) : (
@@ -404,7 +404,7 @@ export function OnboardingWizard({
                   return (
                     <button key={k} type="button" aria-pressed={on} onClick={() => setV((c) => { const m = c.mbti[0] === "unknown" ? [] : [...c.mbti]; m[i] = k; return { ...c, mbti: m }; })} className={`flex min-h-[64px] flex-col justify-center rounded-[16px] px-4 py-2.5 text-left transition ${on ? "bg-accent-soft" : "bg-row"}`}>
                       <span className={`text-[18px] font-black ${on ? "text-accent-text" : "text-ink2"}`}>{k}</span>
-                      <span className={`text-[12px] leading-snug ${on ? "text-[#4a5a51]" : "text-muted"}`}>{d}</span>
+                      <span className={`text-[12px] leading-snug ${on ? "text-ink2" : "text-muted"}`}>{d}</span>
                     </button>
                   );
                 })}

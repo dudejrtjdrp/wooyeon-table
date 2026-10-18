@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { requestCode, submitCode } from "../phone-actions";
 
 const input =
-  "h-[54px] w-full min-w-0 rounded-2xl border border-[#e8edf5] bg-field px-4 text-[17px] text-ink outline-none transition placeholder:text-muted/60 focus:border-accent focus:bg-card focus:ring-4 focus:ring-accent/10 disabled:text-muted";
+  "h-[54px] w-full min-w-0 rounded-2xl border border-line bg-field px-4 text-[17px] text-ink outline-none transition placeholder:text-muted/60 focus:border-accent focus:bg-card focus:ring-4 focus:ring-accent/10 disabled:text-muted";
 
 const fmt = (p: string) => p.replace(/\D/g, "").replace(/^(\d{3})(\d{1,4})?(\d{1,4})?.*/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
 

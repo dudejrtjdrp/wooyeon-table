@@ -49,7 +49,7 @@ export function AuthChooser({ next = "/", error, notice, upcoming }: { next?: st
             {upcoming ? `다음 모임 ${upcoming}` : "저녁 모임"} · 1회 {won(PASSES.single.amount)}
             <span className="block text-[13px] font-medium text-on-accent">식사비는 현장에서 각자 계산해요</span>
           </p>
-          <ul className="relative z-10 mt-5 flex flex-wrap gap-1.5 text-[13px] font-bold text-[#ddf0e5]">
+          <ul className="relative z-10 mt-5 flex flex-wrap gap-1.5 text-[13px] font-bold text-on-accent">
             {["나이 차 8살 안", "성비 맞춰서", "자동 확정"].map((t) => (
               <li key={t} className="flex h-7 items-center rounded-[14px] bg-accent2 px-2.5">{t}</li>
             ))}

@@ -1,31 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  /* E안 (2026-10-16): 브랜드 색 하나(딥그린), 흰 바탕, 회색 블록. 그라데이션·유리 질감·보라색 쓰지 않음 */
-  --paper: #ffffff;      /* 앱 바탕 */
-  --card: #ffffff;
-  --field: #f4f6f5;      /* 회색 블록·입력칸 */
-  --row: #f7f9f8;        /* 고르지 않은 선택 줄 */
-  --ink: #17201b;        /* 본문 */
-  --ink2: #33413a;       /* 진한 보조 */
-  --muted: #5a6a61;      /* 보조 글 (흰 바탕 5.7:1, field 5.3:1, accent-soft 5.0:1) */
-  --faint: #5f6d66;      /* 흐린 글: muted보다 옅게 (흰 바탕 5.4:1, field 5.0:1, accent-soft 4.7:1 — 4.5:1 아래로 내리지 않음) */
-  --line: #e3e8e5;       /* 구분선 */
-  --line2: #eef1ef;
-  --dot: #dce3df;        /* 고르지 않은 체크 */
-  --accent: #1e5e45;     /* 브랜드 */
-  --accent2: #2a7357;    /* 브랜드 보조 */
-  --accent-soft: #e7f1eb;/* 선택 배경 */
-  --accent-text: #17533d;/* 선택 글자 */
-  --on-accent: #cfe3d8;  /* 초록 위 보조 글 */
-  --accent-ink: #ffffff;
-  --navy: #1e5e45;       /* 첫 화면 색면 */
-  --candle: #f4c542;     /* 좌석 포인트 */
-  --seat: #8fbfa6;       /* 좌석 포인트 2 */
-  --warn: #9a6400;
-  --warn-soft: #fbf3df;
-  --leaf: #1e5e45;       /* 완료 */
-  --danger: #c2412d;     /* 오류·취소 */
+  /* A안 '저녁 식탁' (2026-10-18, 성효님 선택): 미색 바탕, 진한 주홍 포인트, 검은 글자. 고딕 한 가지(IBM Plex Sans KR). 그라데이션·그림자 쓰지 않음 */
+  --paper: #f5efe6;      /* 앱 바탕 (미색) */
+  --card: #fffdf9;       /* 카드 */
+  --field: #ede6dc;      /* 칩·입력칸·옅은 블록 */
+  --row: #faf6f0;        /* 고르지 않은 선택 줄 */
+  --ink: #221c17;        /* 본문 */
+  --ink2: #3d342d;       /* 진한 보조 */
+  --muted: #6b5f55;      /* 보조 글 (바탕 5.4:1, 카드 6.1:1, field 5.0:1) */
+  --faint: #6b5f55;      /* 흐린 글: 4.5:1 아래로 내리지 않음 */
+  --line: #e2d8cb;       /* 구분선 */
+  --line2: #efe7dc;
+  --dot: #d9cdbe;        /* 고르지 않은 체크 */
+  --accent: #b23d17;     /* 브랜드 주홍 (바탕 5.1:1, 흰 글자 5.8:1) */
+  --accent2: #8e2f10;    /* 브랜드 보조(진한 주홍) */
+  --accent-soft: #f6e3db;/* 선택 배경 */
+  --accent-text: #8e2f10;/* 선택 글자 */
+  --on-accent: #fbe4d8;  /* 주홍 위 보조 글 */
+  --accent-ink: #fffdf9;
+  --navy: #221c17;       /* 진한 색면 (검정에 가까운 갈색) */
+  --candle: #d8b27a;     /* 좌석 포인트 */
+  --seat: #c9b8a4;       /* 좌석 포인트 2 */
+  --warn: #8a5a00;
+  --warn-soft: #fbf0d9;
+  --leaf: #3f6339;       /* 완료 (초록) */
+  --leaf-soft: #e3ebdd;
+  --danger: #9f1d2b;     /* 오류·취소: 주홍과 구분되게 더 진한 진홍 */
+}
+
+/* 운영자 어드민은 기존 흰 바탕·초록 그대로 둔다 */
+body:has(.admin-theme) { background: #ffffff; }
+.admin-theme {
+  --paper: #ffffff; --card: #ffffff; --field: #f4f6f5; --row: #f7f9f8;
+  --ink: #17201b; --ink2: #33413a; --muted: #5a6a61; --faint: #5f6d66;
+  --line: #e3e8e5; --line2: #eef1ef; --dot: #dce3df;
+  --accent: #1e5e45; --accent2: #2a7357; --accent-soft: #e7f1eb; --accent-text: #17533d;
+  --on-accent: #cfe3d8; --accent-ink: #ffffff; --navy: #1e5e45; --candle: #f4c542; --seat: #8fbfa6;
+  --warn: #9a6400; --warn-soft: #fbf3df; --leaf: #1e5e45; --leaf-soft: #e7f1eb; --danger: #c2412d;
+  font-family: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  letter-spacing: -0.03em;
 }
 
 @theme inline {
@@ -48,18 +62,19 @@
   --color-candle: var(--candle);
   --color-seat: var(--seat);
   --color-danger: var(--danger);
+  --color-leaf-soft: var(--leaf-soft);
   --color-field: var(--field);
   --color-navy: var(--navy);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
-  --font-sans: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.01em;
   word-break: keep-all;
 }
 
