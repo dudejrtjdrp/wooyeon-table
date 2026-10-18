@@ -28,13 +28,13 @@ export default async function TablePage({ params, searchParams }: { params: Prom
 
   const { data: raw } = await db()
     .from("dining_tables")
-    .select("id,status,reservation_name,explanation,slots(region,starts_at,ends_at),venues(name,address,map_url,price_range,rating,review_count),rounds(title)")
+    .select("id,status,reservation_name,explanation,slots(region,starts_at,ends_at),venues(name,address,map_url,price_range,rating,review_count,photo_url,category),rounds(title)")
     .eq("id", id)
     .maybeSingle();
   const t = raw as unknown as {
     id: string; status: string; reservation_name: string | null; explanation: { reasons?: string[] };
     slots: { region: string; starts_at: string; ends_at: string };
-    venues: { name: string; address: string; map_url: string | null; price_range: string | null; rating: number | null; review_count: number | null } | null;
+    venues: { name: string; address: string; map_url: string | null; price_range: string | null; rating: number | null; review_count: number | null; photo_url: string | null; category: string | null } | null;
     rounds: { title: string };
   } | null;
   if (!t) redirect("/");
@@ -92,18 +92,23 @@ export default async function TablePage({ params, searchParams }: { params: Prom
     <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-paper">
       <Toast msg={toast} />
       {/* 위 색면: 사진 대신 식탁 그림. 뒤로 가기는 떠 있는 동그라미 */}
-      <header className="pt-safe relative h-[210px] overflow-hidden bg-[#ebe0d1]">
+      <header className={`pt-safe relative overflow-hidden bg-[#ebe0d1] ${t.venues?.photo_url ? "h-[260px]" : "h-[210px]"}`}>
         <div className="relative z-10 flex h-14 items-center px-3"><span className="flex size-11 items-center justify-center rounded-full bg-card"><BackButton href="/my-tables" /></span></div>
-        <div className="pointer-events-none absolute -bottom-12 -right-6" aria-hidden="true">
-          <RoundTable size={230} filled={Math.min(6, mems.length)} seats={Math.max(mems.length, 4)} />
-        </div>
+        {t.venues?.photo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={t.venues.photo_url} alt={`${t.venues.name} 사진`} className="absolute inset-0 size-full object-cover" />
+        ) : (
+          <div className="pointer-events-none absolute -bottom-12 -right-6" aria-hidden="true">
+            <RoundTable size={230} filled={Math.min(6, mems.length)} seats={Math.max(mems.length, 4)} />
+          </div>
+        )}
       </header>
 
       <main className="relative -mt-6 flex-1 rounded-t-[24px] bg-paper px-5 pb-40 pt-6">
         <span className="inline-flex h-7 items-center rounded-full bg-leaf-soft px-3 text-[13px] font-semibold text-leaf">{status}{!done && ` · ${ddayLabel(dday(t.slots.starts_at, n))}`}</span>
         <h1 className="mt-3 text-[24px] font-bold leading-snug">{t.venues ? t.venues.name : "식당을 정하고 있어요"}</h1>
         <p className="mt-1 text-[14px] text-muted">
-          {t.venues?.rating ? `평점 ${t.venues.rating}${t.venues.review_count ? ` · 리뷰 ${t.venues.review_count}` : ""}` : t.rounds.title}
+          {[t.venues?.category, t.venues?.rating ? `평점 ${t.venues.rating}${t.venues.review_count ? ` · 리뷰 ${t.venues.review_count}` : ""}` : null].filter(Boolean).join(" · ") || t.rounds.title}
         </p>
 
         <section className="mt-5 grid grid-cols-3 rounded-[18px] bg-card" aria-label="핵심 정보">
