@@ -3,7 +3,7 @@
 -- 어드민에서 올릴 때 브라우저가 긴 변 1280px JPEG로 줄여서 보내므로 한 장이 수백 KB를 넘지 않는다.
 
 -- 1) 식당 표시용 칼럼
-alter table venues add column if not exists photo_url text;   -- /api/venue-photo/<id>?v=... 또는 엑셀로 넣은 외부 이미지 주소
+alter table venues add column if not exists photo_url text;   -- 어드민 업로드로만 채운다: /api/venue-photo/<id>?v=...
 alter table venues add column if not exists category text;    -- 업종 한 줄 (예: 한식 주점, 이탈리안)
 comment on column venues.photo_url is '참가자 화면에 보이는 대표 사진. 어드민 업로드면 /api/venue-photo/<venue_id>?v=<저장 시각>';
 comment on column venues.category is '업종 한 줄. 참가자 테이블 화면에 식당 이름 아래 보인다';
