@@ -20,4 +20,12 @@ alter table venue_photos enable row level security;  -- 다른 테이블처럼 �
 comment on table venue_photos is '어드민에서 올린 식당 대표 사진. 공개 라우트 /api/venue-photo/<venue_id>가 꺼내 준다';
 
 -- 3) 같은 동네에 같은 이름의 식당은 하나만 (엑셀 업로드가 이 기준으로 고친다/추가한다)
-create unique index if not exists venues_region_name_key on venues(region, name);
+--    이미 겹치는 식당이 있으면 인덱스를 만들지 않고 알림만 남긴다(앱은 인덱스 없이도 같은 기준으로 동작한다)
+do $$
+begin
+  if exists (select 1 from venues group by region, name having count(*) > 1) then
+    raise notice '같은 동네에 같은 이름의 식당이 있어 고유 인덱스를 건너뜀. 정리한 뒤 다시 실행하세요';
+  else
+    create unique index if not exists venues_region_name_key on venues(region, name);
+  end if;
+end $$;
