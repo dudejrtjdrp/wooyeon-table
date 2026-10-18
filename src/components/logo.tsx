@@ -13,9 +13,9 @@ export function Wordmark({ animate = false, font = "batang", className, title = 
   return (
     <svg viewBox={L.vb} className={className} role="img" aria-label={title}>
       <g fill="currentColor">
-        <path d={L.wy} className={animate ? "wm-rise" : undefined} {...d(1.3)} />
-        <path d={L.han} className={animate ? "wm-pop" : undefined} {...d(1.4)} />
-        <path d={L.sik} className={animate ? "wm-rise" : undefined} {...d(1.5)} />
+        <path d={L.wy} className={animate ? "wm-rise" : undefined} {...d(1.08)} />
+        <path d={L.han} className={animate ? "wm-pop" : undefined} {...d(1.18)} />
+        <path d={L.sik} className={animate ? "wm-rise" : undefined} {...d(1.24)} />
       </g>
       {/* 리본은 글자 위에: '연'처럼 ㅇ이 다른 획과 붙은 글꼴은 리본이 그 ㅇ을 덮는다 */}
       <path d={L.ribbon} pathLength={1} fill="none" stroke="var(--accent)" strokeWidth={L.sw} strokeLinecap="round" strokeLinejoin="round" className={animate ? "wm-ribbon" : undefined} />

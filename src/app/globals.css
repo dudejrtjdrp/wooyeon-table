@@ -109,8 +109,8 @@ html { -webkit-tap-highlight-color: transparent; }
 
 /* 첫 장면: 리본으로 이어지는 ㅇㅇ → 나머지 획 → 한(작게) 식탁 */
 html[data-splash="off"] #splash { display: none; }
-.splash { animation: splash-out .3s ease-in 2.35s forwards; }
-.wm-ribbon { stroke-dasharray: 1; stroke-dashoffset: 1; transform-box: fill-box; transform-origin: 50% 60%; animation: wm-ribbon 1.25s linear .1s forwards, wm-boing .6s 1.35s both; } /* 왼쪽 ㅇ 한 바퀴 → 리본 고리 → 오른쪽 ㅇ 한 바퀴, 같은 방향 선 하나로 */
+.splash { animation: splash-out .28s ease-in 1.78s forwards; }
+.wm-ribbon { stroke-dasharray: 1; stroke-dashoffset: 1; transform-box: fill-box; transform-origin: 50% 60%; animation: wm-ribbon 1.25s linear .1s forwards, wm-boing .42s 1.33s both; } /* 왼쪽 ㅇ 한 바퀴 → 리본 고리 → 오른쪽 ㅇ 한 바퀴, 같은 방향 선 하나로 */
 /* 텐션: 첫 ㅇ은 천천히 감다가, 리본 고리에서 확 당겨지고, 둘째 ㅇ에서 감속. 다 그리면 한 번 튕긴다 */
 @keyframes wm-ribbon {
   0% { stroke-dashoffset: 1; animation-timing-function: cubic-bezier(.5,0,.9,.5); }
@@ -121,7 +121,7 @@ html[data-splash="off"] #splash { display: none; }
 @keyframes wm-boing { 0% { scale: 1; } 30% { scale: 1.07 .94; } 55% { scale: .97 1.03; } 78% { scale: 1.01 .99; } 100% { scale: 1; } }
 .wm-pop { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; animation: wm-pop .3s cubic-bezier(.3,1.5,.5,1) forwards; }
 .wm-rise { opacity: 0; animation: wm-rise .32s ease-out forwards; }
-.splash-tag { opacity: 0; animation: wm-rise .3s ease-out 1.75s forwards; }
+.splash-tag { opacity: 0; animation: wm-rise .3s ease-out 1.25s forwards; }
 @keyframes wm-pop { from { opacity: 0; scale: .4; } to { opacity: 1; scale: 1; } }
 @keyframes wm-rise { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
 @keyframes splash-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
