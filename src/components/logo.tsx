@@ -14,6 +14,8 @@ export function Wordmark({ animate = false, font = "batang", className, title = 
     <svg viewBox={L.vb} className={className} role="img" aria-label={title}>
       <g fill="currentColor">
         <path d={L.wy} className={animate ? "wm-rise" : undefined} {...d(1.0)} />
+        {/* 다른 획과 붙어 있던 원래 ㅇ을 바탕색으로 덮는다(리본 원이 그 자리를 대신한다) */}
+        {L.erase && <path d={L.erase} fill="none" stroke="var(--paper)" strokeWidth={L.eraseW} className={animate ? "wm-rise" : undefined} {...d(1.0)} />}
         <path d={L.han} className={animate ? "wm-pop" : undefined} {...d(1.08)} />
         <path d={L.sik} className={animate ? "wm-rise" : undefined} {...d(1.14)} />
       </g>
