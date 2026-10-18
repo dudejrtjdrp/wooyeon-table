@@ -69,7 +69,7 @@ export function RoundTable({
               width: seat,
               height: seat,
               background: fill,
-              border: fill ? undefined : `2px dashed ${dark ? "var(--seat)" : "#c5d3cb"}`,
+              border: fill ? undefined : `2px dashed ${dark ? "var(--seat)" : "#d9cdbe"}`,
               fontSize: Math.max(10, seat * 0.36),
               color: isMe && dark ? "var(--accent)" : "#fff",
             }}

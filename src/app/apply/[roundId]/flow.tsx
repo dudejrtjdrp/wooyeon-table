@@ -193,7 +193,7 @@ export function ApplyFlow({
                     // 아직 안 여는 동네는 수요 조사로 보낸다 (운영사 Q&A: 서울 4곳 먼저)
                     const whole = a.name.endsWith(" 전체");
                     return (
-                      <li key={a.name} className="border-b border-[#f1f4f2]">
+                      <li key={a.name} className="border-b border-line2">
                         <Link href={whole ? `/wish?sido=${encodeURIComponent(active)}` : `/wish?area=${encodeURIComponent(a.name)}`} className="flex min-h-[52px] w-full items-center gap-2.5 py-2 text-left">
                           <span className="min-w-0 flex-1 text-[15px] text-faint">{a.name}</span>
                           <span className="shrink-0 rounded-[5px] bg-[#EEF1EF] px-1.5 py-[3px] text-[11px] font-bold text-ink2">열리면 알림</span>
@@ -202,7 +202,7 @@ export function ApplyFlow({
                     );
                   }
                   return (
-                    <li key={a.name} className="border-b border-[#f1f4f2]">
+                    <li key={a.name} className="border-b border-line2">
                       <button type="button" role="checkbox" aria-checked={on} onClick={() => toggleArea(a.name, active)} className="flex min-h-[52px] w-full items-center gap-2.5 py-2 text-left">
                         <span className={`min-w-0 flex-1 text-[15px] ${on ? "font-extrabold text-accent-text" : "text-ink2"}`}>{a.name}</span>
                         {hot.includes(a.name) && <span className="shrink-0 rounded-[5px] bg-accent-soft px-1.5 py-[3px] text-[11px] font-bold text-accent">많이 골라요</span>}
@@ -229,8 +229,8 @@ export function ApplyFlow({
               <div className="flex items-center justify-between px-2 pb-3">
                 <span className="text-[17px] font-extrabold">{Number(month.slice(0, 4))}년 {Number(month.slice(5))}월</span>
                 <div className="flex gap-1">
-                  <button type="button" aria-label="이전 달" disabled={mi === 0} onClick={() => setMi(mi - 1)} className="flex size-11 items-center justify-center rounded-full bg-paper text-ink disabled:text-[#b5c0ba]"><ChevronLeft size={16} strokeWidth={2.4} /></button>
-                  <button type="button" aria-label="다음 달" disabled={mi >= months.length - 1} onClick={() => setMi(mi + 1)} className="flex size-11 items-center justify-center rounded-full bg-paper text-ink disabled:text-[#b5c0ba]"><ChevronRight size={16} strokeWidth={2.4} /></button>
+                  <button type="button" aria-label="이전 달" disabled={mi === 0} onClick={() => setMi(mi - 1)} className="flex size-11 items-center justify-center rounded-full bg-paper text-ink disabled:text-[#9a8c7e]"><ChevronLeft size={16} strokeWidth={2.4} /></button>
+                  <button type="button" aria-label="다음 달" disabled={mi >= months.length - 1} onClick={() => setMi(mi + 1)} className="flex size-11 items-center justify-center rounded-full bg-paper text-ink disabled:text-[#9a8c7e]"><ChevronRight size={16} strokeWidth={2.4} /></button>
                 </div>
               </div>
               <div className="grid grid-cols-7 pb-1.5 text-center text-[12px] text-faint">{WEEK.map((w) => <span key={w}>{w}</span>)}</div>
@@ -253,7 +253,7 @@ export function ApplyFlow({
                           aria-pressed={on}
                           aria-label={`${m}월 ${d}일${isOpen ? "" : ", 열린 테이블 없음"}`}
                           onClick={() => { setMsg(null); setDays((cur) => (cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key])); }}
-                          className={`flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-paper font-extrabold text-ink" : "font-medium text-[#b5c0ba]"} ${today && !on ? "ring-[1.5px] ring-inset ring-ink" : ""}`}
+                          className={`flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-paper font-extrabold text-ink" : "font-medium text-[#9a8c7e]"} ${today && !on ? "ring-[1.5px] ring-inset ring-ink" : ""}`}
                         >
                           {d}
                         </button>
@@ -304,10 +304,14 @@ export function ApplyFlow({
                 </div>
               ))}
             </dl>
-            <div className="mx-6 mt-3.5 rounded-[14px] bg-field p-4 text-[13px] leading-[1.7] text-[#4a5a51]">
-              <p className="mb-1 font-extrabold text-ink">환불 규정</p>
-              {refund.map((r) => <p key={r}>{r}</p>)}
-            </div>
+            {/* 환불 규정: 핵심 한 줄만 보이고 나머지는 펼쳐 본다 (동의 전에 읽을 수 있게 그대로 둔다) */}
+            <details className="group/refund mx-6 mt-3.5 rounded-[14px] bg-card px-4 text-[13px] leading-[1.7] text-ink2">
+              <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3">
+                <span><b className="text-ink">환불 규정</b> · {refund[0]}</span>
+                <span className="shrink-0 text-[13px] font-semibold text-accent group-open/refund:hidden">펼치기</span>
+              </summary>
+              <div className="pb-4">{refund.slice(1).map((r) => <p key={r}>{r}</p>)}</div>
+            </details>
             <button type="button" role="checkbox" aria-checked={agree} onClick={() => setAgree(!agree)} className="mx-6 mt-2 flex min-h-[48px] items-center gap-2.5 text-left text-[15px] font-bold">
               <span className={`flex size-[22px] items-center justify-center rounded-[6px] ${agree ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
               환불 규정을 확인했어요
@@ -330,7 +334,7 @@ export function ApplyFlow({
           {msg && <p role="alert" className="mb-2.5 rounded-[12px] bg-danger/10 px-4 py-3 text-[14px] font-bold text-danger">{msg}</p>}
           <div className="pb-4">
             {step < 3 ? (
-              <button type="button" onClick={next} className="flex h-[56px] w-full items-center justify-center gap-1.5 rounded-[14px] bg-accent text-[17px] font-extrabold text-white active:scale-[.985]">
+              <button type="button" onClick={next} className="flex h-[56px] w-full items-center justify-center gap-1.5 rounded-[14px] bg-accent text-[16px] font-bold text-accent-ink active:scale-[.985]">
                 다음
                 {step === 1 && picked.length > 0 && <span className="font-medium opacity-70">{expanded.size}곳</span>}
                 {step === 2 && days.length > 0 && <span className="font-medium opacity-70">{days.length}일</span>}
@@ -356,7 +360,7 @@ export function ApplyFlow({
         <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${on ? "bg-accent" : "bg-dot"}`}>{on && CHECK}</span>
         <span className="min-w-0 flex-1">
           <span className={`flex items-center gap-1.5 text-[17px] ${on ? "font-extrabold text-accent-text" : "font-bold"}`}>{title}{badge && <span className="rounded-[5px] bg-accent px-1.5 py-[2px] text-[11px] font-bold text-white">{badge}</span>}</span>
-          <span className={`mt-0.5 block text-[13px] ${on ? "text-[#4a5a51]" : "text-muted"}`}>{sub}</span>
+          <span className={`mt-0.5 block text-[13px] ${on ? "text-ink2" : "text-muted"}`}>{sub}</span>
         </span>
         <span className={`shrink-0 text-[17px] ${on ? "font-extrabold text-accent-text" : "font-bold"}`}>{price}</span>
       </button>

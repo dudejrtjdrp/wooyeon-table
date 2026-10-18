@@ -90,14 +90,14 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   return (
     <Screen title="내 신청" back="/rounds">
       <Toast msg={m} />
-      <section className="animate-rise relative mt-3 overflow-hidden rounded-[24px] bg-field">
+      <section className="animate-rise relative mt-3 overflow-hidden rounded-[20px] bg-card">
         <div className="pointer-events-none absolute right-4 top-6">
           <RoundTable size={104} filled={matched ? 6 : app.match_status === "ALTERNATIVE_OFFERED" ? 3 : 1} />
         </div>
         <div className="relative p-6">
           <Pill tone={h.tone}>{h.label}</Pill>
-          <p className="mt-4 max-w-[62%] text-[24px] font-black leading-[1.35] text-ink">{app.rounds.title}</p>
-          <p className="mt-3 max-w-[60%] text-[15px] leading-relaxed text-ink2">{payClosed ? "결제 전에 매칭 시각이 지나 이번 테이블에는 들어가지 못했어요. 빠져나간 돈은 없어요." : app.match_reason ?? h.desc}</p>
+          <p className="mt-4 max-w-[62%] text-[22px] font-bold leading-[1.35] text-ink">{app.rounds.title}</p>
+          <p className="mt-3 text-[15px] leading-relaxed text-ink2">{payClosed ? "결제 전에 매칭 시각이 지나 이번 테이블에는 들어가지 못했어요. 빠져나간 돈은 없어요." : app.match_reason ?? h.desc}</p>
           {money && <p className="mt-3 inline-flex rounded-full bg-paper px-3 py-1.5 text-[14px] font-bold text-ink">{money}</p>}
           {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH") && (
             <Link href="/rounds" className="mt-4 flex h-12 w-fit items-center rounded-[14px] bg-accent px-5 text-[15px] font-bold text-white">다른 일정 보기</Link>
@@ -121,7 +121,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       {app.match_status === "ALTERNATIVE_OFFERED" && <OfferBanner userId={me.id} applicationId={app.id} />}
 
       <SectionTitle>이렇게 진행돼요</SectionTitle>
-      <section id="progress" className="scroll-mt-20 rounded-[22px] bg-field p-5">
+      <section id="progress" className="scroll-mt-20 rounded-[20px] bg-card p-5">
         <ol>
           {steps.map((st, i) => {
             const now_ = i === current;
@@ -145,7 +145,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       </section>
 
       {moved && (
-        <div className="mt-3 rounded-[20px] bg-field px-4 py-3.5 text-[14px] leading-relaxed text-ink2">
+        <div className="mt-3 rounded-[20px] bg-card px-4 py-3.5 text-[14px] leading-relaxed text-ink2">
           <p>처음 테이블 인원이 줄어 같은 조건의 다른 테이블로 옮겨 드렸어요. 이 테이블이 마음에 들지 않으면 다른 방법을 고를 수 있어요.</p>
           <ConfirmSheet
             trigger={<button className="mt-1 inline-flex h-11 items-center text-[14px] font-bold text-accent">다른 방법 고르기</button>}
@@ -218,11 +218,18 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       <ErrorText msg={e} />
 
       <SectionTitle>환불 규정</SectionTitle>
-      <ul className="space-y-1.5 rounded-[22px] bg-field p-5 text-[13px] leading-relaxed text-muted">
-        {REFUND_POLICY.map((r) => (
-          <li key={r} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-muted" />{r}</li>
-        ))}
-      </ul>
+      {/* 핵심 한 줄만 먼저, 나머지는 펼쳐 본다 */}
+      <details className="group/refund rounded-[20px] bg-card px-5 text-[13px] leading-relaxed text-muted">
+        <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-3 text-[14px] text-ink2">
+          {REFUND_POLICY[0]}
+          <span className="shrink-0 font-semibold text-accent group-open/refund:hidden">펼치기</span>
+        </summary>
+        <ul className="space-y-1.5 pb-5">
+          {REFUND_POLICY.slice(1).map((r) => (
+            <li key={r} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-muted" />{r}</li>
+          ))}
+        </ul>
+      </details>
 
       <p className="mt-8 text-center text-[13px] text-muted">
         <Link href="/rounds" className="inline-flex h-11 items-center px-4 underline underline-offset-4">다른 일정 보기</Link>

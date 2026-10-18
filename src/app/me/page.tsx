@@ -1,7 +1,6 @@
-import { ChevronRight, CircleHelp, FileText, ShieldCheck, ReceiptText, UserRound } from "lucide-react";
+import { Bell, ChevronRight, CircleHelp, FileText, ShieldCheck, ReceiptText, UserRound } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { PushToggle } from "@/components/push-toggle";
 import { ConfirmSheet, List, Row, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { isMembership } from "@/lib/constants";
@@ -47,12 +46,12 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
             // eslint-disable-next-line @next/next/no-img-element
             <img src={me.avatar_url} alt="" className="size-[60px] rounded-full object-cover" />
           ) : (
-            <span className="flex size-[60px] items-center justify-center rounded-full bg-accent text-[22px] font-black text-white">
+            <span className="flex size-[60px] items-center justify-center rounded-full bg-accent text-[22px] font-bold text-accent-ink">
               {me.name.slice(-2, -1) || me.name.slice(0, 1)}
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-[20px] font-black text-ink">{me.name}</p>
+            <p className="text-[20px] font-bold text-ink">{me.name}</p>
             <p className="mt-0.5 truncate text-[14px] text-muted">
               {via.length ? `${via.join(", ")}로 로그인` : me.phone ? me.phone.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3") : me.email ?? ""}
             </p>
@@ -62,20 +61,20 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
         <div className="mx-5 mt-5 grid grid-cols-2 border-t border-line py-4">
           <Link href="/my-tables" className="text-center">
             <p className="text-[14px] text-muted">함께한 테이블</p>
-            <p className="mt-1 text-[26px] font-extrabold text-accent">{attended ?? 0}번</p>
+            <p className="mt-1 text-[26px] font-bold text-accent">{attended ?? 0}번</p>
           </Link>
           <Link href="/rounds" className="border-l border-line text-center">
             <p className="text-[14px] text-muted">{member ? "멤버십" : "남은 이용권"}</p>
-            <p className="mt-1 text-[26px] font-extrabold text-accent">{member?.expires_at ? `${fmtDay(member.expires_at).replace(/\s*\(.\)$/, "")}까지` : `${left}회`}</p>
+            <p className="mt-1 text-[26px] font-bold text-accent">{member?.expires_at ? `${fmtDay(member.expires_at).replace(/\s*\(.\)$/, "")}까지` : `${left}회`}</p>
           </Link>
         </div>
       </section>
 
       <SectionTitle>계정</SectionTitle>
       <List>
-        <PushToggle />
         <MenuRow href="/onboarding?next=/me" icon={<UserRound size={20} />} label="프로필과 매칭 정보" />
         <MenuRow href="/rounds" icon={<ReceiptText size={20} />} label="신청·결제 내역" />
+        <MenuRow href="/settings" icon={<Bell size={20} />} label="알림과 앱 설치" />
       </List>
 
       <SectionTitle>도움</SectionTitle>

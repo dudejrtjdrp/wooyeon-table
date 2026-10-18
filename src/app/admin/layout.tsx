@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   ]);
   const virtual = Number(clock?.offset_seconds) !== 0;
   return (
-    <div className="flex min-h-dvh bg-paper">
+    <div className="admin-theme flex min-h-dvh bg-paper">
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line/70 bg-gradient-to-b from-white to-[#f3f7fd] px-4 py-6 md:flex">
         <Link href="/admin" className="flex items-center gap-3 px-2">
           <span className="relative size-11 overflow-hidden rounded-full ring-2 ring-white"><Image src={IMG.splashTable} alt="" fill sizes="44px" className="object-cover" /></span>

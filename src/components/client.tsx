@@ -81,7 +81,7 @@ export function TabBar({ unread = 0 }: { unread?: number }) {
               <Link
                 href={href}
                 aria-current={on ? "page" : undefined}
-                className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] ${on ? "font-extrabold text-accent" : "font-medium text-muted"}`}
+                className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] ${on ? "font-bold text-accent" : "font-medium text-muted"}`}
               >
                 <Icon size={24} strokeWidth={on ? 2.3 : 1.8} />
                 {label}
