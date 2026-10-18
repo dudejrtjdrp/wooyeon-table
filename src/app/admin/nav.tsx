@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CalendarRange, ChartNoAxesColumn, MapPin, CreditCard, Gauge, LayoutDashboard, MessageSquareText, MessagesSquare, ShieldCheck, SlidersHorizontal, UserCheck, Users, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, CalendarRange, ChartNoAxesColumn, ChefHat, MapPin, CreditCard, Gauge, LayoutDashboard, MessageSquareText, MessagesSquare, ShieldCheck, SlidersHorizontal, UserCheck, Users, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -23,6 +23,7 @@ const GROUPS = [
   ] },
   { name: "설정", items: [
     { href: "/admin/rounds", label: "회차·식당 재고", icon: CalendarRange },
+    { href: "/admin/venues", label: "식당 관리", icon: ChefHat },
     { href: "/admin/demand", label: "지역 수요", icon: MapPin },
     { href: "/admin/messages", label: "자동 메시지", icon: MessageSquareText },
     { href: "/admin/contents", label: "대화 콘텐츠", icon: MessagesSquare },

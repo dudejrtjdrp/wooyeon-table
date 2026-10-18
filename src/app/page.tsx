@@ -24,7 +24,7 @@ type ActiveRow = {
   id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; resolution: string | null;
   table_id: string | null; areas: string[] | null; dates: string[] | null;
   rounds: { title: string; match_at: string };
-  dining_tables: { slots: { starts_at: string; ends_at: string; region: string } | null; venues: { name: string } | null } | null;
+  dining_tables: { slots: { starts_at: string; ends_at: string; region: string } | null; venues: { name: string; photo_url: string | null; category: string | null } | null } | null;
 };
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
@@ -44,7 +44,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(slots(starts_at,ends_at,region),venues(name))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(slots(starts_at,ends_at,region),venues(name,photo_url,category))")
     .eq("user_id", me.id)
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .limit(10);
@@ -213,7 +213,17 @@ function Greeting({ children }: { children: React.ReactNode }) {
 }
 
 /** 카드 윗부분 색면: 사진 대신 식탁 그림과 핵심 한 줄 */
-function Hero({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
+function Hero({ children, right, photo }: { children: React.ReactNode; right?: React.ReactNode; photo?: { src: string; alt: string } | null }) {
+  if (photo) {
+    // 식당 사진이 있으면 사진 위에 칩만 얹는다
+    return (
+      <div className="relative h-[150px] overflow-hidden bg-[#ebe0d1]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={photo.src} alt={photo.alt} className="absolute inset-0 size-full object-cover" />
+        <div className="absolute left-4 top-4">{children}</div>
+      </div>
+    );
+  }
   return (
     <div className="relative flex min-h-[112px] items-end justify-between gap-3 overflow-hidden bg-[#ebe0d1] px-5 pb-4 pt-5">
       <div className="relative z-10 min-w-0">{children}</div>
@@ -248,14 +258,14 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
   const others = members.filter((_, i) => memberIds[i] !== meId);
   return (
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
-      <Hero right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
+      <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
         <span className="inline-flex h-7 items-center rounded-full bg-ink px-3 text-[13px] font-semibold text-paper">
           {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
         </span>
       </Hero>
       <div className="px-5 pt-4">
         <p className="text-[18px] font-bold leading-snug">{confirmed ? (a.dining_tables?.venues?.name ?? `${slot!.region} 테이블`) : a.rounds.title}</p>
-        <p className="mt-1 text-[14px] text-muted">{confirmed ? `${fmtSlot(slot!.starts_at)} · ${slot!.region}` : where}</p>
+        <p className="mt-1 text-[14px] text-muted">{confirmed ? [a.dining_tables?.venues?.category, `${fmtSlot(slot!.starts_at)} · ${slot!.region}`].filter(Boolean).join(" · ") : where}</p>
         {confirmed && others.length > 0 && (
           <div className="mt-3 flex items-center gap-2.5">
             <span className="flex" aria-hidden="true">
