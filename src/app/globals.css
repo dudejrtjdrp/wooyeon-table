@@ -107,20 +107,19 @@ html { -webkit-tap-highlight-color: transparent; }
 .glow-in { opacity: 0; animation: glow-in .8s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) { .seat-in, .glow-in { animation: none; opacity: 1; } }
 
-/* 첫 장면 (A1) */
+/* 첫 장면: 리본으로 이어지는 ㅇㅇ → 나머지 획 → 한(작게) 식탁 */
 html[data-splash="off"] #splash { display: none; }
-.splash { animation: splash-out .3s ease-in 1.25s forwards; }
-.splash-photo { opacity: 0; transform: scale(.94); animation: photo-in .55s cubic-bezier(.2,.8,.2,1) .05s forwards; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent); mask-image: radial-gradient(closest-side, #000 72%, transparent); }
-.splash-photo img { filter: brightness(.55) saturate(.8); animation: seats-on .5s ease-out .45s forwards; }
-.splash-lamp { opacity: 0; background: radial-gradient(closest-side, rgb(255 214 140 / .85), rgb(255 185 56 / .25) 60%, transparent); mix-blend-mode: screen; animation: glow-pop .45s ease-out 1s forwards; }
-.splash-name { opacity: 0; transform: translateY(8px); animation: name-in .4s ease-out .8s forwards; }
-@keyframes photo-in { to { opacity: 1; transform: none; } }
-@keyframes seats-on { to { filter: none; } }
-@keyframes glow-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-@keyframes name-in { to { opacity: 1; transform: none; } }
+.splash { animation: splash-out .3s ease-in 1.6s forwards; }
+.wm-ribbon { stroke-dasharray: 1; stroke-dashoffset: 1; animation: wm-draw .7s cubic-bezier(.55,.1,.3,1) .05s forwards; }
+.wm-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: wm-draw .22s ease-out forwards; }
+.wm-pop { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; animation: wm-pop .3s cubic-bezier(.3,1.5,.5,1) forwards; }
+.wm-rise { opacity: 0; animation: wm-rise .32s ease-out forwards; }
+.splash-tag { opacity: 0; animation: wm-rise .3s ease-out 1.05s forwards; }
+@keyframes wm-draw { to { stroke-dashoffset: 0; } }
+@keyframes wm-pop { from { opacity: 0; scale: .4; } to { opacity: 1; scale: 1; } }
+@keyframes wm-rise { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
 @keyframes splash-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .splash { animation: splash-out .2s ease-in .5s forwards; }
-  .splash-photo, .splash-photo img, .splash-lamp, .splash-name { animation: none; opacity: 1; filter: none; transform: none; }
-  .splash-lamp { transform: translate(-50%, -50%); }
+  .splash { animation: splash-out .2s ease-in .6s forwards; }
+  .wm-ribbon, .wm-draw, .wm-pop, .wm-rise, .splash-tag { animation: none; opacity: 1; stroke-dashoffset: 0; }
 }
