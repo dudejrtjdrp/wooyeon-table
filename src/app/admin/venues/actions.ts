@@ -8,22 +8,52 @@ import { matchPhotoName, parseVenueRow, type VenueRow } from "@/lib/venue-sheet"
 import { saveVenuePhoto } from "@/lib/venue-photo";
 import { readVenueWorkbook } from "@/lib/venue-xlsx";
 
-export type ImportResult = { ok: boolean; added: number; updated: number; skipped: { line: number; why: string }[]; message: string };
+export type ImportResult = {
+  ok: boolean;
+  /** true면 아직 아무것도 바꾸지 않은 미리보기다. 운영자가 확인한 뒤 같은 파일로 다시 보낸다 */
+  preview: boolean;
+  added: number;
+  updated: number;
+  inventory: number;
+  skipped: { line: number; why: string }[];
+  changes: { name: string; how: "추가" | "고침"; fields: string[] }[];
+  message: string;
+};
 
-/** 엑셀로 식당 넣기: 같은 동네·같은 이름이면 고치고, 없으면 새로 만든다. 새 식당은 모집 중인 일정에 2테이블씩 잡는다 */
+const MAX_ROWS = 500;
+const FIELD_LABEL: Record<string, string> = { category: "업종", address: "주소", price_range: "가격대", rating: "평점", review_count: "리뷰 수", booking_channel: "예약 채널", booking_url: "예약 페이지", phone: "전화", map_url: "지도 링크", seats_per_table: "좌석", active: "사용" };
+const fail = (message: string): ImportResult => ({ ok: false, preview: false, added: 0, updated: 0, inventory: 0, skipped: [], changes: [], message });
+
+/** 사용 중인 식당이 모집 중인 같은 동네 일정에 재고가 없으면 2테이블씩 잡는다(0002 시드와 같은 시연용 가정, 회차·식당 재고에서 바꾼다). 만든 칸 수 */
+async function ensureInventory(venueId: string, region: string) {
+  const { data: slots } = await db().from("slots").select("id,rounds!inner(status)").eq("region", region).eq("rounds.status", "open");
+  if (!slots?.length) return 0;
+  const { data: have } = await db().from("venue_slots").select("slot_id").eq("venue_id", venueId);
+  const missing = slots.filter((s) => !(have ?? []).some((h) => h.slot_id === s.id));
+  if (!missing.length) return 0;
+  const { error } = await db().from("venue_slots").insert(missing.map((s) => ({ venue_id: venueId, slot_id: s.id, tables_available: 2 })));
+  return error ? -1 : missing.length;
+}
+
+/**
+ * 엑셀로 식당 넣기. 처음 보내면 바꿀 내용을 미리 보여 주고(mode=preview), 운영자가 '이대로 넣기'를 누르면 반영한다(mode=apply).
+ * 같은 동네·같은 이름이면 고치고 없으면 새로 만든다. 사용 중인 식당은 모집 중인 일정에 재고가 잡혀 있게 맞춘다.
+ */
 export async function importVenues(_prev: ImportResult | null, form: FormData): Promise<ImportResult> {
   const me = await requireAdminWrite("/admin/venues");
+  const apply = form.get("mode") === "apply";
   const file = form.get("file");
-  if (!(file instanceof File) || !file.size) return { ok: false, added: 0, updated: 0, skipped: [], message: "엑셀 파일을 골라 주세요" };
-  if (!/\.xlsx$/i.test(file.name)) return { ok: false, added: 0, updated: 0, skipped: [], message: "양식(.xlsx) 파일만 올릴 수 있어요. 양식을 내려받아 채워 주세요" };
+  if (!(file instanceof File) || !file.size) return fail("엑셀 파일을 골라 주세요");
+  if (!/\.xlsx$/i.test(file.name)) return fail("양식(.xlsx) 파일만 올릴 수 있어요. 양식을 내려받아 채워 주세요");
   let parsed: Awaited<ReturnType<typeof readVenueWorkbook>>;
   try {
     parsed = await readVenueWorkbook(await file.arrayBuffer());
   } catch {
-    return { ok: false, added: 0, updated: 0, skipped: [], message: "엑셀 파일을 읽지 못했어요. 양식을 내려받아 다시 채워 주세요" };
+    return fail("엑셀 파일을 읽지 못했어요. 양식을 내려받아 다시 채워 주세요");
   }
-  if (parsed.missing.length) return { ok: false, added: 0, updated: 0, skipped: [], message: `첫 줄에 ${parsed.missing.join("·")} 칸이 없어요. 양식 그대로 써 주세요` };
-  if (!parsed.rows.length) return { ok: false, added: 0, updated: 0, skipped: [], message: "채워진 줄이 없어요" };
+  if (parsed.missing.length) return fail(`첫 줄에 ${parsed.missing.join("·")} 칸이 없어요. 양식 그대로 써 주세요`);
+  if (!parsed.rows.length) return fail("채워진 줄이 없어요");
+  if (parsed.rows.length > MAX_ROWS) return fail(`한 번에 ${MAX_ROWS}줄까지 올릴 수 있어요. 나눠서 올려 주세요`);
 
   const skipped: ImportResult["skipped"] = [];
   const good: { line: number; v: VenueRow }[] = [];
@@ -38,31 +68,52 @@ export async function importVenues(_prev: ImportResult | null, form: FormData): 
     good.push({ line, v: r.value });
   }
 
-  const { data: existing } = await db().from("venues").select("id,name,region,photo_url");
-  const byKey = new Map((existing ?? []).map((v) => [`${v.region}|${v.name}`, v]));
-  let added = 0, updated = 0;
+  const { data: existing } = await db().from("venues").select("id,name,region,category,address,price_range,rating,review_count,booking_channel,booking_url,phone,map_url,seats_per_table,active");
+  const byKey = new Map((existing ?? []).map((v) => [`${v.region}|${v.name}`, v as Record<string, unknown> & { id: string }]));
+  const changes: ImportResult["changes"] = [];
+  for (const { v } of good) {
+    const cur = byKey.get(`${v.region}|${v.name}`);
+    if (!cur) { changes.push({ name: v.name, how: "추가", fields: [] }); continue; }
+    const fields = Object.keys(FIELD_LABEL).filter((k) => String(cur[k] ?? "") !== String((v as Record<string, unknown>)[k] ?? ""));
+    changes.push({ name: v.name, how: "고침", fields: fields.map((k) => FIELD_LABEL[k]) });
+  }
+  const added = changes.filter((c) => c.how === "추가").length;
+  const updated = changes.filter((c) => c.how === "고침").length;
+  if (!apply) {
+    return {
+      ok: good.length > 0, preview: true, added, updated, inventory: 0, skipped, changes,
+      message: good.length ? `새로 ${added}곳, 고칠 곳 ${updated}곳${skipped.length ? `, 건너뛸 줄 ${skipped.length}개` : ""}. 확인하고 '이대로 넣기'를 눌러 주세요` : "넣을 수 있는 줄이 없어요",
+    };
+  }
+
+  let done = 0, inventory = 0;
   for (const { line, v } of good) {
     const cur = byKey.get(`${v.region}|${v.name}`);
-    // 사진 주소 칸이 비어 있으면 이미 올린 사진을 지우지 않는다
-    const row = { ...v, photo_url: v.photo_url ?? cur?.photo_url ?? null };
+    let id = cur?.id;
     if (cur) {
-      const { error } = await db().from("venues").update(row).eq("id", cur.id);
-      if (error) skipped.push({ line, why: "저장하지 못했어요" }); else updated++;
+      const { error } = await db().from("venues").update(v).eq("id", cur.id);
+      if (error) { skipped.push({ line, why: "저장하지 못했어요" }); continue; }
+      // 감사 로그: 바뀐 칸마다 이전 값 → 새 값
+      const diff = Object.keys(FIELD_LABEL).filter((k) => String(cur[k] ?? "") !== String((v as Record<string, unknown>)[k] ?? ""));
+      if (diff.length) await logStatus({ entityType: "venue", entityId: cur.id, field: "import", from: diff.map((k) => `${FIELD_LABEL[k]}=${cur[k] ?? ""}`).join("; "), to: diff.map((k) => `${FIELD_LABEL[k]}=${(v as Record<string, unknown>)[k] ?? ""}`).join("; "), actor: `admin:${me.id}`, reason: `엑셀로 식당 고침: ${v.name} (${file.name})` });
     } else {
-      const { data: ins, error } = await db().from("venues").insert(row).select("id").single();
+      const { data: ins, error } = await db().from("venues").insert(v).select("id").single();
       if (error || !ins) { skipped.push({ line, why: "저장하지 못했어요" }); continue; }
-      added++;
-      const { data: slots } = await db().from("slots").select("id,rounds!inner(status)").eq("region", v.region).eq("rounds.status", "open");
-      if (slots?.length && v.active) await db().from("venue_slots").insert(slots.map((s) => ({ venue_id: ins.id, slot_id: s.id, tables_available: 2 })));
+      id = ins.id;
+      await logStatus({ entityType: "venue", entityId: ins.id, field: "import", to: "추가", actor: `admin:${me.id}`, reason: `엑셀로 식당 추가: ${v.region} ${v.name} (${file.name})` });
+    }
+    done++;
+    if (v.active && id) {
+      const n = await ensureInventory(id, v.region);
+      if (n < 0) skipped.push({ line, why: "식당은 넣었지만 일정별 재고를 잡지 못했어요. 회차·식당 재고에서 확인해 주세요" });
+      else inventory += n;
     }
   }
-  await logStatus({ entityType: "venue", entityId: me.id, field: "import", to: `${added}/${updated}`, actor: `admin:${me.id}`, reason: `엑셀로 식당 넣기: 새로 ${added}곳, 고침 ${updated}곳, 건너뜀 ${skipped.length}줄 (${file.name})` });
   revalidatePath("/admin/venues");
   revalidatePath("/admin/rounds");
   return {
-    ok: added + updated > 0,
-    added, updated, skipped,
-    message: `새로 ${added}곳, 고친 곳 ${updated}곳${skipped.length ? `, 건너뛴 줄 ${skipped.length}개` : ""}`,
+    ok: done > 0, preview: false, added, updated, inventory, skipped, changes,
+    message: `새로 ${added}곳, 고친 곳 ${updated}곳${inventory ? `, 모집 중인 일정에 재고 ${inventory}칸` : ""}${skipped.length ? `, 건너뛴 줄 ${skipped.length}개` : ""}`,
   };
 }
 

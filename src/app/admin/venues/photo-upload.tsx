@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { startTransition, useActionState, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 // admin-ui.tsx는 서버 전용 모듈을 함께 불러와서, 클라이언트에서는 같은 클래스만 따로 둔다
 const ctl = "h-11 rounded-xl border border-line bg-card px-3.5 text-[14px] text-ink outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/10";
@@ -101,22 +101,43 @@ export function BulkPhotos({ action }: { action: (f: FormData) => Promise<{ ok: 
   );
 }
 
-/** 엑셀 올리기: 결과(새로·고침·건너뛴 줄과 이유)를 바로 보여 준다 */
+/** 엑셀 올리기: 먼저 무엇이 바뀌는지 미리 보여 주고, '이대로 넣기'를 눌러야 반영한다 */
 export function ExcelImport({ action }: { action: (prev: ImportResult | null, f: FormData) => Promise<ImportResult> }) {
   const [res, run, pending] = useActionState(action, null);
+  const [fileName, setFileName] = useState<string | null>(null);
   return (
-    <form action={run} className="flex flex-col gap-2">
+    // 미리보기 뒤에도 고른 파일이 남아 있어야 '이대로 넣기'가 같은 파일을 보낸다: 폼 액션의 자동 초기화를 쓰지 않고 직접 보낸다
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+        startTransition(() => run(fd));
+      }}
+      className="flex flex-col gap-2"
+    >
       <div className="flex flex-wrap items-center gap-2">
-        <input name="file" type="file" accept=".xlsx" required className={`${ctl} py-2`} aria-label="엑셀 파일" />
-        <button disabled={pending} className={btnPrimary}>{pending ? "넣는 중" : "엑셀로 올리기"}</button>
+        <label className={`${btnLight} cursor-pointer`}>
+          엑셀 파일 고르기
+          <input name="file" type="file" accept=".xlsx" required className="sr-only" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)} />
+        </label>
+        <span className="min-w-0 truncate text-[13px] text-muted">{fileName ?? "고른 파일 없음"}</span>
       </div>
+      <button name="mode" value="preview" disabled={pending || !fileName} className={`${btnPrimary} self-start disabled:opacity-50`}>{pending ? "확인하는 중" : "바뀔 내용 확인"}</button>
       {res && (
         <div role="status" className={`rounded-xl px-4 py-3 text-[14px] ${res.ok ? "bg-accent-soft text-accent-text" : "bg-danger/10 text-danger"}`}>
           <p className="font-semibold">{res.message}</p>
-          {res.skipped.length > 0 && (
-            <ul className="mt-1.5 space-y-0.5 text-[13px]">
-              {res.skipped.map((s) => <li key={s.line}>{s.line}번째 줄: {s.why}</li>)}
+          {res.changes.length > 0 && (
+            <ul className="mt-1.5 max-h-48 space-y-0.5 overflow-y-auto text-[13px]">
+              {res.changes.map((c) => <li key={c.name}>{c.how} · {c.name}{c.how === "고침" ? ` — ${c.fields.length ? c.fields.join(", ") : "바뀐 칸 없음"}` : ""}</li>)}
             </ul>
+          )}
+          {res.skipped.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5 text-[13px] text-danger">
+              {res.skipped.map((x) => <li key={x.line}>{x.line}번째 줄: {x.why}</li>)}
+            </ul>
+          )}
+          {res.preview && res.ok && (
+            <button name="mode" value="apply" disabled={pending} className={`${btnPrimary} mt-3`}>{pending ? "넣는 중" : "이대로 넣기"}</button>
           )}
         </div>
       )}

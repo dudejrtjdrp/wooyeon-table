@@ -18,14 +18,20 @@ describe("식당 엑셀 한 줄 검사", () => {
     expect(r.ok && r.value).toMatchObject({ booking_channel: "catchtable", rating: 4.6, review_count: 1204, active: false, price_range: "2만 원대" });
   });
   it("틀린 값은 이유를 모두 알려 준다", () => {
-    const r = parseVenueRow({ "식당 이름": "", "동네 묶음": "강남", "주소": "", "리뷰 평점": "6", "예약 채널": "배민", "1인 가격대": "5만 원대", "사진 주소": "http://x", "테이블당 좌석": "10" });
+    const r = parseVenueRow({ "식당 이름": "", "동네 묶음": "강남", "주소": "", "리뷰 평점": "6", "예약 채널": "배민", "1인 가격대": "5만 원대", "예약 페이지 주소": "http://x", "테이블당 좌석": "10" });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors).toHaveLength(8);
   });
-  it("내려받기는 업로드한 사진(내부 주소)을 빼고 채널을 한글로", () => {
-    const s = venueToSheet({ name: "a", region: "잠실·송파", address: "b", booking_channel: "naver", photo_url: "/api/venue-photo/x", active: true });
+  it("운영하지 않는 동네는 받지 않고, 이름의 겹친 공백은 하나로", () => {
+    const out = parseVenueRow(row({ "동네 묶음": "성수·건대" }));
+    expect(out.ok).toBe(false);
+    const sp = parseVenueRow(row({ "식당 이름": "  잠실   호숫가  식탁 " }));
+    expect(sp.ok && sp.value.name).toBe("잠실 호숫가 식탁");
+  });
+  it("내려받기는 채널을 한글로, 사진은 엑셀에 넣지 않는다(업로드로만)", () => {
+    const s = venueToSheet({ name: "a", region: "잠실·송파", address: "b", booking_channel: "naver", active: true });
     expect(s["예약 채널"]).toBe("네이버 예약");
-    expect(s["사진 주소"]).toBe("");
+    expect(s["사진 주소"]).toBeUndefined();
     expect(s["사용"]).toBe("예");
   });
 });

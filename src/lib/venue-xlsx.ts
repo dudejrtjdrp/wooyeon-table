@@ -77,6 +77,5 @@ const SAMPLE: Record<string, string | number> = {
   "전화번호": "",
   "지도 링크": "",
   "테이블당 좌석": 6,
-  "사진 주소": "",
   "사용": "예",
 };

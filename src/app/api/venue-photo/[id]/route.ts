@@ -7,6 +7,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { data } = await db().from("venue_photos").select("mime,data").eq("venue_id", id).maybeSingle();
   if (!data) return new Response("not found", { status: 404 });
   return new Response(Buffer.from(data.data, "base64"), {
-    headers: { "Content-Type": data.mime, "Cache-Control": "public, max-age=31536000, immutable" },
+    headers: { "Content-Type": data.mime, "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" },
   });
 }

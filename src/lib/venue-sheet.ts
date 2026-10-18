@@ -1,10 +1,10 @@
 // 식당 엑셀 양식: 칸 정의와 한 줄 검사 (DB·엑셀 라이브러리 없이 테스트할 수 있게 따로 둔다)
 // 운영자가 양식을 내려받아 채운 뒤 올리면, 같은 동네·같은 이름 식당은 고치고 없으면 새로 만든다.
 
-import { PRICE_RANGES } from "./constants";
-import { SIDOS } from "./regions";
+import { DEFAULT_REGIONS, PRICE_RANGES } from "./constants";
 
-export const AREAS = SIDOS.flatMap((s) => s.areas);
+/** 지금 운영하는 동네만 고를 수 있다 (운영사 Q&A: 서울 네 곳). 늘리면 DEFAULT_REGIONS를 고친다 */
+export const AREAS: readonly string[] = DEFAULT_REGIONS;
 export const SHEET_PRICES = PRICE_RANGES.filter((p) => p !== "상관없어요");
 export const CHANNELS = { "네이버 예약": "naver", "캐치테이블": "catchtable", "전화 예약": "phone" } as const;
 export const CHANNEL_NAMES = Object.keys(CHANNELS) as (keyof typeof CHANNELS)[];
@@ -22,14 +22,13 @@ export type VenueRow = {
   phone: string | null;
   map_url: string | null;
   seats_per_table: number;
-  photo_url: string | null;
   active: boolean;
 };
 
 /** 엑셀 첫 줄 제목. 순서가 곧 양식의 칸 순서다 */
 export const COLUMNS: { key: keyof VenueRow; label: string; required?: boolean; width: number; help: string; list?: readonly string[] }[] = [
   { key: "name", label: "식당 이름", required: true, width: 22, help: "같은 동네에 같은 이름이 있으면 그 식당을 고쳐요." },
-  { key: "region", label: "동네 묶음", required: true, width: 20, help: "목록에서 골라요. 지금은 서울 네 곳(홍대·합정·연남, 잠실·송파, 강남·역삼·선릉, 을지로·종로·광화문)에서 모여요.", list: AREAS },
+  { key: "region", label: "동네 묶음", required: true, width: 20, help: "목록에서 골라요. 지금 운영하는 서울 네 곳(홍대·합정·연남, 잠실·송파, 강남·역삼·선릉, 을지로·종로·광화문)만 돼요.", list: AREAS },
   { key: "category", label: "업종", width: 16, help: "한 줄로. 예: 한식 주점, 이탈리안, 일식 이자카야" },
   { key: "address", label: "주소", required: true, width: 36, help: "도로명 주소. 지도 버튼이 이 주소로 찾아요." },
   { key: "price_range", label: "1인 가격대", width: 12, help: "참가자가 고른 가격대와 맞는 식당을 먼저 배정해요.", list: SHEET_PRICES },
@@ -40,7 +39,6 @@ export const COLUMNS: { key: keyof VenueRow; label: string; required?: boolean; 
   { key: "phone", label: "전화번호", width: 16, help: "예: 02-123-4567" },
   { key: "map_url", label: "지도 링크", width: 30, help: "비워 두면 이름·주소로 네이버 지도·카카오맵을 찾아요." },
   { key: "seats_per_table", label: "테이블당 좌석", width: 12, help: "4~8. 비워 두면 6." },
-  { key: "photo_url", label: "사진 주소", width: 36, help: "선택. https:// 이미지 주소. 사진 파일은 어드민 식당 관리에서 따로 올려도 돼요." },
   { key: "active", label: "사용", width: 8, help: "예/아니오. 아니오면 배정하지 않아요. 비워 두면 예.", list: ["예", "아니오"] },
 ];
 
@@ -62,12 +60,12 @@ const isUrl = (s: string) => /^https:\/\/[^\s]+$/.test(s);
 export function parseVenueRow(raw: Record<string, unknown>): { ok: true; value: VenueRow } | { ok: false; errors: string[] } {
   const get = (key: keyof VenueRow) => raw[COLUMNS.find((c) => c.key === key)!.label];
   const errors: string[] = [];
-  const name = text(get("name"));
+  const name = text(get("name")).replace(/\s+/g, " ");
   const region = text(get("region"));
   const address = text(get("address"));
   if (!name) errors.push("식당 이름이 비어 있어요");
   if (!region) errors.push("동네 묶음이 비어 있어요");
-  else if (!AREAS.includes(region)) errors.push(`동네 묶음 '${region}'은 목록에 없어요`);
+  else if (!AREAS.includes(region)) errors.push(`'${region}'은 지금 운영하는 동네가 아니에요(서울 네 곳만)`);
   if (!address) errors.push("주소가 비어 있어요");
 
   const price = text(get("price_range"));
@@ -83,8 +81,6 @@ export function parseVenueRow(raw: Record<string, unknown>): { ok: true; value: 
   if (bookingUrl && !isUrl(bookingUrl)) errors.push("예약 페이지 주소는 https:// 로 시작해야 해요");
   const mapUrl = text(get("map_url"));
   if (mapUrl && !isUrl(mapUrl)) errors.push("지도 링크는 https:// 로 시작해야 해요");
-  const photo = text(get("photo_url"));
-  if (photo && !isUrl(photo)) errors.push("사진 주소는 https:// 로 시작해야 해요");
   const phone = text(get("phone"));
   if (phone && !/^[0-9\-\s()+]{8,20}$/.test(phone)) errors.push("전화번호는 숫자와 - 만 써 주세요");
   const seats = num(get("seats_per_table"));
@@ -106,7 +102,6 @@ export function parseVenueRow(raw: Record<string, unknown>): { ok: true; value: 
       phone: phone || null,
       map_url: mapUrl || null,
       seats_per_table: seats ?? 6,
-      photo_url: photo || null,
       active: !act || ["예", "Y", "y", "TRUE", "true"].includes(act),
     },
   };
@@ -120,7 +115,6 @@ export function venueToSheet(v: Partial<VenueRow>): Record<string, string | numb
     const val = v[c.key];
     if (c.key === "booking_channel") out[c.label] = val ? back[val as string] ?? "" : "";
     else if (c.key === "active") out[c.label] = val === false ? "아니오" : "예";
-    else if (c.key === "photo_url") out[c.label] = typeof val === "string" && /^https:\/\//.test(val) ? val : ""; // 업로드한 사진(내부 주소)은 내보내지 않는다
     else out[c.label] = val === null || val === undefined ? "" : (val as string | number);
   }
   return out;

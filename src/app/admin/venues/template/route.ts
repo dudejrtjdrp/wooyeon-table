@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   await requireAdmin();
   const filled = new URL(req.url).searchParams.get("filled") === "1";
   const rows = filled
-    ? ((await db().from("venues").select("name,region,category,address,price_range,rating,review_count,booking_channel,booking_url,phone,map_url,seats_per_table,photo_url,active").order("region").order("name")).data ?? []).map(venueToSheet)
+    ? ((await db().from("venues").select("name,region,category,address,price_range,rating,review_count,booking_channel,booking_url,phone,map_url,seats_per_table,active").order("region").order("name")).data ?? []).map(venueToSheet)
     : [];
   const buf = await buildVenueWorkbook(rows, !filled);
   const name = filled ? "우연한식탁_식당목록.xlsx" : "우연한식탁_식당양식.xlsx";
