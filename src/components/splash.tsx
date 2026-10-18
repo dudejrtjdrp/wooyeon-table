@@ -1,28 +1,27 @@
-// 앱을 켰을 때 한 번 나오는 첫 장면 (약 1.4초).
-// 초록 색면 위에 원형 테이블 자리가 하나씩 차고 이름이 떠오른 뒤 사라진다.
-// 같은 창에서는 한 번만 나온다. 어드민·심사 안내에서는 나오지 않는다.
+// 앱을 켰을 때 나오는 첫 장면 (약 2초, 누르거나 키를 치면 바로 닫힘). 하루에 한 번만.
+// '우연'의 두 ㅇ이 리본 한 줄로 이어 그려지고, 나머지 획과 '한(작게) 식탁'이 차례로 붙은 뒤 사라진다.
+// 같은 날 다시 켜면(PWA 재실행 포함) 건너뛴다. 어드민·심사 안내·알림으로 연 화면에서는 나오지 않는다.
+
+import { Wordmark } from "./logo";
 
 export function Splash() {
-  const seats = Array.from({ length: 6 }, (_, i) => {
-    const a = -Math.PI / 2 + (i * Math.PI) / 3;
-    return { x: 80 + 62 * Math.cos(a), y: 80 + 62 * Math.sin(a), d: 0.15 + i * 0.12 };
-  });
   return (
     <>
       <script
         dangerouslySetInnerHTML={{
-          __html: `try{var p=location.pathname;if(/^\\/(admin|guide|api|verify|offline)/.test(p)||sessionStorage.getItem('wt_splash')){document.documentElement.dataset.splash='off'}else{sessionStorage.setItem('wt_splash','1')}}catch(e){}`,
+          __html: `try{var p=location.pathname;if(/^\\/(admin|guide|api|verify|offline)/.test(p)||/[?&]from=push/.test(location.search)||localStorage.getItem('wt_splash')===new Date().toDateString()){document.documentElement.dataset.splash='off'}else{localStorage.setItem('wt_splash',new Date().toDateString())}}catch(e){}`,
         }}
       />
-      <div id="splash" aria-hidden="true" className="splash fixed inset-0 z-[100] flex flex-col items-center justify-center bg-navy">
-        <svg width="160" height="160" viewBox="0 0 160 160">
-          <circle cx="80" cy="80" r="40" fill="var(--accent2)" />
-          {seats.map((s, i) => (
-            <circle key={i} cx={s.x} cy={s.y} r="14" fill={i === 0 ? "var(--candle)" : "#ffffff"} className="seat-in" style={{ animationDelay: `${s.d}s` }} />
-          ))}
-        </svg>
-        <p className="splash-name mt-8 text-[30px] font-black tracking-[-0.03em] text-white">우연한 식탁</p>
+      <div id="splash" aria-hidden="true" className="splash fixed inset-0 z-[100] flex flex-col items-center justify-center bg-paper px-10 text-ink">
+        <Wordmark animate className="w-full max-w-[300px]" />
+        <p className="splash-tag mt-6 text-[14px] font-medium text-muted">처음 만나는 사람들과 저녁 한 끼</p>
       </div>
+      {/* 기다리기 싫으면 아무 데나 누르거나 키를 쳐서 바로 닫는다. 손을 뗄 때 닫고, 그 손짓이 아래 버튼까지 눌리지 않게 잠깐(0.4초) 클릭을 막는다(iOS는 손을 뗀 뒤 클릭을 따로 보낸다) */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `try{var s=document.getElementById('splash');if(s){var b=function(e){e.preventDefault();e.stopPropagation()};var c=function(){document.removeEventListener('keydown',c);if(s.style.display==='none')return;s.style.display='none';document.addEventListener('click',b,true);setTimeout(function(){document.removeEventListener('click',b,true)},400)};s.addEventListener('pointerup',c);s.addEventListener('animationend',function(e){if(e.target===s)document.removeEventListener('keydown',c)});document.addEventListener('keydown',c)}}catch(e){}`,
+        }}
+      />
     </>
   );
 }

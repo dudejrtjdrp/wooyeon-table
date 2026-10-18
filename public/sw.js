@@ -58,7 +58,9 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = new URL((event.notification.data && event.notification.data.url) || "/", self.location.origin).href;
+  const u = new URL((event.notification.data && event.notification.data.url) || "/", self.location.origin);
+  u.searchParams.set("from", "push"); // 알림으로 연 화면은 첫 장면 없이 바로 보여 준다
+  const url = u.href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {
