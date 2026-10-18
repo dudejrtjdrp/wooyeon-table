@@ -2,7 +2,11 @@
 
 import { useActionState, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { btn, btnLight, btnPrimary, ctl } from "@/components/admin-ui";
+// admin-ui.tsx는 서버 전용 모듈을 함께 불러와서, 클라이언트에서는 같은 클래스만 따로 둔다
+const ctl = "h-11 rounded-xl border border-line bg-card px-3.5 text-[14px] text-ink outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/10";
+const btn = "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-4 text-[14px] font-semibold transition active:scale-[.98]";
+const btnPrimary = `${btn} bg-accent text-white shadow-cta`;
+const btnLight = `${btn} border border-accent/40 bg-card text-accent hover:bg-accent-soft/50`;
 import type { ImportResult } from "./actions";
 
 /** 사진을 긴 변 1280px JPEG로 줄인다 (서버 요청 크기 제한과 화면 속도 때문에) */
@@ -119,5 +123,3 @@ export function ExcelImport({ action }: { action: (prev: ImportResult | null, f:
     </form>
   );
 }
-
-export const linkBtn = `${btn} border border-line bg-card text-ink hover:bg-field`;

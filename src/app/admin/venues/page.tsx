@@ -1,11 +1,13 @@
 import { Download, ImageOff } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, Panel, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, btn, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
 import { importVenues, uploadPhotoByName, uploadVenuePhoto } from "./actions";
-import { BulkPhotos, ExcelImport, VenuePhotoButton, linkBtn } from "./photo-upload";
+import { BulkPhotos, ExcelImport, VenuePhotoButton } from "./photo-upload";
+
+const linkBtn = `${btn} border border-line bg-card text-ink hover:bg-field`;
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ export default async function Venues() {
         desc="제휴 식당 목록이에요. 테이블이 확정되면 이 목록에서 동네·시간·인원·평점·예약 채널을 보고 자동으로 배정해요. 일정별 받을 수 있는 테이블 수는 '회차·식당 재고'에서 바꿔요."
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <Panel title={`제휴 식당 ${venues.length}곳 · ${regions.length}개 동네${noPhoto ? ` · 사진 없는 곳 ${noPhoto}` : ""}`}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-[14px]">
@@ -45,7 +47,7 @@ export default async function Venues() {
                     </td>
                     <td className={`${td} whitespace-nowrap text-muted`}>{v.region}</td>
                     <td className={td}>
-                      <p className="font-semibold text-ink">{v.name}</p>
+                      <p className="min-w-[160px] font-semibold text-ink">{v.name}</p>
                       <p className="text-[12px] text-muted">{[v.category, v.address].filter(Boolean).join(" · ")}</p>
                     </td>
                     <td className={`${td} whitespace-nowrap text-muted`}>{v.price_range ?? "-"}</td>
