@@ -34,7 +34,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
   const adminName = new Map((admins ?? []).map((a) => [a.id, a.name]));
   const rows = ((inv ?? []) as unknown as { slot_id: string; tables_available: number; slots: { starts_at: string; region: string; rounds: { title: string; status: string } } }[])
     .sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at));
-  // 지우기: 배정·예약·재고 기록이 하나도 없을 때만 (기록 보존)
+  // 지우기: 배정·예약 기록이 하나도 없을 때만 (기록 보존). 일정별 재고는 함께 정리
   const del = canDeleteVenue(await venueUsage(id));
   const usedIn = (sid: string) => (used ?? []).filter((u) => u.slot_id === sid).length;
 
@@ -82,10 +82,10 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
             <Panel title="식당 지우기">
               {del.ok ? (
                 <>
-                  <p className="text-[13px] text-muted">아직 배정·예약·재고 기록이 없는 식당이라 지울 수 있어요. 사진도 함께 지워지고, 되돌릴 수 없어요.</p>
+                  <p className="text-[13px] text-muted">아직 배정·예약 기록이 없는 식당이라 지울 수 있어요. 사진과 일정별 재고도 함께 지워지고, 되돌릴 수 없어요.</p>
                   <form action={deleteVenue} className="mt-3">
                     <input type="hidden" name="id" value={v.id} />
-                    <ConfirmButton confirm={`${v.region} '${v.name}'을(를) 지워요. 사진도 함께 지워지고 되돌릴 수 없어요. 계속할까요?`} className={`${btnLight} border-danger/40 text-danger hover:bg-danger/5`}>이 식당 지우기</ConfirmButton>
+                    <ConfirmButton confirm={`${v.region} '${v.name}'을(를) 지워요. 사진과 일정별 재고도 함께 지워지고 되돌릴 수 없어요. 계속할까요?`} className={`${btnLight} border-danger/40 text-danger hover:bg-danger/5`}>이 식당 지우기</ConfirmButton>
                   </form>
                 </>
               ) : (

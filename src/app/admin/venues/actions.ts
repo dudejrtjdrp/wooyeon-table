@@ -231,12 +231,15 @@ export async function deleteVenue(form: FormData) {
   if (!cur) redirect(`/admin/venues?e=${encodeURIComponent("식당을 찾지 못했어요. 이미 지워졌을 수 있어요")}`);
   const check = canDeleteVenue(await venueUsage(id));
   if (!check.ok) redirect(`/admin/venues/${id}?e=${encodeURIComponent(check.reason)}`);
+  // 일정별 재고(받을 수 있는 테이블 수)는 함께 지운다 (canDeleteVenue 참고)
+  const { error: stockErr } = await db().from("venue_slots").delete().eq("venue_id", id);
+  if (stockErr) redirect(`/admin/venues/${id}?e=${encodeURIComponent("재고를 정리하지 못해 식당도 그대로 뒀어요. 잠시 뒤 다시 해 주세요")}`);
   const { error: photoErr } = await db().from("venue_photos").delete().eq("venue_id", id);
   if (photoErr) redirect(`/admin/venues/${id}?e=${encodeURIComponent("사진을 지우지 못해 식당도 그대로 뒀어요. 잠시 뒤 다시 해 주세요")}`);
   const { error } = await db().from("venues").delete().eq("id", id);
   // 그 사이 배정·예약이 생기면 외래 키에 걸려 지워지지 않는다
   if (error) redirect(`/admin/venues/${id}?e=${encodeURIComponent("지우지 못했어요. 방금 배정이나 예약이 생겼을 수 있어요. 새로 고침해서 다시 확인해 주세요")}`);
-  await logStatus({ entityType: "venue", entityId: id, field: "status", from: cur.active ? "active" : "inactive", to: "deleted", actor: `admin:${me.id}`, reason: `식당 지움: ${cur.region} ${cur.name}${cur.photo_url ? " (사진 함께)" : ""}` });
+  await logStatus({ entityType: "venue", entityId: id, field: "status", from: cur.active ? "active" : "inactive", to: "deleted", actor: `admin:${me.id}`, reason: `식당 지움: ${cur.region} ${cur.name}${cur.photo_url ? " (사진 함께)" : ""}, 일정별 재고 함께 정리` });
   revalidatePath("/admin/venues");
   revalidatePath("/admin/rounds");
   redirect(`/admin/venues?m=${encodeURIComponent(`${cur.name}을(를) 지웠어요`)}`);

@@ -72,7 +72,9 @@ export type VenueUsage = { tables: number; reservations: number; stock: number }
  * 그럴 땐 '배정 끄기'로 새 배정만 막는다
  */
 export function canDeleteVenue(u: VenueUsage): { ok: true } | { ok: false; reason: string } {
-  const used = [u.tables && `배정된 테이블 ${u.tables}개`, u.reservations && `예약 기록 ${u.reservations}건`, u.stock && `일정별 재고 ${u.stock}칸`].filter(Boolean);
+  // 일정별 재고는 식당을 추가하면 모집 중 일정마다 자동으로 잡히는 '받을 수 있는 수'라 기록이 아니다: 지울 때 함께 지운다.
+  // 실제로 쓰인 기록(배정된 테이블·예약)이 있을 때만 막는다
+  const used = [u.tables && `배정된 테이블 ${u.tables}개`, u.reservations && `예약 기록 ${u.reservations}건`].filter(Boolean);
   if (!used.length) return { ok: true };
   return { ok: false, reason: `쓰인 기록이 있어 지울 수 없어요(${used.join(", ")}). 기록을 지키려면 '배정 끄기'로 새 테이블에만 배정하지 않게 해 주세요.` };
 }

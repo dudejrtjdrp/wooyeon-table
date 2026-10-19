@@ -52,6 +52,7 @@ describe("식당 지우기", () => {
       expect(r.reason).not.toContain("재고");
       expect(r.reason).toContain("배정 끄기");
     }
-    expect(canDeleteVenue({ tables: 0, reservations: 0, stock: 3 }).ok).toBe(false);
+    // 재고만 있는 식당(추가하면 자동으로 잡힘)은 지울 수 있고, 재고는 함께 정리된다
+    expect(canDeleteVenue({ tables: 0, reservations: 0, stock: 3 }).ok).toBe(true);
   });
 });
