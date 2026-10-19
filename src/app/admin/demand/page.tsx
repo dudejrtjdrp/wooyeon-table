@@ -26,10 +26,14 @@ export default async function Demand() {
 
   return (
     <div>
-      <PageHeader title="지역 수요" desc={`지금 여는 동네는 ${OPEN_REGIONS.join(", ")}예요. 나머지 동네는 참가자가 남긴 수요를 모아 보고, 회차를 열면 기다리던 사람에게 자동으로 알림이 가요.`} />
+      <PageHeader
+        title="새 동네 요청"
+        desc={`지금 여는 동네는 ${OPEN_REGIONS.join(", ")}예요. 아직 안 연 동네에 참가자가 '열리면 알려 주세요'를 남기면 여기에 모여요. 그 동네에 회차를 열면 기다리던 사람에게 자동으로 알림이 가요.`}
+        how={["'기다리는 사람'이 많은 동네부터 보기", "'남긴 말'에서 원하는 시간·분위기 읽기", "열 곳을 정하면 식당을 넣고 회차 만들기"]}
+      />
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="남긴 사람" value={`${new Set(rows.map((r) => r.users?.name)).size}명`} />
-        <Stat label="기다리는 요청" value={`${rows.filter((r) => !r.notified_at).length}건`} />
+        <Stat label="아직 알림 전" value={`${rows.filter((r) => !r.notified_at).length}건`} />
         <Stat label="최근 30일" value={`${rows.filter((r) => new Date(r.created_at).getTime() >= since).length}건`} />
         <Stat label="1순위 후보" value={ranked[0] ? ranked[0].area : "-"} sub={ranked[0] ? `${ranked[0].waiting}명 기다림` : undefined} />
       </div>

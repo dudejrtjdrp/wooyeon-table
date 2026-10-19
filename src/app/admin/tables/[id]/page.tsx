@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, PageHeader, Panel, btnInk, ctl } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, Term, btnInk, ctl } from "@/components/admin-ui";
+import { CHAT_POST, TIP, reasonText } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
 import { ATTEND, actorLabel, ageBand, eventText, label } from "@/lib/labels";
@@ -79,7 +80,11 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
     <div>
       <Link href="/admin/tables" className="text-[13px] text-muted hover:text-ink">← 테이블 목록</Link>
       <div className="mt-2">
-        <PageHeader title={`${fmtDate(t.slots.starts_at)} ${fmtTime(t.slots.starts_at)} ${t.slots.region}`} desc={`${t.rounds.title}, 확정 ${t.confirmed_at ? fmtDateTime(t.confirmed_at) : "-"}, 점수 ${Math.round(Number(t.score))}${typeof t.score_detail?.gate === "number" ? ` (확정 판정 ${Math.round(t.score_detail.gate)}점, 성비 감점 제외)` : ""}`} />
+        <PageHeader
+          title={`${fmtDate(t.slots.starts_at)} ${fmtTime(t.slots.starts_at)} ${t.slots.region}`}
+          desc={<>{t.rounds.title} · 확정 {t.confirmed_at ? fmtDateTime(t.confirmed_at) : "-"} · <Term tip={TIP.매칭점수}>매칭 점수</Term> {Math.round(Number(t.score))}점{typeof t.score_detail?.gate === "number" ? ` (확정 판정 ${Math.round(t.score_detail.gate)}점, 성비 감점 제외)` : ""}</>}
+          how={["참가자·식당·예약 상태 확인", "'안내 발송 상태'에서 안 나간 안내 확인", <>문제가 있으면 오른쪽 <Term tip={TIP.긴급수정}>긴급 수정</Term>(사유 필수)</>]}
+        />
       </div>
       {linkedEx?.status === "open" && (
         <p className="mt-4 rounded-xl bg-warn-soft px-4 py-3 text-[14px] text-warn">
@@ -93,7 +98,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
               {members.map((m) => (
                 <li key={m.id} className="flex items-center justify-between py-2.5 text-[14px]">
                   <Link href={`/admin/applicants/${m.id}`} className="font-semibold hover:underline">{m.users.name}</Link>
-                  <span className="text-muted">{m.users.profiles ? `${ageBand(m.users.profiles.birth_year, year)} ${m.users.profiles.gender === "M" ? "남" : "여"} ${m.users.profiles.mbti ?? ""} ${m.users.profiles.job ?? ""}` : ""}{m.realloc_count ? `, 재배치 ${m.realloc_count}` : ""}</span>
+                  <span className="text-muted">{m.users.profiles ? `${ageBand(m.users.profiles.birth_year, year)} ${m.users.profiles.gender === "M" ? "남" : "여"} ${m.users.profiles.mbti ?? ""} ${m.users.profiles.job ?? ""}` : ""}{m.realloc_count ? `, 재배치 ${m.realloc_count}번` : ""}</span>
                   <Badge v={label(ATTEND, m.attendance_status)} />
                 </li>
               ))}
@@ -113,7 +118,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
               <ul className="space-y-2 text-[13px]">
                 {(msgs ?? []).map((m) => (
                   <li key={m.id} className={`rounded-xl px-3 py-2 ${m.kind === "system" ? "bg-accent-soft/60" : "bg-paper"}`}>
-                    <p className="text-[11px] text-muted">{m.kind === "system" ? `자동 게시${(m.meta as { type?: string })?.type ? ` · ${(m.meta as { type?: string }).type}` : ""}` : "참가자"} · {fmtDateTime(m.created_at)}</p>
+                    <p className="text-[11px] text-muted">{m.kind === "system" ? `자동 게시${CHAT_POST[(m.meta as { type?: string })?.type ?? ""] ? ` · ${CHAT_POST[(m.meta as { type?: string }).type!]}` : ""}` : "참가자"} · {fmtDateTime(m.created_at)}</p>
                     <p className="mt-0.5 whitespace-pre-line">{m.body}</p>
                   </li>
                 ))}
@@ -128,15 +133,15 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
               <OpsPanel tableId={id} slotId={t.slot_id} active={active} exceptionId={linkedEx?.status === "open" ? linkedEx.id : undefined} members={seated.map((m) => ({ id: m.id, name: m.users.name }))} siblings={siblings} />
             ) : <p className="text-[13px] text-muted">조회 전용 계정이라 긴급 수정을 할 수 없어요.</p>}
           </Panel>
-          <Panel title="빈자리 제안 (대기자 자동 전환)">
+          <Panel title="빈자리 제안 (기다리는 사람에게 자동으로)">
             <ul className="divide-y divide-line text-[13px]">
               {(offers ?? []).map((o) => {
                 const x = o as unknown as { id: string; status: string; expires_at: string; users: { name: string } };
                 return (
                   <li key={x.id} className="flex items-center justify-between py-2">
                     <span>{x.users.name}</span>
-                    <Badge v={OFFER[x.status] ?? [x.status, "muted"]} />
-                    <span className="text-muted">{x.status === "pending" ? `~${fmtDateTime(x.expires_at)}` : ""}</span>
+                    <Badge v={OFFER[x.status] ?? ["기타", "muted"]} />
+                    <span className="text-muted">{x.status === "pending" ? `${fmtDateTime(x.expires_at)}까지` : ""}</span>
                   </li>
                 );
               })}
@@ -193,8 +198,8 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
             {resv ? (
               <div className="space-y-2 text-[14px]">
                 <div className="flex items-center gap-2">
-                  <Badge v={[{ REQUESTED: "예약 요청 중", CONFIRMED: "예약 확정", FAILED: "예약 실패", CANCELED: "예약 취소" }[resv.status as string] ?? resv.status, resv.status === "CONFIRMED" ? "leaf" : resv.status === "FAILED" ? "danger" : "candle"]} />
-                  <span className="text-muted">{CHANNEL_LABEL[resv.channel as Channel]} · {resv.party_size}명 · {resv.mode === "mock" ? "모의 연동" : resv.mode === "manual" ? "운영자 직접 예약" : "실연동"}</span>
+                  <Badge v={[{ REQUESTED: "예약 요청 중", CONFIRMED: "예약 확정", FAILED: "예약 실패", CANCELED: "예약 취소" }[resv.status as string] ?? "예약 상태 확인 필요", resv.status === "CONFIRMED" ? "leaf" : resv.status === "FAILED" ? "danger" : "candle"]} />
+                  <span className="text-muted">{CHANNEL_LABEL[resv.channel as Channel]} · {resv.party_size}명 · {resv.mode === "mock" ? "시연용 모의 예약" : resv.mode === "manual" ? "운영자 직접 예약" : "예약 서비스 자동 연결"}</span>
                 </div>
                 {resv.external_ref && <div><span className="text-muted">예약번호 </span><b className="tabular-nums">{resv.external_ref}</b></div>}
                 {resv.last_error && <div className="text-danger">마지막 오류: {resv.last_error} (시도 {resv.attempts}회)</div>}
@@ -228,7 +233,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
                 <li key={e.id}>
                   <span className="text-muted">{fmtDateTime(e.created_at)} · {actorLabel(e.actor, adminName)}</span>
                   <span className="block text-ink">{eventText(e)}</span>
-                  {e.reason && <span className="block text-[12px] text-muted">{e.reason}</span>}
+                  {reasonText(e.reason) && <span className="block text-[12px] text-muted">{reasonText(e.reason)}</span>}
                 </li>
               ))}
               {!events?.length && <li className="text-muted">기록이 없어요.</li>}

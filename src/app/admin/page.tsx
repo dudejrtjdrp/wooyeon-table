@@ -2,7 +2,8 @@ import { BellRing, CalendarDays, ChartColumn, ChartPie, Check, ChevronDown, Chev
 import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { btnLight, btnPrimary, ctl } from "@/components/admin-ui";
+import { HowTo, Term, btnLight, btnPrimary, ctl } from "@/components/admin-ui";
+import { TIP } from "@/lib/admin-glossary";
 import { IMG } from "@/components/ui";
 import { after } from "next/server";
 import { requireAdmin } from "@/lib/auth";
@@ -112,7 +113,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             {retrying ? <span className="ml-2 font-semibold text-warn">알림 {retrying}건 다시 보내는 중</span> : null}
           </p>
         </div>
-        <form className="flex items-center gap-2 lg:mr-[400px]">
+        <form className="flex items-center gap-2 lg:mr-[400px]" aria-label="회차 고르기">
           <select name="r" defaultValue={round?.id} className={ctl}>
             {rounds?.map((x) => (
               <option key={x.id} value={x.id}>{x.title}</option>
@@ -120,6 +121,9 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           </select>
           <button className={btnLight}>보기</button>
         </form>
+      </div>
+      <div className="relative lg:mr-[400px]">
+        <HowTo steps={["처리할 일 숫자를 눌러 예외 처리함으로 가기", "건마다 적힌 '먼저 할 일'대로 버튼 누르기", <>위에서 <Term tip={TIP.회차}>회차</Term>를 골라 진행 단계·현황 보기</>]} />
       </div>
 
       {!round && (
@@ -137,23 +141,33 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         </h2>
         {openTotal > 0 && <Link href="/admin/exceptions" className="text-[14px] font-semibold text-accent hover:underline">예외 처리함에서 오래된 것부터 보기 →</Link>}
       </div>
-      {!openTotal && (
-        <p className="mt-3 flex items-center gap-2 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-semibold text-leaf"><Check size={18} strokeWidth={2.6} />처리할 예외가 0건이에요. 자동으로 풀리지 않은 일이 생기면 여기에 숫자로 올라와요.</p>
+      {!openTotal ? (
+        // 0건이면 칸 9개를 늘어놓지 않고 한 줄로 말한다. 유형별 숫자(모두 0)와 목록 링크는 접어 둔다
+        <>
+          <p className="mt-3 flex items-center gap-2 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-semibold text-leaf"><Check size={18} strokeWidth={2.6} />지금 처리할 일 없어요. 자동으로 풀리지 않은 일이 생기면 여기에 숫자로 올라와요.</p>
+          <details className="group mt-2">
+            <summary className="flex cursor-pointer list-none items-center gap-1 px-1 text-[13px] font-semibold text-muted hover:text-ink">
+              유형별 보기 <ChevronDown size={16} className="transition group-open:rotate-180" />
+            </summary>
+            <ZeroTiles tiles={TILES} />
+          </details>
+        </>
+      ) : (
+        <>
+          <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {TILES.filter(([k]) => exCount.get(k)).map(([k, l, I]) => (
+              <Link key={k} href={`/admin/exceptions?k=${k}`} title={TILE_TIP[k]} className="shadow-card group rounded-[18px] bg-card p-5 ring-1 ring-danger/40 transition hover:-translate-y-0.5">
+                <p className="flex items-center gap-2 text-[15px] font-semibold text-ink"><I size={19} className="text-danger" />{l}</p>
+                <p className="mt-2 flex items-end justify-between">
+                  <span className="text-[34px] font-bold tabular-nums text-danger">{exCount.get(k)}<span className="ml-0.5 text-[16px]">건</span></span>
+                  <span className="mb-1.5 flex items-center text-[13px] font-semibold text-accent">처리하러 가기<ChevronRight size={17} /></span>
+                </p>
+              </Link>
+            ))}
+          </div>
+          {TILES.some(([k]) => !exCount.get(k)) && <ZeroTiles tiles={TILES.filter(([k]) => !exCount.get(k))} label="0건" />}
+        </>
       )}
-      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {TILES.map(([k, l, I]) => {
-          const n = exCount.get(k) ?? 0;
-          return (
-            <Link key={k} href={`/admin/exceptions?k=${k}`} className={`shadow-card group rounded-[18px] p-4 transition hover:-translate-y-0.5 ${n ? "bg-card ring-1 ring-danger/40" : "bg-card"}`}>
-              <p className={`flex items-center gap-2 text-[14px] font-semibold ${n ? "text-ink" : "text-muted"}`}><I size={18} className={n ? "text-danger" : "text-muted"} />{l}</p>
-              <p className="mt-2 flex items-end justify-between">
-                <span className={`text-[28px] font-bold tabular-nums ${n ? "text-danger" : "text-muted/70"}`}>{n}</span>
-                <ChevronRight size={18} className="mb-1.5 text-muted" />
-              </p>
-            </Link>
-          );
-        })}
-      </div>
 
       {round && (
         <section className="shadow-card relative mt-8 rounded-[20px] bg-card px-6 py-5">
@@ -183,9 +197,9 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             <Kpi href={`/admin/applicants${rq}`} I={Users} label="신청" value={`${list.length}명`} sub={`결제 완료 ${paid.length}명`} />
             <Kpi href={`/admin/matching${rq}`} I={ChartColumn} label="자동 매칭 성공률" value={matchRate === null ? "매칭 전" : `${matchRate}%`} sub={`확정 ${confirmed.length}명 · 테이블 ${tableCount ?? 0}개`} />
-            <Kpi href={`/admin/matching${rq}`} I={Shuffle} label="자동 재배치 성공률" value={realloc ? metricValue(realloc) ?? "대상 없음" : "-"} sub={realloc ? `재배치로 확정 ${realloc.numerator}명 / 대상 ${realloc.denominator}명` : undefined} />
-            <Kpi href={`/admin/applicants${rq}${rq ? "&" : "?"}s=CHOOSING`} I={UserRound} label="대체 일정·환불 선택 대기" value={`${waitingChoice.length}명`} sub="다른 일정·보관·환불을 아직 안 고름 (자리 기다리기를 고른 사람 제외)" danger={waitingChoice.length > 0} />
-            <Kpi href={`/admin/attendance${rq}`} I={ChartPie} label="참석률" value={attendRate === null ? "모임 전" : `${attendRate}%`} sub={`참석 ${attended.length} · 늦은 취소 ${lateCancel} · 노쇼 후보 ${roundNoShow}`} />
+            <Kpi href={`/admin/matching${rq}`} I={Shuffle} label={<>자동 <Term inLink tip={TIP.재배치}>재배치</Term> 성공률</>} value={realloc ? metricValue(realloc) ?? "대상 없음" : "-"} sub={realloc ? `대상 ${realloc.denominator}명 중 ${realloc.numerator}명이 재배치로 확정` : undefined} />
+            <Kpi href={`/admin/applicants${rq}${rq ? "&" : "?"}s=CHOOSING`} I={UserRound} label={<><Term inLink tip={TIP.대체일정}>대체 일정</Term>·환불 선택 대기</>} value={`${waitingChoice.length}명`} sub="다른 일정·보관·환불을 아직 안 고름 (자리 기다리기를 고른 사람 제외)" danger={waitingChoice.length > 0} />
+            <Kpi href={`/admin/attendance${rq}`} I={ChartPie} label="참석률" value={attendRate === null ? "모임 전" : `${attendRate}%`} sub={<>참석 {attended.length} · 늦은 취소 {lateCancel} · <Term inLink tip={TIP.노쇼후보}>노쇼 후보</Term> {roundNoShow}</>} />
           </div>
 
           <div className="mt-8 flex items-end justify-between gap-3">
@@ -199,7 +213,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               const v = metricValue(x);
               return (
                 <Link key={k} href={`/admin/metrics${rq}`} className="shadow-card rounded-[20px] bg-card p-5 transition hover:-translate-y-0.5">
-                  <p className="text-[14px] text-muted">{x.name} <span className="text-[12px]">· {x.higherIsBetter ? "높을수록 좋음" : "낮을수록 좋음"}</span></p>
+                  <p className="text-[14px] text-muted"><Term inLink tip={METRIC_TIP[k]}>{x.name}</Term> <span className="text-[12px]">· {x.higherIsBetter ? "높을수록 좋음" : "낮을수록 좋음"}</span></p>
                   <p className={`mt-0.5 font-bold tabular-nums tracking-[-0.03em] ${v ? "text-[30px] text-ink" : "py-2 text-[17px] text-muted"}`}>{v ?? "아직 데이터 없음"}</p>
                   <p className="text-[13px] text-muted">{x.numeratorLabel} {x.numerator} ÷ {x.denominatorLabel} {x.denominator}</p>
                   {x.sub && <p className="text-[13px] font-semibold text-ink/80">{x.sub}</p>}
@@ -300,7 +314,36 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   );
 }
 
-function Kpi({ href, I, label, value, sub, danger }: { href: string; I: LucideIcon; label: string; value: string; sub?: string; danger?: boolean }) {
+const METRIC_TIP: Record<string, string> = { auto_confirm: TIP.자동확정률, intervention: TIP.개입률, ops_time: TIP.운영시간 };
+
+// 대시보드 예외 유형 칸에 마우스를 올리면 뜨는 풀이
+const TILE_TIP: Record<string, string> = {
+  safety: "참가자가 보낸 신고예요. 경고·참가 제한·영구 제한 중에서 골라요.",
+  payment: "결제사 승인과 우리 기록이 맞지 않는 건이에요.",
+  refund: "자동 환불이 세 번 실패한 건이에요.",
+  data_missing: TIP.데이터누락,
+  condition_conflict: TIP.조건충돌,
+  venue_shortage: TIP.식당부족,
+  notification: "안내 알림이 세 번 다시 보내도 나가지 않은 건이에요.",
+  no_show: TIP.노쇼후보,
+  reservation: "식당 예약이 자동으로 안 됐거나, 전화로만 예약되는 식당이에요.",
+};
+
+/** 0건인 유형: 작게 한 줄로. 누르면 그 유형 목록(A2) */
+function ZeroTiles({ tiles, label }: { tiles: [string, string, LucideIcon][]; label?: string }) {
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1.5 px-1 text-[13px] text-muted">
+      {label && <span className="mr-1 font-semibold">{label}</span>}
+      {tiles.map(([k, l]) => (
+        <Link key={k} href={`/admin/exceptions?k=${k}`} title={TILE_TIP[k]} className="rounded-full border border-line bg-card px-2.5 py-1 hover:border-accent hover:text-ink">
+          {l} <span className="tabular-nums">0</span>
+        </Link>
+      ))}
+    </p>
+  );
+}
+
+function Kpi({ href, I, label, value, sub, danger }: { href: string; I: LucideIcon; label: React.ReactNode; value: string; sub?: React.ReactNode; danger?: boolean }) {
   return (
     <Link href={href} className="shadow-card group flex gap-4 rounded-[20px] bg-card p-5 transition hover:-translate-y-0.5">
       <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent"><I size={22} /></span>

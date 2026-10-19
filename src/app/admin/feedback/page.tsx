@@ -58,9 +58,14 @@ export default async function Feedback({ searchParams }: { searchParams: Promise
 
   return (
     <div>
-      <PageHeader title="피드백·안전" desc="만족도와 사람별 선호는 다음 매칭에 바로 반영돼요. 신고는 접수 즉시 두 사람을 분리하고, 조치는 예외 처리함에서 해요." actions={<RoundPicker rounds={rounds} current={round?.id} />} />
+      <PageHeader
+        title="피드백·안전"
+        desc="만족도와 사람별 선호는 다음 매칭에 바로 반영돼요. 신고는 접수 즉시 두 사람을 분리하고, 조치는 예외 처리함에서 해요."
+        how={["오른쪽에서 회차 고르고 만족도 보기", "'안전 신고'에서 검토 대기 건 확인", "경고·참가 제한은 예외 처리함에서", "아래에서 한 사람이 남기고 받은 것 찾아보기"]}
+        actions={<RoundPicker rounds={rounds} current={round?.id} />}
+      />
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-6">
-        <Stat label="응답률" value={attended ? `${Math.round((f.length / attended) * 100)}%` : "-"} sub={`${f.length}/${attended ?? 0}명`} />
+        <Stat label="응답률" value={attended ? `${Math.round((f.length / attended) * 100)}%` : "-"} sub={`참석 ${attended ?? 0}명 중 ${f.length}명`} />
         <Stat label="테이블 분위기" value={avg(f.map((x) => x.mood_score))} sub="5점 만점" />
         <Stat label="대화" value={avg(f.map((x) => x.talk_score))} />
         <Stat label="식당" value={avg(f.map((x) => x.venue_score))} />
@@ -125,7 +130,7 @@ export default async function Feedback({ searchParams }: { searchParams: Promise
           {!people.length && <li className="py-4 text-[14px] text-muted">맞는 회원이 없어요. 두 글자 이상이나 연락처 뒤 4자리로 찾아 주세요.</li>}
         </ul>
       ) : (
-        <p className="mt-3 text-[14px] text-muted">찾은 사람이 남긴/받은 &lsquo;다시는 싫어요&rsquo;·차단·신고를 한 번에 봐요. 위 신고 목록에서 이름을 눌러도 돼요.</p>
+        <p className="mt-3 text-[14px] text-muted">찾은 사람이 남기고 받은 &lsquo;다시는 싫어요&rsquo;·차단·신고를 한 번에 봐요. 위 신고 목록에서 이름을 눌러도 돼요.</p>
       )}
     </div>
   );

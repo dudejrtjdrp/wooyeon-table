@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Badge, PageHeader, Panel, btnInk, btnLight, ctl } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, Term, btnInk, btnLight, ctl } from "@/components/admin-ui";
+import { TIP } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
 import { TABLE_TYPES, TYPE_LABEL, loadContentRules } from "@/lib/contents";
 import { INTERESTS } from "@/lib/constants";
@@ -41,7 +42,8 @@ export default async function Contents({ searchParams }: { searchParams: Promise
     <div>
       <PageHeader
         title="대화 콘텐츠"
-        desc="모임 시작 시각에 단체방에 자동으로 올라가는 대화 주제와 아이스브레이킹이에요. 테이블의 공통 관심사와 유형에 맞는 것부터 골라요."
+        desc={<>모임 시작 시각에 단체방에 자동으로 올라가는 대화 주제와 <Term tip={TIP.아이스브레이킹}>아이스브레이킹</Term>이에요. 테이블의 공통 관심사와 <Term tip={TIP.테이블유형}>테이블 유형</Term>에 맞는 것부터 골라요(<Term tip={TIP.큐레이션}>큐레이션</Term>).</>}
+        how={["대화 주제·아이스브레이킹 탭 고르기", "새 콘텐츠 쓰고 관심사 태그 붙이기", "오른쪽 '노출 규칙'에서 개수·가중치 정하기", "테이블 상세에서 실제로 나갈 주제 미리 보기"]}
       />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_340px]">
@@ -52,7 +54,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                 {x === "topic" ? "대화 주제" : "아이스브레이킹"} <span className="ml-1 tabular-nums opacity-70">{count(x)}</span>
               </Link>
             ))}
-            <span className="ml-auto text-[13px] text-muted">지금까지 자동 게시 {posted?.length ?? 0}회</span>
+            <span className="ml-auto text-[13px] text-muted">지금까지 단체방에 자동으로 올린 횟수 {posted?.length ?? 0}번</span>
           </div>
 
           {ro ? <p className="rounded-xl bg-field px-4 py-3 text-[13px] text-muted">조회 전용 계정이라 콘텐츠와 노출 규칙을 볼 수만 있어요.</p> : (
@@ -64,7 +66,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                 <label className="block text-[12px] font-semibold text-muted">관심사 태그 (쉼표로 구분, 비우면 모든 테이블)
                   <input name="tags" list="interest-list" placeholder="여행, 맛집 탐방" className={`${ctl} mt-1 w-full font-normal text-ink`} />
                 </label>
-                <label className="block text-[12px] font-semibold text-muted">우선순위
+                <label className="block text-[12px] font-semibold text-muted" title="클수록 먼저 골라요. -10~10">우선순위 (클수록 먼저)
                   <input name="priority" type="number" min={-10} max={10} defaultValue={0} className={`${ctl} mt-1 w-full font-normal text-ink`} />
                 </label>
               </div>
@@ -88,7 +90,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                       <span className="mt-1.5 flex flex-wrap gap-1">
                         {(c.tags ?? []).length ? c.tags.map((t) => <Badge key={t} v={[`#${t}`, "accent"]} />) : <Badge v={["모든 관심사", "muted"]} />}
                         {(c.table_types ?? []).map((t) => <Badge key={t} v={[TYPE_LABEL[t] ?? t, "candle"]} />)}
-                        {c.priority ? <Badge v={[`우선 ${c.priority > 0 ? "+" : ""}${c.priority}`, "ink"]} /> : null}
+                        {c.priority ? <Badge v={[`우선순위 ${c.priority > 0 ? "+" : ""}${c.priority}`, "ink"]} /> : null}
                         {!c.active && <Badge v={["노출 중지", "danger"]} />}
                       </span>
                     </span>
@@ -124,8 +126,8 @@ export default async function Contents({ searchParams }: { searchParams: Promise
             <form action={saveRules} className="space-y-3 text-[14px]">
               <label className="flex items-center justify-between gap-3">대화 주제 개수 <input name="topicCount" type="number" min={3} max={6} defaultValue={rules.topicCount} className={`${ctl} w-20`} /></label>
               <label className="flex items-center justify-between gap-3">아이스브레이킹 개수 <input name="icebreakerCount" type="number" min={1} max={3} defaultValue={rules.icebreakerCount} className={`${ctl} w-20`} /></label>
-              <label className="flex items-center justify-between gap-3">공통 관심사 가중치 <input name="interestWeight" type="number" min={0} max={30} defaultValue={rules.interestWeight} className={`${ctl} w-20`} /></label>
-              <label className="flex items-center justify-between gap-3">테이블 유형 가중치 <input name="typeWeight" type="number" min={0} max={30} defaultValue={rules.typeWeight} className={`${ctl} w-20`} /></label>
+              <label className="flex items-center justify-between gap-3"><span>공통 관심사 <Term tip="관심사 태그가 테이블 사람들과 겹칠수록 더하는 점수예요. 클수록 관심사가 맞는 주제가 먼저 뽑혀요.">가중치</Term></span> <input name="interestWeight" type="number" min={0} max={30} defaultValue={rules.interestWeight} className={`${ctl} w-20`} /></label>
+              <label className="flex items-center justify-between gap-3"><span>테이블 유형 가중치</span> <input name="typeWeight" type="number" min={0} max={30} defaultValue={rules.typeWeight} className={`${ctl} w-20`} /></label>
               {ro ? <p className="text-[12px] text-muted">조회 전용 계정이라 규칙을 바꿀 수 없어요.</p> : <button className={btnLight}>규칙 저장</button>}
             </form>
           </Panel>
@@ -136,7 +138,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
               <li>유형이 맞으면 유형 가중치, 우선순위 값을 더해요.</li>
               <li>점수가 같으면 테이블마다 다르게 섞여서, 같은 날 여러 테이블이 똑같은 주제를 받지 않아요.</li>
             </ol>
-            <p className="mt-3 text-[12px] text-muted">테이블 유형: 첫 참가 위주/재방문 위주는 이전 참석 기록, 4인/5~6인은 인원, 20대/30대 이상은 평균 나이로 정해요. 테이블 상세에서 실제로 나갈 콘텐츠를 미리 볼 수 있어요.</p>
+            <p className="mt-3 text-[12px] text-muted">테이블 유형: 첫 참가 위주·재방문 위주는 이전 참석 기록, 4인·5~6인은 인원, 20대·30대 이상은 평균 나이로 정해요. 테이블 상세에서 실제로 나갈 콘텐츠를 미리 볼 수 있어요.</p>
           </Panel>
         </div>
       </div>

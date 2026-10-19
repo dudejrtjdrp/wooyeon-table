@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { reasonText } from "@/lib/admin-glossary";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Panel, btnLight, ctl, td, th } from "@/components/admin-ui";
@@ -147,7 +148,7 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
                   <li key={e.id} className="grid grid-cols-[140px_90px_1fr] items-start gap-3 text-[14px]">
                     <span className="tabular-nums text-muted">{fmtDateTime(e.created_at)}</span>
                     <span className="text-muted">{actorLabel(e.actor, adminName)}</span>
-                    <span className="text-ink">{eventText(e)}{e.reason && <span className="block text-[12px] text-muted">{e.reason}</span>}</span>
+                    <span className="text-ink">{eventText(e)}{reasonText(e.reason) && <span className="block text-[12px] text-muted">{reasonText(e.reason)}</span>}</span>
                   </li>
                 ))}
               </ol>
@@ -251,7 +252,7 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
                     <li key={e.id} className="text-[13px]">
                       <span className="tabular-nums text-muted">{fmtDateTime(e.created_at)} · {actorLabel(e.actor, adminName)}</span>
                       <span className="block text-ink">{passName2.get(e.entity_id)} {eventText(e)}</span>
-                      {e.reason && <span className="block text-[12px] text-muted">{e.reason}</span>}
+                      {reasonText(e.reason) && <span className="block text-[12px] text-muted">{reasonText(e.reason)}</span>}
                     </li>
                   ))}
                 </ol>

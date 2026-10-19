@@ -1,7 +1,8 @@
 import { ChevronDown, Heart, Settings2, ShieldCheck, Sparkles, Users, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
-import { Badge, btnLight, btnPrimary, ctl, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Term, btnLight, btnPrimary, ctl, th } from "@/components/admin-ui";
+import { TIP, humanizeMatchLog } from "@/lib/admin-glossary";
 import { MATCH, TABLE, ageBand, label } from "@/lib/labels";
 import { now } from "@/lib/clock";
 import { requireAdmin } from "@/lib/auth";
@@ -26,7 +27,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
   if (!round)
     return (
       <div>
-        <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">자동 매칭 모니터</h1>
+        <PageHeader title="자동 매칭 모니터" desc="신청 마감 시각에 자동으로 꾸린 테이블과 그 이유를 봐요." />
         <div className="shadow-card mt-6 rounded-[20px] bg-card p-10 text-center">
           <p className="text-[17px] font-bold text-ink">아직 회차가 없어요</p>
           <p className="mt-1.5 text-[14px] text-muted">회차를 만들면 신청 마감 시각에 결제를 마친 사람끼리 자동으로 테이블을 꾸리고, 그 결과와 이유가 여기에 보여요.</p>
@@ -97,18 +98,19 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
 
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">자동 매칭 모니터</h1>
-          <p className="mt-1.5 text-[15px] text-muted">신청자 정보로 마감 시각에 자동으로 꾸린 테이블과 그 이유예요.</p>
-        </div>
-        <form className="flex gap-2">
-          <select name="r" defaultValue={round.id} className={ctl}>
-            {rounds?.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
-          </select>
-          <button className={btnLight}>보기</button>
-        </form>
-      </div>
+      <PageHeader
+        title="자동 매칭 모니터"
+        desc={<>신청 마감 시각에 결제한 사람끼리 자동으로 꾸린 테이블과 그 이유예요. 모자란 테이블은 자동 <Term tip={TIP.재배치}>재배치</Term>까지 해 본 뒤 결과가 여기 남아요.</>}
+        how={[<>위에서 <Term tip={TIP.회차}>회차</Term> 고르기</>, "실행 요약에서 확정·재배치·실패 수 보기", <>테이블마다 <Term tip={TIP.매칭점수}>매칭 점수</Term>와 충돌 확인</>, "오른쪽 '테이블에 못 든 사람'의 사유 보기"]}
+        actions={
+          <form className="flex gap-2">
+            <select name="r" defaultValue={round.id} className={ctl} aria-label="회차">
+              {rounds?.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+            </select>
+            <button className={btnLight}>보기</button>
+          </form>
+        }
+      />
 
       {!run ? (
         <div className="shadow-card mt-6 rounded-[20px] bg-card p-10 text-center">
@@ -132,12 +134,13 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2 text-[15px] font-semibold text-accent">실행 요약 <Badge v={run.status === "done" ? ["완료", "leaf"] : run.status === "running" ? ["실행 중", "candle"] : ["실패", "danger"]} /></span>
               <span className="mt-0.5 block text-[14px] text-[#4c5368]">
-                {fmtDateTime(run.started_at)} 시작{run.finished_at ? ` · ${fmtDateTime(run.finished_at)} 끝` : ""} · 알고리즘 {run.algorithm_version} · 대상 {run.candidate_count}명 → 확정 {st("confirmed")}명 / 테이블 {tables.length}개 / 재배치 {st("reallocated")}명 / 가까운 동네 {st("widened")}명 / 병합 {st("merged")} / 해제 {st("dissolved")} / 대안 안내 {st("failed")}명{st("exceptions") ? ` / 데이터 예외 ${st("exceptions")}` : ""}
+                {fmtDateTime(run.started_at)} 시작{run.finished_at ? ` · ${fmtDateTime(run.finished_at)} 끝` : ""} · <Term tip={TIP.매칭규칙버전}>매칭 규칙 버전</Term> {run.algorithm_version}
+                <span className="mt-0.5 block">대상 {run.candidate_count}명 → 확정 {st("confirmed")}명(테이블 {tables.length}개) · 재배치 {st("reallocated")}명 · 가까운 동네로 {st("widened")}명 · 테이블 병합 {st("merged")}번 · 해제 {st("dissolved")}번 · 실패 안내 {st("failed")}명{st("exceptions") ? ` · 정보 누락 ${st("exceptions")}건` : ""}</span>
               </span>
             </span>
             <span className="flex items-center gap-1 border-l border-line pl-4 text-[14px] font-semibold text-accent">처리 기록 보기 <ChevronDown size={18} className="transition group-open:rotate-180" /></span>
           </summary>
-          <ol className="max-h-72 space-y-1 overflow-y-auto border-t border-line px-6 py-4 text-[13px] text-muted">{(summary.log ?? []).map((l, i) => <li key={i}>{l}</li>)}</ol>
+          <ol className="max-h-72 space-y-1 overflow-y-auto border-t border-line px-6 py-4 text-[13px] text-muted">{(summary.log ?? []).map((l, i) => <li key={i}>{humanizeMatchLog(l)}</li>)}</ol>
         </details>
       )}
       {run?.status === "failed" && (
@@ -168,8 +171,8 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                       <p className="mt-1 text-[14px] text-muted">{t.venues?.address ?? "예외 처리함에서 식당을 다시 배정할 수 있어요"}{t.reservation_name ? ` · 예약명 ${t.reservation_name}` : ""}</p>
                     </div>
                     <div className="rounded-2xl bg-accent-soft/60 px-5 py-3 text-right">
-                      <p className="text-[12px] text-muted">매칭 점수</p>
-                      <p className="text-[30px] font-bold leading-tight text-accent">{Math.round(Number(t.score))}<span className="text-[16px] font-semibold"> / 100</span></p>
+                      <p className="text-[12px] text-muted"><Term tip={TIP.매칭점수}>매칭 점수</Term></p>
+                      <p className="text-[30px] font-bold leading-tight text-accent">{Math.round(Number(t.score))}<span className="text-[16px] font-semibold">점</span></p>
                       {typeof d?.gate === "number" && d.gate !== Number(t.score) && <p className="text-[12px] text-muted">확정 판정 {Math.round(d.gate)}점 (성비 감점 제외)</p>}
                     </div>
                   </div>
@@ -214,9 +217,9 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                     </ul>
                   </div>
                   <div className="mt-5 grid grid-cols-1 gap-3 rounded-2xl bg-field p-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Strip I={UsersRound} k="나이 차" v={`${d.ageGap}살`} sub={`${d.ageGap <= DEFAULT_SETTINGS.maxAgeGap ? `${DEFAULT_SETTINGS.maxAgeGap}살 이내 규칙 지킴` : `${DEFAULT_SETTINGS.maxAgeGap}살 규칙 넘음`} · 여성 ${d.female} / 남성 ${d.male}`} danger={d.ageGap > DEFAULT_SETTINGS.maxAgeGap} />
+                    <Strip I={UsersRound} k="나이 차" v={`${d.ageGap}살`} sub={`${d.ageGap <= DEFAULT_SETTINGS.maxAgeGap ? `${DEFAULT_SETTINGS.maxAgeGap}살 이내 규칙 지킴` : `${DEFAULT_SETTINGS.maxAgeGap}살 규칙 넘음`} · 여성 ${d.female}명, 남성 ${d.male}명`} danger={d.ageGap > DEFAULT_SETTINGS.maxAgeGap} />
                     <Strip I={Heart} k="공통 관심사" v={d.commonInterests.slice(0, 2).join(" · ") || "-"} sub={`MBTI ${d.mbtiList.join(" · ")}`} />
-                    <Strip I={Users} k="이전 만남" v={`${d.metPairs}쌍 / 전체 ${d.totalPairs}쌍`} sub={`희망 성향 충족 ${d.wantedMet}/${d.wantedTotal}명`} />
+                    <Strip I={Users} k="이전 만남" v={`${d.totalPairs}쌍 중 ${d.metPairs}쌍`} sub={`희망 성향 맞춘 사람 ${d.wantedTotal}명 중 ${d.wantedMet}명`} />
                     <Strip I={ShieldCheck} k="차단·비선호 충돌" v={cfN ? `${cfN}쌍 있음` : "없음"} sub={`차단 ${cf.block} · 신고 ${cf.report} · 비선호 ${cf.avoid}쌍`} danger={cfN > 0} />
                   </div>
                   {reasons.length > 0 && (
@@ -228,7 +231,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                     </div>
                   )}
                   <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted">
-                    {cfN > 0 ? <span className="font-semibold text-danger">확정 뒤 생긴 차단·신고·비선호가 있어요. 테이블 상세의 긴급 수정에서 분리해 주세요</span> : <span>지금 기준으로 다시 세어 봐도 충돌 없음</span>}
+                    {cfN > 0 ? <span className="font-semibold text-danger">확정 뒤 생긴 차단·신고·비선호가 있어요. 테이블 상세의 <Term tip={TIP.긴급수정}>긴급 수정</Term>에서 분리해 주세요</span> : <span>지금 기준으로 다시 세어 봐도 충돌 없음</span>}
                     {t.confirmed_at && <span>{t.explanation.origin === "admin_split" ? "운영자 분리로 확정" : "자동 확정"} {fmtDateTime(t.confirmed_at)}</span>}
                     <Link href={`/admin/tables/${t.id}`} className="font-semibold text-accent">테이블 상세 →</Link>
                   </p>
@@ -252,7 +255,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                   <Badge v={label(MATCH, a.match_status)} />
                 </div>
                 <p className="mt-3 border-t border-line pt-3 text-[13px] leading-relaxed text-[#4c5368]"><span className="mr-2 text-muted">사유</span>{a.match_reason ?? "-"}</p>
-                <p className="mt-1 text-[12px] text-muted">재배치 시도 {a.realloc_count}회{failedAt.get(a.id) ? ` · 실패 ${fmtDateTime(failedAt.get(a.id)!)}` : ""}</p>
+                <p className="mt-1 text-[12px] text-muted">재배치 시도 {a.realloc_count}번{failedAt.get(a.id) ? ` · 실패 ${fmtDateTime(failedAt.get(a.id)!)}` : ""}</p>
               </li>
             ))}
             {!failed.length && <li className="py-6 text-center text-[14px] text-muted">모두 테이블에 앉았어요.</li>}
