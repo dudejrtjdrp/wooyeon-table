@@ -33,6 +33,9 @@ export const TEMPLATES = {
   round_changed: { label: "결과 안내 시각 변경", when: "운영자가 모집 중인 회차의 자동 매칭 시각을 바꿨을 때 (결제를 마친 신청자)", channel: "알림함(푸시 없음)", title: "결과 안내 시각이 바뀌었어요", body: "{round} · {match_at}에 결과를 알려 드려요", vars: ["round", "match_at"] },
   round_canceled: { label: "회차 취소", when: "운영자가 매칭 전 회차를 취소했을 때 (신청자 전원)", channel: "푸시·알림함", title: "이번 모임이 취소됐어요", body: "{round} · 결제·환불 결과는 내 신청에서 볼 수 있어요", vars: ["round"] },
   feedback_remind: { label: "후기 리마인드", when: "종료 24시간 뒤까지 후기가 없을 때 1회", channel: "푸시·알림함", title: "어제 식탁, 한 줄만 남겨 주세요", body: "남겨 주신 후기는 다음 테이블에 반영돼요", vars: [] },
+  pass_granted: { label: "이용권 지급", when: "운영자가 회원 상세에서 이용권 횟수를 더했을 때 (보상·문의 처리)", channel: "푸시·알림함", title: "이용권 {count}회를 드렸어요", body: "{until}까지 다음 일정에 쓸 수 있어요", vars: ["count", "until"] },
+  membership_granted: { label: "멤버십 기간 연장(운영자)", when: "운영자가 회원 상세에서 멤버십 기간을 늘렸을 때", channel: "푸시·알림함", title: "멤버십 기간을 {extra_days}일 늘렸어요", body: "{until}까지 쓸 수 있어요", vars: ["extra_days", "until"] },
+  announcement: { label: "운영자 공지", when: "운영자가 자동 메시지 화면에서 회차 신청자·테이블·회원에게 공지를 보낼 때", channel: "푸시·알림함", title: "{headline}", body: "{message}", vars: ["headline", "message"] },
 } as const;
 export type TemplateKey = keyof typeof TEMPLATES;
 
@@ -53,6 +56,7 @@ export const SAMPLE_VARS: Record<string, string> = {
   round: "10월 넷째 주 저녁", areas: "홍대·합정·연남", days: "10월 23일(금)·10월 24일(토)", cutoff: "10월 20일(화) 밤 12시", deadline: "10월 20일(화) 밤 12시",
   match_at: "10월 21일(수) 오전 9시", remaining: "2", reservation_line: "예약명은 '우연한식탁 2032'이에요.",
   venue_info: "",
+  count: "1", until: "12월 18일(금)", extra_days: "7", headline: "이번 주 모임 장소 안내", message: "식당 입구가 공사 중이라 옆문으로 들어와 주세요",
   recommendation: "늘 오시던 금요일 홍대·합정·연남 · 10월 30일(금) 저녁 7:30", alternatives: "옮길 수 있는 일정: 10월 다섯째 주 저녁(10월 30일(금)·10월 31일(토), 홍대·합정·연남·강남·역삼·선릉). ",
 };
 

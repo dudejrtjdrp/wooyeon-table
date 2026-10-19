@@ -154,3 +154,37 @@ export async function retryPushes(nowMs = Date.now()): Promise<number> {
   await pushNotifications(due);
   return due.length;
 }
+
+/**
+ * 운영자가 알림 한 건을 다시 보낸다 (자동 메시지 화면에서. 예외 처리함의 '다시 보내기'와 같은 방식).
+ * 알림함 저장이 실패했던 알림(failed)은 알림함에 넣고, 푸시도 다시 보낸다. 등록 기기가 없거나 알림함 전용 알림이면 알림함만으로 성공.
+ * 성공하면 이 알림 때문에 열려 있던 발송 실패 예외도 닫는다
+ */
+export async function resendNotification(id: string, adminId: string): Promise<boolean> {
+  const { now } = await import("./clock");
+  const t = (await now()).toISOString();
+  const { data: before } = await db().from("notifications").select("status,sent_at").eq("id", id).maybeSingle();
+  if (!before) return false;
+  const { error } = await db()
+    .from("notifications")
+    .update({ status: "sent", sent_at: before.status === "sent" ? before.sent_at : t, last_error: null })
+    .eq("id", id);
+  if (error) return false;
+  const { pushNotifications } = await import("./push");
+  await pushNotifications([id]);
+  const { data: n } = await db().from("notifications").select("status,last_error").eq("id", id).maybeSingle();
+  const ok = n?.status === "sent" && !n.last_error;
+  if (ok) {
+    const resolution = "자동 메시지 화면에서 다시 보내기 성공";
+    const { data: closed } = await db()
+      .from("exceptions")
+      .update({ status: "resolved", resolution, resolved_by: adminId, resolved_at: t })
+      .eq("kind", "notification")
+      .eq("ref_type", "notification")
+      .eq("ref_id", id)
+      .eq("status", "open")
+      .select("id");
+    for (const x of closed ?? []) await logStatus({ entityType: "exception", entityId: x.id, field: "status", from: "open", to: "resolved", actor: `admin:${adminId}`, reason: resolution }).catch(() => null);
+  }
+  return ok;
+}

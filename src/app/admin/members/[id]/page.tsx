@@ -12,6 +12,9 @@ import { maskLoginId, maskPhone } from "@/lib/members";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "../../confirm-button";
 import { setAccountStatus } from "../../applicants/[id]/actions";
+import { PersonSafety } from "../../feedback/person-safety";
+import { EXTEND_MAX_DAYS, GRANT_MAX, passStamp } from "@/lib/pass-grant-rules";
+import { extendMembership, grantPass } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +29,8 @@ type App = {
 };
 type Pay = { id: string; amount: number; status: string; provider: string; pass_type: string | null; paid_at: string | null; refunded_at: string | null; created_at: string; refund_error: string | null };
 type Pass = { id: string; pass_type: string; remaining: number; total_count: number; expires_at: string | null; created_at: string };
-type Report = { id: string; reason: string; status: string; action: string | null; created_at: string };
 
 const passName = (t: string | null) => (t && (PASSES[t as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[t])) || "-";
-const ACTION: Record<string, string> = { none: "조치 없음", warning: "경고", restricted: "참가 제한", banned: "영구 제한" };
 
 export default async function MemberDetail({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireAdmin();
@@ -44,26 +45,26 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
   const p = Array.isArray(u.profiles) ? u.profiles[0] : u.profiles;
   const t = await now();
 
-  const [{ data: appsRaw }, { data: paysRaw }, { data: passesRaw }, { data: repsRaw }, { count: reportedByMe }, { data: events }, { data: ids }] = await Promise.all([
+  const [{ data: appsRaw }, { data: paysRaw }, { data: passesRaw }, { data: events }, { data: ids }] = await Promise.all([
     db().from("applications").select("id,application_status,payment_status,match_status,attendance_status,submitted_at,created_at,rounds(title),dining_tables(slots(starts_at,region))").eq("user_id", id).order("created_at", { ascending: false }),
     db().from("payments").select("id,amount,status,provider,pass_type,paid_at,refunded_at,created_at,refund_error").eq("user_id", id).order("created_at", { ascending: false }),
     db().from("passes").select("id,pass_type,remaining,total_count,expires_at,created_at").eq("user_id", id).order("created_at", { ascending: false }),
-    db().from("safety_reports").select("id,reason,status,action,created_at").eq("reported_id", id).order("created_at", { ascending: false }),
-    db().from("safety_reports").select("id", { count: "exact", head: true }).eq("reporter_id", id),
     db().from("status_events").select("id,entity_type,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "user").eq("entity_id", id).order("created_at", { ascending: false }).limit(20),
     db().from("user_identities").select("provider").eq("user_id", id),
   ]);
   const apps = (appsRaw ?? []) as unknown as App[];
   const pays = (paysRaw ?? []) as unknown as Pay[];
   const passes = (passesRaw ?? []) as unknown as Pass[];
-  const reps = (repsRaw ?? []) as unknown as Report[];
-  const { data: extendsRaw } = passes.length
-    ? await db().from("status_events").select("entity_id,from_value,to_value").eq("entity_type", "pass").eq("field", "expires_at").in("entity_id", passes.map((x) => x.id))
+  const { data: passEventsRaw } = passes.length
+    ? await db().from("status_events").select("id,entity_id,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "pass").in("entity_id", passes.map((x) => x.id)).order("created_at", { ascending: false }).limit(100)
     : { data: [] };
+  const passEvents = passEventsRaw ?? [];
   const extendN = new Map<string, number>();
   // 기한이 늘어난 기록만 센다 (멤버십 환불로 끝낸 기록은 빼고)
-  for (const e of extendsRaw ?? []) if (e.from_value && e.to_value > e.from_value) extendN.set(e.entity_id, (extendN.get(e.entity_id) ?? 0) + 1);
-  const adminIds = [...new Set((events ?? []).filter((e) => e.actor.startsWith("admin:")).map((e) => e.actor.slice(6)))];
+  for (const e of passEvents) if (e.field === "expires_at" && e.from_value && Date.parse(e.to_value) > Date.parse(e.from_value)) extendN.set(e.entity_id, (extendN.get(e.entity_id) ?? 0) + 1);
+  // 운영자가 준 이용권 (결제 없이 만들었거나 횟수를 더한 것)
+  const granted = new Set(passEvents.filter((e) => e.field === "remaining" && e.actor.startsWith("admin:")).map((e) => e.entity_id));
+  const adminIds = [...new Set([...(events ?? []), ...passEvents].filter((e) => e.actor.startsWith("admin:")).map((e) => e.actor.slice(6)))];
   const { data: admins } = adminIds.length ? await db().from("users").select("id,name").in("id", adminIds) : { data: [] };
   const adminName = new Map((admins ?? []).map((x) => [x.id, x.name]));
 
@@ -72,6 +73,9 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
   const canceled = apps.filter((a) => a.application_status === "CANCELED" || a.attendance_status?.startsWith("CANCELED")).length;
   const livePasses = passes.filter((x) => !x.expires_at || new Date(x.expires_at) > t);
   const back = `/admin/members/${u.id}`;
+  const stamp = passStamp(passes);
+  const hasMembership = passes.some((x) => isMembership(x.pass_type));
+  const passName2 = new Map(passes.map((x) => [x.id, passName(x.pass_type)]));
 
   return (
     <div>
@@ -80,6 +84,7 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
         <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">{u.name}님</h1>
         <Badge v={label(ACCOUNT, u.account_status)} />
         {u.deleted_at && <Badge v={["탈퇴", "muted"]} />}
+        {!u.deleted_at && <Link href={`/admin/messages?ns=member&nm=${u.id}#notice`} className={`${btnLight} ml-auto`}>공지 보내기</Link>}
       </div>
       <p className="mt-1 text-[15px] text-muted">
         {fmtDate(u.created_at)} 가입 · 신청 {apps.length}건 · 참석 {attended}번{noShows ? ` · 노쇼 ${noShows}번` : ""}{canceled ? ` · 취소 ${canceled}건` : ""}
@@ -133,20 +138,7 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
             <Link href={`/admin/payments?q=${encodeURIComponent(u.name)}`} className="mt-2 inline-flex min-h-11 items-center text-[14px] font-semibold text-accent hover:underline">결제·환불 화면에서 보기</Link>
           </Panel>
 
-          <Panel title="받은 신고">
-            {!reps.length ? <p className="text-[14px] text-muted">받은 신고가 없어요.</p> : (
-              <ul className="space-y-2 text-[14px]">
-                {reps.map((r) => (
-                  <li key={r.id} className="flex flex-wrap items-center gap-2">
-                    <span className="tabular-nums text-muted">{fmtDate(r.created_at)}</span>
-                    <span className="min-w-0 flex-1 text-ink">{r.reason}</span>
-                    <Badge v={r.status === "open" ? ["검토 전", "danger"] : [ACTION[r.action ?? "none"] ?? "검토 끝", "muted"]} />
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-3 text-[13px] text-muted">이 회원이 낸 신고 {reportedByMe ?? 0}건</p>
-          </Panel>
+          <PersonSafety userId={u.id} back={`${back}#safety`} canWrite={me.level === "full"} />
 
           <Panel title="계정 상태 이력">
             {!events?.length ? <p className="text-[14px] text-muted">바뀐 적이 없어요.</p> : (
@@ -184,6 +176,7 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
           </Panel>
 
           <Panel title="이용권·멤버십">
+            <div id="passes" className="scroll-mt-24" />
             {!passes.length ? <p className="text-[14px] text-muted">가진 이용권이 없어요.</p> : (
               <ul className="space-y-2.5 text-[14px]">
                 {passes.map((x) => {
@@ -192,7 +185,7 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
                   return (
                     <li key={x.id} className="rounded-xl bg-field px-3 py-2.5">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-ink">{passName(x.pass_type)}</span>
+                        <span className="font-semibold text-ink">{passName(x.pass_type)}{granted.has(x.id) && <span className="ml-1.5 text-[12px] font-normal text-muted">운영자 지급</span>}</span>
                         <Badge v={!live ? ["기한 지남", "muted"] : member || x.remaining > 0 ? ["쓸 수 있음", "leaf"] : ["다 씀", "muted"]} />
                       </div>
                       <p className="mt-0.5 text-[12px] text-muted">
@@ -204,6 +197,65 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
                   );
                 })}
               </ul>
+            )}
+
+            {me.level !== "full" ? <p className="mt-4 text-[13px] text-muted">조회 전용 계정이라 이용권을 바꿀 수 없어요.</p> : u.deleted_at ? null : (
+              <div className="mt-4 space-y-2 border-t border-line pt-4">
+                <details>
+                  <summary className="inline-flex min-h-11 cursor-pointer items-center text-[14px] font-semibold text-accent">이용권 횟수 더하기</summary>
+                  <form action={grantPass} className="mt-2 space-y-2.5">
+                    <input type="hidden" name="user_id" value={u.id} />
+                    <input type="hidden" name="stamp" value={stamp} />
+                    <label className="flex items-center gap-3 text-[14px] text-muted">
+                      <span className="w-14 shrink-0">횟수<Required /></span>
+                      <select name="count" defaultValue="1" className={`${ctl} w-full`}>
+                        {Array.from({ length: GRANT_MAX }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}회</option>)}
+                      </select>
+                    </label>
+                    <label className="flex items-start gap-3 text-[14px] text-muted">
+                      <span className="w-14 shrink-0 pt-2.5">사유<Required /></span>
+                      <textarea name="note" rows={2} required minLength={4} placeholder="예: 식당 사정으로 모임이 취소돼 보상" className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
+                    </label>
+                    <p className="text-[12px] text-muted">결제 없이 1회권으로 드리고 60일 동안 쓸 수 있어요. 돈으로 산 이용권에는 더하지 않아요(환불하면 함께 사라져서).</p>
+                    <ConfirmButton confirm={`${u.name}님에게 이용권 횟수를 더하고 알림을 보내요. 계속할까요?`} className={`${btnLight} w-full`}>횟수 더하기</ConfirmButton>
+                  </form>
+                </details>
+                {hasMembership && (
+                  <details>
+                    <summary className="inline-flex min-h-11 cursor-pointer items-center text-[14px] font-semibold text-accent">멤버십 기간 늘리기</summary>
+                    <form action={extendMembership} className="mt-2 space-y-2.5">
+                      <input type="hidden" name="user_id" value={u.id} />
+                      <input type="hidden" name="stamp" value={stamp} />
+                      <label className="flex items-center gap-3 text-[14px] text-muted">
+                        <span className="w-14 shrink-0">기간<Required /></span>
+                        <input name="days" type="number" min={1} max={EXTEND_MAX_DAYS} defaultValue={7} required className={`${ctl} w-24`} />
+                        <span>일 (최대 {EXTEND_MAX_DAYS}일)</span>
+                      </label>
+                      <label className="flex items-start gap-3 text-[14px] text-muted">
+                        <span className="w-14 shrink-0 pt-2.5">사유<Required /></span>
+                        <textarea name="note" rows={2} required minLength={4} placeholder="예: 앱 오류로 신청하지 못한 주 보상" className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
+                      </label>
+                      <p className="text-[12px] text-muted">기한이 가장 늦은 멤버십을 늘려요. 이미 끝났으면 오늘부터 늘려요.</p>
+                      <ConfirmButton confirm={`${u.name}님의 멤버십 기간을 늘리고 알림을 보내요. 계속할까요?`} className={`${btnLight} w-full`}>기간 늘리기</ConfirmButton>
+                    </form>
+                  </details>
+                )}
+              </div>
+            )}
+
+            {passEvents.length > 0 && (
+              <div className="mt-4 border-t border-line pt-4">
+                <p className="text-[13px] font-semibold text-ink">이용권 이력</p>
+                <ol className="mt-2 space-y-2">
+                  {passEvents.slice(0, 10).map((e) => (
+                    <li key={e.id} className="text-[13px]">
+                      <span className="tabular-nums text-muted">{fmtDateTime(e.created_at)} · {actorLabel(e.actor, adminName)}</span>
+                      <span className="block text-ink">{passName2.get(e.entity_id)} {eventText(e)}</span>
+                      {e.reason && <span className="block text-[12px] text-muted">{e.reason}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
             )}
           </Panel>
 
