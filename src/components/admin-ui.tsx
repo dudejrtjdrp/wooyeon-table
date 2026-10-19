@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Pill } from "./ui";
+import { btnLight, ctl } from "./admin-classes";
+export { btn, btnDanger, btnInk, btnLight, btnPrimary, ctl, td, th } from "./admin-classes";
 
 export function PageHeader({ title, desc, actions }: { title: string; desc?: string; actions?: ReactNode }) {
   return (
@@ -31,14 +33,6 @@ export function Badge({ v }: { v: [string, "muted" | "accent" | "leaf" | "ink" |
   return <Pill tone={v[1]}>{v[0]}</Pill>;
 }
 
-export const ctl = "h-11 rounded-xl border border-line bg-card px-3.5 text-[14px] text-ink outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/10";
-export const btn = "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-4 text-[14px] font-semibold transition active:scale-[.98]";
-export const btnPrimary = `${btn} bg-accent text-white shadow-cta`;
-export const btnInk = `${btn} bg-accent text-white shadow-cta`;
-export const btnLight = `${btn} border border-accent/40 bg-card text-accent hover:bg-accent-soft/50`;
-export const btnDanger = `${btn} bg-danger text-white`;
-export const th = "bg-[#f4f7fc] px-4 py-3 text-left text-[13px] font-semibold text-muted first:rounded-l-xl last:rounded-r-xl";
-export const td = "px-4 py-3";
 
 /** 회차 고르기 (주소의 r 값으로 넘긴다) */
 export function RoundPicker({ rounds, current, extra }: { rounds: { id: string; title: string }[]; current?: string; extra?: React.ReactNode }) {

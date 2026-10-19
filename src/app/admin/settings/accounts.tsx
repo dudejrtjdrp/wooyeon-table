@@ -2,7 +2,7 @@
 
 import { Copy, KeyRound } from "lucide-react";
 import { useActionState, useState } from "react";
-import { btnLight, btnPrimary, ctl } from "@/components/admin-ui";
+import { btnLight, btnPrimary, ctl } from "@/components/admin-classes";
 import { ConfirmButton } from "../confirm-button";
 import { type AccountState, createAdmin, resetAdminPassword } from "./account-actions";
 
