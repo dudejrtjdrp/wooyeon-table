@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtClock, fmtDate, fmtDateTime, fmtDay, fmtDayClock, fmtSlot, fmtTime } from "./format";
+import { fmtClock, fmtDate, fmtDateTime, fmtDay, fmtDayClock, fmtSlot, fmtTime, withRo } from "./format";
 
 describe("마감 시각 표기", () => {
   it("정확히 0시는 화면마다 같은 말로 '전날 밤 12시'라고 쓴다", () => {
@@ -35,5 +35,15 @@ describe("날짜·시각 표기를 하나로 쓴다", () => {
     for (const s of [fmtDate(dinner), fmtTime(dinner), fmtDateTime(dinner)]) {
       expect(s).not.toMatch(/오후 7|일 \(/);
     }
+  });
+});
+
+describe("withRo", () => {
+  it("받침 따라 으로/로", () => {
+    expect(withRo("강우진")).toBe("강우진으로");
+    expect(withRo("김우연")).toBe("김우연으로");
+    expect(withRo("이수아")).toBe("이수아로");
+    expect(withRo("한별")).toBe("한별로");
+    expect(withRo("admin")).toBe("admin로");
   });
 });

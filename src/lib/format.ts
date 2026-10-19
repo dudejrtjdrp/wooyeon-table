@@ -66,3 +66,11 @@ export function dday(iso: string, now: Date) {
   return Math.round((b - a) / 86400_000);
 }
 export const ddayLabel = (n: number) => (n <= 0 ? "D-day" : `D-${n}`);
+
+/** 이름 뒤 '으로/로': 받침이 있으면 '으로'(ㄹ 받침은 '로'). 한글이 아니면 '로' */
+export function withRo(name: string) {
+  const c = name.charCodeAt(name.length - 1) - 0xac00;
+  if (c < 0 || c > 11171) return `${name}로`;
+  const jong = c % 28;
+  return `${name}${jong === 0 || jong === 8 ? "로" : "으로"}`;
+}
