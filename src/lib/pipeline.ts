@@ -1,3 +1,4 @@
+import { contentMessage } from "./content-preview";
 import { now } from "./clock";
 import { REFUND_POLICY } from "./constants";
 import { logStatus } from "./events";
@@ -413,11 +414,8 @@ export async function tick() {
       const c = await pickContents(tb.id);
       await systemMessage(
         roomId,
-        [
-          "모두 모이셨나요? 오늘의 대화 주제예요.",
-          ...c.topics.map((x, i) => `${i + 1}. ${x.body}`),
-          c.icebreakers.length ? `\n아이스브레이킹\n${c.icebreakers.map((x) => `· ${x.body}`).join("\n")}` : "",
-        ].join("\n"),
+        // 어드민 대화 콘텐츠 화면의 미리 보기와 같은 함수로 만든다(화면과 실제 게시가 어긋나지 않게)
+        contentMessage(c.topics, c.icebreakers),
         `content:${tb.id}`,
         { type: "content", common: c.common, types: c.types },
       );
