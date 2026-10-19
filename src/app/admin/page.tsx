@@ -14,7 +14,8 @@ import { computeMetrics, metricValue } from "@/lib/metrics";
 import { maybeTick } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "./confirm-button";
-import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants } from "./demo-actions";
+import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants, toggleBots } from "./demo-actions";
+import { botsOn } from "@/lib/sim/bots";
 import { loadMetricsInput } from "./metrics/load";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
 
   // 자동 처리 상태: 마지막 실행 시각과 다시 보내는 중인 알림 (INF-08)
   const { data: ran } = await db().from("settings").select("value").eq("key", "tick.ran").maybeSingle();
+  const bots = await botsOn();
   const { count: retrying } = await db().from("notifications").select("id", { count: "exact", head: true }).eq("status", "sent").like("last_error", "푸시 실패%").lt("attempts", 3).gte("sent_at", new Date(Date.now() - 24 * 3600_000).toISOString());
 
   // 처리할 예외는 회차와 상관없이 지금 열린 것 전부(예외 처리함과 같은 기준). 아래 '주요 현황'만 고른 회차 기준이다
@@ -282,6 +284,13 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               <p className="text-[14px] font-semibold">③ 테스트 참가자 체크인·후기 채우기 (모임 시작 뒤)</p>
               <p className="mt-1 text-[12px] text-muted">일부는 서로 &lsquo;다시는 싫어요&rsquo;를 골라요. 다음 매칭에서 같은 테이블에 앉지 않는지 볼 수 있어요.</p>
               <button className="mt-3 h-10 w-full rounded-xl bg-accent text-[14px] font-semibold text-white">채우기</button>
+            </form>
+
+            <form action={toggleBots} className="shadow-card rounded-[20px] bg-card p-4">
+              <input type="hidden" name="on" value={bots ? "0" : "1"} />
+              <p className="flex items-center gap-2 text-[14px] font-semibold">시연 봇 <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${bots ? "bg-leaf-soft text-leaf" : "bg-field text-muted"}`}>{bots ? "켜짐" : "꺼짐"}</span></p>
+              <p className="mt-1 text-[12px] text-muted">참가자가 결제하면 그 일정이 4명이 되도록 테스트 참가자가 같이 신청해요. 확정되면 단체방에서 성격대로 인사·대화하고, 사람이 쓴 말에 한두 명이 답해요. 모임 날엔 체크인(가끔 한 명은 안 와요)과 후기까지 남겨요.</p>
+              <button className="mt-3 h-10 w-full rounded-xl border border-line bg-card text-[14px] font-semibold hover:border-accent">{bots ? "끄기" : "켜기"}</button>
             </form>
 
             {nextRound && (

@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { PASSES, isMembership, type PassType } from "@/lib/constants";
@@ -106,6 +107,9 @@ export async function submitApplication(form: FormData) {
       ? render("paid_membership", { match_at: fmtSlot(round!.match_at) }, tpl)
       : render("paid_pass", { remaining: String(owned.remaining - 1), match_at: fmtSlot(round!.match_at) }, tpl);
     await notify({ userId: me.id, template: "paid", title: pm.title, body: pm.body, link: `/applications/${app!.id}`, dedupeKey: `paid:${app!.id}:${payment!.id}` });
+    // 시연: 같은 일정에 봇이 같이 신청한다 (lib/sim/bots.ts)
+    const appId = app!.id;
+    after(() => import("@/lib/sim/bots").then((b) => b.botsJoin(appId)).catch((e) => console.error("[bots] 같이 신청 실패", e)));
     redirect(`/applications/${app!.id}`);
   }
   // 결제 대기 안내 (14장): 결제 방법과 기한. 1시간 뒤에도 결제 전이면 한 번 더 알린다

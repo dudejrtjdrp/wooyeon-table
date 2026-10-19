@@ -1,5 +1,5 @@
 // 토스 결제창에서 결제 인증이 끝나면 여기로 돌아온다. 금액·주문번호를 서버 기록과 맞춰 본 뒤 승인 API를 부른다.
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { logStatus } from "@/lib/events";
 import { markPaid } from "@/lib/payments";
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
     if (!USER_SIDE.some((c) => r.error.code.startsWith(c))) await raise(app.payment_id, `토스 승인 실패 ${r.error.code}: ${r.error.message}`, r.error.code);
     return fail(r.error.message);
   }
-  await markPaid(appId, me.id, {
+  const paid = await markPaid(appId, me.id, {
     provider: "toss",
     method: methodLabel(r.data),
     pgPaymentKey: r.data.paymentKey,
@@ -63,5 +63,7 @@ export async function GET(req: NextRequest) {
     raw: r.data,
     reason: `토스페이먼츠 결제 승인 (${methodLabel(r.data)})`,
   });
+  // 시연: 같은 일정에 봇이 같이 신청한다 (lib/sim/bots.ts)
+  if (paid) after(() => import("@/lib/sim/bots").then((b) => b.botsJoin(appId)).catch((e) => console.error("[bots] 같이 신청 실패", e)));
   return to(`/applications/${appId}?m=${encodeURIComponent("결제가 끝났어요")}`);
 }
