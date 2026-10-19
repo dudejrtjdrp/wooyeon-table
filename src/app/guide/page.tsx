@@ -42,7 +42,7 @@ const FLOW: { who: "참가자" | "자동"; title: string; body: string }[] = [
   { who: "자동", title: "확정 · 식당 · 단체방", body: "운영자 승인 없이 확정되고, 식당 배정과 단체방 첫 공지까지 바로 나가요." },
   { who: "자동", title: "하루 전 알림 · 대화 주제", body: "리마인드가 가고, 모임 시작에 맞춰 대화 주제가 올라와요." },
   { who: "참가자", title: "체크인 · 후기", body: "만족도와 사람별 선호(다시 만나고 싶어요/다시는 싫어요)를 남겨요." },
-  { who: "자동", title: "다음 매칭에 반영", body: "같이 앉았던 사람, 다시는 싫다는 사람은 다음엔 다른 테이블로." },
+  { who: "자동", title: "다음 매칭에 반영", body: "다시는 싫다는 사람·차단한 사람은 반드시, 같이 앉았던 사람은 되도록 다른 테이블로." },
 ];
 
 const chip = "inline-flex min-h-11 items-center rounded-xl px-3.5 text-[14px] font-semibold";
@@ -226,7 +226,7 @@ export default async function Guide() {
         <Step n={11} who="운영자" title="다음 매칭에서 이전 만남과 피드백이 반영된 것을 확인한다"
           actions={<>{panel}<As admin login={A} to="/admin/matching">자동 매칭 모니터</As><As admin login={A} to="/admin/feedback">피드백·안전</As></>}>
           <p>시연 패널 <b>④ 다음 차수에 다시 신청시키기</b>를 누르고, 그 차수를 고른 상태에서 <b>② 매칭 마감 직후</b>를 눌러요.</p>
-          <p>자동 매칭 모니터에서 지난번에 같이 앉았거나 &lsquo;다시는 싫어요&rsquo;를 남긴 사람끼리 다른 테이블로 나뉜 것(&lsquo;차단·비선호 충돌 없음&rsquo;)을 확인해요.</p>
+          <p>자동 매칭 모니터에서 &lsquo;다시는 싫어요&rsquo;를 남긴 사람끼리는 반드시 다른 테이블로 나뉜 것(&lsquo;차단·비선호 충돌 없음&rsquo;)을, 지난번에 같이 앉았던 사람은 되도록 새 사람과 앉힌 것을 확인해요.</p>
         </Step>
 
         <Step n={12} who="운영자" title="정상 흐름은 운영자 손 없이 끝나고, 해결 안 된 예외만 운영자 화면에 남는다"
