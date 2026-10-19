@@ -37,7 +37,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
     venues: { name: string; address: string; map_url: string | null; price_range: string | null; rating: number | null; review_count: number | null; photo_url: string | null; category: string | null } | null;
     rounds: { title: string };
   } | null;
-  if (!t) redirect(`/?m=${encodeURIComponent("이 모임을 찾지 못했어요. 내 일정은 일정 탭에서 볼 수 있어요")}`);
+  if (!t) redirect(`/?m=${encodeURIComponent("이 모임을 찾지 못했어요. 내 모임은 단체방 탭에서 볼 수 있어요")}`);
 
   const { data: resv } = await db().from("reservations").select("channel,status,external_ref").eq("table_id", id).maybeSingle();
   const { data: memRaw } = await db()

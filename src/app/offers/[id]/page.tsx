@@ -31,7 +31,7 @@ export default async function Offer({ params, searchParams }: { params: Promise<
     id: string; user_id: string; status: string; expires_at: string; application_id: string; table_id: string;
     dining_tables: { id: string; slots: { starts_at: string; ends_at: string; region: string }; venues: { name: string; address: string; price_range: string | null } | null };
   } | null;
-  if (!o || o.user_id !== me.id) redirect("/");
+  if (!o || o.user_id !== me.id) redirect(`/?m=${encodeURIComponent("이 자리 제안을 찾지 못했어요. 알림함에서 다시 확인해 주세요")}`);
   const t = await now();
   const pending = o.status === "pending" && new Date(o.expires_at) > t;
   const left = Math.max(0, new Date(o.expires_at).getTime() - t.getTime());

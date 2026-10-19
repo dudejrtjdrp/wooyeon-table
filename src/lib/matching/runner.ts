@@ -7,6 +7,7 @@ import { loadTemplates, render } from "../templates";
 import { db } from "../supabase";
 import { nearSlotsFor } from "../regions";
 import { runMatching } from "./engine";
+import { blockedReason } from "./blocked";
 import { type FeedbackRow, feedbackSignals } from "./feedback";
 import {
   ALGORITHM_VERSION,
@@ -165,11 +166,10 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
     for (const a of rows) {
       if (a.payment_status !== "PAID") continue; // 결제 안 된 신청은 후보에서 뺀다
       // 제한 기한이 지났으면 제한이 풀린 것으로 본다 (기한 지난 제한 때문에 정상 참가자가 빠지지 않게)
-      const st = a.users?.account_status;
-      const expired = st === "restricted" && !!a.users.restricted_until && new Date(a.users.restricted_until) <= runAt;
-      if (st === "banned" || (st === "restricted" && !expired)) {
-        // 결제까지 한 뒤 제한된 사람은 조용히 빼면 매칭 대기로 영영 남는다: 이유를 남기고 운영자가 환불·안내하도록 예외 처리함으로
-        exceptions.push({ appId: a.id, kind: "account_blocked", reason: st === "banned" ? "영구 제한된 계정이라 매칭에서 뺐어요. 결제를 돌려주고 안내해 주세요" : `신청 제한 중(${a.users.restricted_until ? fmtDay(a.users.restricted_until) : "기한 없음"}까지)이라 매칭에서 뺐어요. 환불하거나 제한을 풀고 다른 일정으로 안내해 주세요` });
+      // 결제까지 한 뒤 제한된 사람은 조용히 빼면 매칭 대기로 영영 남는다: 이유를 남기고 운영자가 환불·안내하도록 예외 처리함으로
+      const blocked = blockedReason(a.users?.account_status, a.users?.restricted_until ?? null, runAt);
+      if (blocked) {
+        exceptions.push({ appId: a.id, kind: "account_blocked", reason: blocked });
         continue;
       }
       const p = Array.isArray(a.users?.profiles) ? a.users.profiles[0] : a.users?.profiles;

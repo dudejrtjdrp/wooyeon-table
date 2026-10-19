@@ -26,6 +26,8 @@ function adviceFor(e: { kind: string; ref_type: string; reason?: string | null }
     case "refund":
       return `${who}${c.amount ? `의 ${c.amount}` : ""} 환불을 '환불 다시 요청'으로 먼저 해 보세요. 또 안 되면 결제사 관리 화면에서 직접 취소하고 '직접 처리함'을 눌러요.`;
     case "data_missing":
+      // 결제한 뒤 계정이 제한돼 매칭에서 뺀 신청 (runner.ts blockedReason)
+      if (e.reason?.includes("매칭에서 뺐어요")) return `${who}은(는) 계정 제한 중이라 매칭에서 빠졌어요. 제한이 맞으면 결제·환불에서 돌려주고, 잘못 걸린 제한이면 신청자 상세에서 계정 상태를 풀고 다른 일정으로 안내한 뒤 '처리 완료'를 눌러요.`;
       return e.ref_type === "match_run"
         ? `${where}자동 매칭이 끝까지 돌지 못했어요. '관련 기록 보기'로 매칭 모니터의 실패 사유를 확인하고 개발 담당에게 다시 실행을 부탁한 뒤 '처리 완료'를 눌러요. 같은 회차를 다시 돌려도 테이블이 두 번 생기지 않아요.`
         : `${who}의 신청에서 빠진 정보를 신청자 상세에서 확인하고, 본인에게 연락해 채운 뒤 '처리 완료'를 눌러요. 채우기 전까지는 매칭에서 빠져 있어요.`;

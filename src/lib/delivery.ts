@@ -94,7 +94,15 @@ export async function retrySystemMessages(nowMs = Date.now()): Promise<number> {
   for (const [key, f] of byKey) {
     if (done.has(key) || f.tries >= MAX_TRIES) continue;
     if (nowMs - f.last < RETRY_GAP_MIN * 60_000) continue;
-    await postSystem(f.roomId, f.p.body, { dedupeKey: key, meta: f.p.meta, retry: true });
+    // 하루 전 안내는 지금 식당·예약명으로 다시 쓰고, 해제·시작된 테이블이면 올리지 않는다 (운영자 다시 보내기와 같은 판단)
+    let body = f.p.body;
+    if (key.startsWith("remind:")) {
+      const { freshRoomReminder } = await import("./pipeline");
+      const fresh = await freshRoomReminder(key.slice("remind:".length));
+      if (fresh.skip) continue;
+      body = fresh.body ?? body;
+    }
+    await postSystem(f.roomId, body, { dedupeKey: key, meta: f.p.meta, retry: true });
     n++;
   }
   return n;
@@ -118,9 +126,9 @@ export async function resendSystem(exceptionKey: string): Promise<boolean> {
   // 하루 전 안내는 실패 당시 문구가 아니라 지금 식당·예약명으로 다시 쓴다. 테이블이 해제됐거나 이미 시작했으면 올리지 않는다
   if (key.startsWith("remind:")) {
     const { freshRoomReminder } = await import("./pipeline");
-    const body = await freshRoomReminder(key.slice("remind:".length));
-    if (!body) return false;
-    return postSystem(data.entity_id, body, { dedupeKey: key, meta: p.meta, retry: true });
+    const fresh = await freshRoomReminder(key.slice("remind:".length));
+    if (fresh.skip) return false;
+    return postSystem(data.entity_id, fresh.body ?? p.body, { dedupeKey: key, meta: p.meta, retry: true });
   }
   return postSystem(data.entity_id, p.body, { dedupeKey: key, meta: p.meta, retry: true });
 }
