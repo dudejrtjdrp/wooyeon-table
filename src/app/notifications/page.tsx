@@ -62,7 +62,7 @@ export default async function Notifications() {
                   <p className={`text-[16px] text-ink ${unread ? "font-extrabold" : "font-bold"}`}>{n.title}</p>
                   <span className="shrink-0 pt-0.5 text-[12px] text-muted">{ago(n.scheduled_at, t)}</span>
                 </div>
-                <p className="mt-1 line-clamp-2 text-[14px] leading-relaxed text-muted">{n.body}</p>
+                <p className={`mt-1 text-[14px] leading-relaxed text-muted ${n.template === "announcement" ? "" : "line-clamp-2"}`}>{n.body}</p>
               </div>
               {n.link && <ChevronRight size={20} className="shrink-0 text-muted" />}
             </div>

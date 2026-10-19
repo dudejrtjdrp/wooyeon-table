@@ -58,10 +58,12 @@ export const CHECKIN_OPEN_BEFORE = 60 * 60_000;
 /**
  * 운영자가 참석 상태를 바꿀 수 있는지와 바뀔 값.
  * 체크인: 참석 예정인 사람만, 모임 1시간 전부터(끝난 뒤 정정도 됨).
- * 노쇼: 참석 예정인 사람만, 모임이 시작된 뒤에만(제재가 걸린다).
+ * 노쇼: 참석 예정이고, 모임이 끝났고(종료 시각까지 체크인이 없어야 후보가 된다), 노쇼 후보로 올라온 사람만(FDB-01: 운영자는 후보만 확인).
+ *   늦게 오는 사람이 모임 도중 경고·제한을 받지 않게 한다.
  * 되돌리기: 체크인·노쇼를 참석 예정으로. 후기를 이미 남긴 참석은 되돌리지 않는다(후기가 다음 매칭에 쓰여서).
  */
-export function attendanceChange(op: AttendOp, o: { status: string | null; tableStatus: string; startsAt: string; now: Date; hasFeedback?: boolean }): { ok: true; from: string; to: string } | No {
+export type AttendCtx = { status: string | null; tableStatus: string; startsAt: string; endsAt: string; now: Date; hasFeedback?: boolean; isCandidate?: boolean };
+export function attendanceChange(op: AttendOp, o: AttendCtx): { ok: true; from: string; to: string } | No {
   if (o.tableStatus === "DISSOLVED") return { ok: false, reason: "해제된 테이블이라 참석 상태를 바꿀 수 없어요" };
   const start = new Date(o.startsAt).getTime();
   const s = o.status ?? "";
@@ -74,7 +76,8 @@ export function attendanceChange(op: AttendOp, o: { status: string | null; table
   if (op === "noshow") {
     if (s === "NO_SHOW") return { ok: false, reason: "이미 노쇼로 처리됐어요" };
     if (s !== "SCHEDULED") return { ok: false, reason: s === "ATTENDED" ? "체크인한 분이에요. 잘못 체크인됐다면 먼저 참석 예정으로 되돌려 주세요" : "참석 예정인 분만 노쇼로 처리할 수 있어요" };
-    if (o.now.getTime() < start) return { ok: false, reason: "모임이 시작된 뒤에만 노쇼로 처리할 수 있어요" };
+    if (o.now.getTime() < new Date(o.endsAt).getTime()) return { ok: false, reason: "모임이 끝난 뒤에만 노쇼로 처리할 수 있어요. 늦게 오는 분일 수 있어요" };
+    if (!o.isCandidate) return { ok: false, reason: "노쇼 후보로 올라온 분만 노쇼로 확정할 수 있어요" };
     return { ok: true, from: s, to: "NO_SHOW" };
   }
   if (s !== "ATTENDED" && s !== "NO_SHOW") return { ok: false, reason: "체크인이나 노쇼로 처리된 분만 되돌릴 수 있어요" };
@@ -83,7 +86,7 @@ export function attendanceChange(op: AttendOp, o: { status: string | null; table
 }
 
 /** 한 사람 줄에서 보여 줄 버튼 (판단은 attendanceChange와 같다) */
-export function attendanceOps(o: { status: string | null; tableStatus: string; startsAt: string; now: Date; hasFeedback?: boolean }): AttendOp[] {
+export function attendanceOps(o: AttendCtx): AttendOp[] {
   return (["checkin", "noshow", "revert"] as AttendOp[]).filter((op) => attendanceChange(op, o).ok);
 }
 

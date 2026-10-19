@@ -563,7 +563,7 @@ async function feedbackSafetyNet(t: Date, tpl: Awaited<ReturnType<typeof loadTem
  * 하루 전 리마인드를 보내는 순간의 정보로 다시 쓴다. 키는 remind:<신청 id>(운영자가 옮긴 경우 remind:<신청 id>:<테이블 id>).
  * 이제 보낼 이유가 없으면(취소·테이블 해제) null, 같은 신청에 이미 리마인드가 나갔어도 null.
  */
-async function freshReminder(notificationId: string, key: string, tpl: Awaited<ReturnType<typeof loadTemplates>>): Promise<{ title: string; body: string; link: string } | null> {
+export async function freshReminder(notificationId: string, key: string, tpl: Awaited<ReturnType<typeof loadTemplates>>): Promise<{ title: string; body: string; link: string } | null> {
   const appId = key.split(":")[1];
   const { data: app } = await db().from("applications").select("id,match_status,attendance_status,table_id").eq("id", appId).maybeSingle();
   if (!app || app.match_status !== "CONFIRMED" || app.attendance_status !== "SCHEDULED" || !app.table_id) return null;

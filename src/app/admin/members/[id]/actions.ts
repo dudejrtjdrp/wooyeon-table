@@ -68,6 +68,10 @@ export async function grantPass(form: FormData) {
       await logStatus({ entityType: "pass", entityId: passId, field: "expires_at", from: plan.from.expiresAt, to: plan.to.expiresAt, actor, reason: `지급한 횟수를 쓸 수 있게 기한 맞춤: ${note}` });
     }
   } else {
+    // 새 이용권은 조건부로 고칠 줄이 없어, 화면을 연 때의 이용권 상태(stamp)로 한 번만 잡는 표시를 먼저 남긴다.
+    // settings.key가 기본 키라 같은 화면에서 두 번 눌러도 두 번째는 여기서 막힌다(마이그레이션 없이)
+    const { data: claim } = await db().from("settings").upsert({ key: `grant-lock:${userId}:${passStamp(passes)}`, value: { by: admin.id, at: t.toISOString() } }, { onConflict: "key", ignoreDuplicates: true }).select("key");
+    if (!claim?.length) return go(userId, "e", "이미 처리된 요청이에요. 화면을 새로 고쳐 확인해 주세요");
     const { data: created, error } = await db()
       .from("passes")
       .insert({ user_id: userId, pass_type: "single", total_count: plan.to.total, remaining: plan.to.remaining, expires_at: plan.to.expiresAt })
@@ -80,9 +84,11 @@ export async function grantPass(form: FormData) {
 
   const until = plan.to.expiresAt ? fmtDay(plan.to.expiresAt) : "기한 없이";
   const m = render("pass_granted", { count: String(n), until }, await loadTemplates());
+  // 기한 없는 이용권이면 "기한 없이까지"가 되지 않게 본문을 따로 쓴다
+  if (!plan.to.expiresAt) m.body = "기한 없이 다음 일정에 쓸 수 있어요";
   await notify({ userId, template: "pass_granted", title: m.title, body: m.body, link: "/me", dedupeKey: `pass_grant:${passId}:${plan.to.total}` });
   revalidatePath("/admin/payments");
-  return go(userId, "m", `이용권 ${n}회를 더했어요 (${until}까지). 회원에게 알림을 보냈어요`);
+  return go(userId, "m", `이용권 ${n}회를 더했어요 (${plan.to.expiresAt ? `${until}까지` : "기한 없음"}). 회원에게 알림을 보냈어요`);
 }
 
 /** 멤버십 기간 늘리기 (보상·문의 처리). 1~30일, 사유 필수. 멤버십이 없으면 새로 만들지 않는다 */

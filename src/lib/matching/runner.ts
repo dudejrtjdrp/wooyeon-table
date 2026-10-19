@@ -131,12 +131,16 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
   }
 
   try {
-    // 0단계 확인과 여기 사이에 회차가 취소돼 닫혔으면(rounds/actions.ts cancelRound) 방금 잡은 실행 기록을 지우고 멈춘다.
+    // 0단계 확인과 여기 사이에 회차가 취소돼 닫혔으면(rounds/actions.ts cancelRound) 멈춘다.
+    // 닫힌 회차만 멈춘다: 동시에 들어온 다른 실행·스케줄러가 회차를 'matched'로 맞춰 둔 경우(위 중복 경로)나
+    // 복구(resumeFailed)는 이 실행 기록을 잡은 쪽이므로 그대로 이어서 돈다.
     // 취소 쪽은 '모집 중'일 때만 닫으므로, 여기서 먼저 '매칭 중'이 되면 취소가 막혀 둘이 엇갈리지 않는다
-    const { data: started } = await db().from("rounds").update({ status: "matching" }).eq("id", roundId).in("status", ["open", "matching"]).select("id");
+    const { data: started } = await db().from("rounds").update({ status: "matching" }).eq("id", roundId).neq("status", "closed").select("id");
     if (!started?.length) {
-      await db().from("match_runs").delete().eq("id", run.id).eq("status", "running");
-      return { runId: "", alreadyRan: true, summary: { skipped: "closed" } };
+      // 기록을 지우지 않고 '취소로 건너뜀'으로 남긴다 (MatchRun 기록)
+      const summary = { skipped: "canceled", reason: "실행을 시작하는 사이 회차가 취소돼 매칭하지 않았어요" };
+      await db().from("match_runs").update({ status: "done", finished_at: new Date().toISOString(), summary }).eq("id", run.id).eq("status", "running");
+      return { runId: run.id, alreadyRan: true, summary };
     }
 
     // 2. 대상 불러오기: 제출 + 결제 완료 + 매칭 대기

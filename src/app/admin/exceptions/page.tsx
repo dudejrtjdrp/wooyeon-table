@@ -46,6 +46,8 @@ function adviceFor(e: { kind: string; ref_type: string; reason?: string | null }
     case "safety":
       return `신고 내용을 보고 조치를 골라요. 두 사람은 신고가 들어온 순간부터 같은 테이블에 앉지 않아요. 지금 같은 테이블이면 '긴급 수정 열기'에서 한 사람을 옮겨요.`;
     case "reservation":
+      if (e.ref_type === "venue_cancel") return `${where}식당을 바꿔 이전 식당 예약이 남아 있어요. 식당에 전화해 취소한 뒤 '이전 예약 취소함'을 눌러요.`;
+      if (e.ref_type === "venue_phone") return `${where}전화로만 예약되는 식당이에요. 전화로 예약하고, 예약번호를 메모에 적어 '직접 예약함'을 눌러요.`;
       return `${where}예약이 안 됐어요. '예약 다시 시도'를 먼저 눌러 보세요. 안 되면 예약 페이지에서 직접 예약하고, 예약번호를 메모에 적어 '직접 예약함'을 눌러요.`;
   }
   return undefined;
@@ -211,6 +213,16 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                     <>
                       <ConfirmButton name="action" value="retry_refund" confirm="결제사에 환불을 다시 요청해요. 승인되면 되돌릴 수 없어요. 계속할까요?" className={primary}>환불 다시 요청</ConfirmButton>
                       <button name="action" value="done" className={light}>직접 처리함</button>
+                    </>
+                  ) : e.kind === "reservation" && e.ref_type === "venue_cancel" ? (
+                    <>
+                      <Link href={`/admin/tables/${e.ref_id}#reservation`} className={`${B} flex items-center border border-line text-ink`}>테이블 보기</Link>
+                      <button name="action" value="done" className={primary}>이전 예약 취소함</button>
+                    </>
+                  ) : e.kind === "reservation" && e.ref_type === "venue_phone" ? (
+                    <>
+                      <Link href={`/admin/tables/${e.ref_id}#reservation`} className={`${B} flex items-center border border-line text-ink`}>예약 정보 보기</Link>
+                      <button name="action" value="reserved" className={primary}>직접 예약함</button>
                     </>
                   ) : e.kind === "reservation" ? (
                     <>

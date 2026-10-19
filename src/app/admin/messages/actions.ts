@@ -48,7 +48,11 @@ export async function resendNotice(form: FormData) {
   const { data: n } = await db().from("notifications").select("id,status,last_error,attempts").eq("id", id).maybeSingle();
   if (!n) return go(back, "e", "알림을 찾지 못했어요");
   if (!isFailedNotice(n)) return go(back, "m", "이미 나간 알림이에요");
-  const ok = await resendNotification(id, admin.id);
+  const { ok, skipped } = await resendNotification(id, admin.id);
+  if (skipped) {
+    await logStatus({ entityType: "notification", entityId: id, field: "resend", from: "failed", to: "보내지 않음", actor: `admin:${admin.id}`, reason: skipped });
+    return go(back, "m", skipped);
+  }
   await logStatus({ entityType: "notification", entityId: id, field: "resend", from: n.status === "failed" ? "failed" : "FAILED", to: ok ? "SENT" : "FAILED", actor: `admin:${admin.id}`, reason: `자동 메시지 화면에서 다시 보내기${n.last_error ? ` (이전 오류: ${n.last_error.slice(0, 80)})` : ""}` });
   revalidatePath("/admin/exceptions");
   revalidatePath("/admin");

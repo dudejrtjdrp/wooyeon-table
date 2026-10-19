@@ -66,6 +66,7 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
           <Link href="/rounds" className="border-l border-line text-center">
             <p className="text-[14px] text-muted">{member ? "멤버십" : "남은 이용권"}</p>
             <p className="mt-1 text-[26px] font-bold text-accent">{member?.expires_at ? `${fmtDay(member.expires_at).replace(/\s*\(.\)$/, "")}까지` : `${left}회`}</p>
+            {member && left > 0 && <p className="mt-0.5 text-[13px] text-muted">이용권 {left}회도 있어요</p>}
           </Link>
         </div>
       </section>

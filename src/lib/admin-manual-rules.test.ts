@@ -44,14 +44,17 @@ describe("바꿀 식당 후보", () => {
 });
 
 describe("참석 상태 바꾸기", () => {
-  const o = { status: "SCHEDULED", tableStatus: "IN_PROGRESS", startsAt: start, now: at("2026-11-06T10:30:00Z") };
+  // 모임 10:00~12:30(UTC), 끝난 뒤 13:00, 노쇼 후보로 올라온 사람
+  const o = { status: "SCHEDULED", tableStatus: "DONE", startsAt: start, endsAt: "2026-11-06T12:30:00Z", now: at("2026-11-06T13:00:00Z"), isCandidate: true };
   it("체크인은 1시간 전부터, 끝난 뒤에도 정정할 수 있다", () => {
     expect(attendanceChange("checkin", { ...o, now: at("2026-11-06T08:59:00Z") })).toMatchObject({ ok: false, reason: expect.stringContaining("1시간 전") });
     expect(attendanceChange("checkin", { ...o, now: at("2026-11-06T09:00:00Z") })).toEqual({ ok: true, from: "SCHEDULED", to: "ATTENDED" });
     expect(attendanceChange("checkin", { ...o, tableStatus: "DONE", now: at("2026-11-08T10:00:00Z") }).ok).toBe(true);
   });
-  it("노쇼는 모임 시작 전엔 막는다", () => {
-    expect(attendanceChange("noshow", { ...o, now: at("2026-11-06T09:59:00Z") })).toMatchObject({ ok: false, reason: expect.stringContaining("시작된 뒤") });
+  it("노쇼는 모임이 끝난 뒤, 노쇼 후보만 (늦게 오는 사람을 모임 도중 노쇼로 만들지 않는다)", () => {
+    expect(attendanceChange("noshow", { ...o, now: at("2026-11-06T09:59:00Z") })).toMatchObject({ ok: false, reason: expect.stringContaining("끝난 뒤") });
+    expect(attendanceChange("noshow", { ...o, tableStatus: "IN_PROGRESS", now: at("2026-11-06T10:30:00Z") })).toMatchObject({ ok: false, reason: expect.stringContaining("늦게 오는") });
+    expect(attendanceChange("noshow", { ...o, isCandidate: false })).toMatchObject({ ok: false, reason: expect.stringContaining("후보") });
     expect(attendanceChange("noshow", o)).toEqual({ ok: true, from: "SCHEDULED", to: "NO_SHOW" });
   });
   it("이미 처리된 사람은 같은 처리를 다시 못 하고, 반대 처리는 되돌린 뒤에만", () => {

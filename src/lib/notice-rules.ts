@@ -129,8 +129,8 @@ export function noticeHash(s: string): string {
 export const noticeKey = (scope: NoticeScope, targetId: string, title: string, body: string, userId: string) =>
   `announce:${scope}:${targetId}:${noticeHash(`${title}\n${body}`)}:${userId}`;
 
-/** 공지를 눌렀을 때 갈 곳. 테이블 공지는 그 테이블, 나머지는 알림함 */
-export const noticeLink = (scope: NoticeScope, targetId: string) => (scope === "table" ? `/tables/${targetId}` : "/notifications");
+/** 공지를 눌렀을 때 갈 곳. 테이블 공지는 그 테이블. 나머지는 갈 곳이 없어 링크를 두지 않는다(알림함에서 전문이 다 보인다) */
+export const noticeLink = (scope: NoticeScope, targetId: string): string | undefined => (scope === "table" ? `/tables/${targetId}` : undefined);
 
 /** 화면에서 본 받는 사람 수와 보낼 때 다시 센 수가 다르면 보내지 않는다 */
 export function noticeSendCheck(expected: unknown, recipients: string[]): { ok: true } | { ok: false; message: string } {

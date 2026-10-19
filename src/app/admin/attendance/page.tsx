@@ -25,9 +25,9 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
   const { r } = await searchParams;
   const { rounds, round } = await roundsAndCurrent(r);
   const { data } = round
-    ? await db().from("applications").select("id,attendance_status,table_id,users(name),dining_tables(id,status,slots(starts_at,region))").eq("round_id", round.id).eq("match_status", "CONFIRMED")
+    ? await db().from("applications").select("id,user_id,attendance_status,table_id,users(name),dining_tables(id,status,slots(starts_at,ends_at,region))").eq("round_id", round.id).eq("match_status", "CONFIRMED")
     : { data: [] };
-  const rows = (data ?? []) as unknown as { id: string; attendance_status: string | null; table_id: string | null; users: { name: string }; dining_tables: { id: string; status: string; slots: { starts_at: string; region: string } } | null }[];
+  const rows = (data ?? []) as unknown as { id: string; user_id: string; attendance_status: string | null; table_id: string | null; users: { name: string }; dining_tables: { id: string; status: string; slots: { starts_at: string; ends_at: string; region: string } } | null }[];
   const clock = await now();
   const attendedIds = rows.filter((x) => x.attendance_status === "ATTENDED").map((x) => x.id);
   const { data: fbs } = attendedIds.length ? await db().from("feedbacks").select("application_id").in("application_id", attendedIds) : { data: [] };
@@ -38,6 +38,10 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
   const candidates = new Set((noshow ?? []).map((n) => n.ref_id));
   // 본인이 '참석했는데 체크인을 못 했어요'라고 알린 후보
   const claimed = new Set((noshow ?? []).filter((n) => isClaimed(n.reason)).map((n) => n.ref_id));
+  // 단체방에서 '늦을 것 같아요'를 누른 사람 (노쇼 확정 전에 보이게)
+  const tableIds = [...new Set(rows.map((x) => x.dining_tables?.id).filter(Boolean))] as string[];
+  const { data: lates } = tableIds.length ? await db().from("status_events").select("entity_id,to_value").eq("entity_type", "dining_table").eq("field", "late").in("entity_id", tableIds) : { data: [] };
+  const late = new Set((lates ?? []).map((x) => `${x.entity_id}:${x.to_value}`));
   const byTable = new Map<string, typeof rows>();
   for (const a of rows.filter((x) => x.dining_tables)) {
     const k = a.dining_tables!.id;
@@ -63,12 +67,13 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
             <Panel key={tid} title={`${fmtDate(s.starts_at)} ${fmtTime(s.starts_at)} ${s.region}`} action={<Link href={`/admin/tables/${tid}`} className="text-[13px] text-muted hover:text-ink">테이블 보기</Link>}>
               <ul className="space-y-2 text-[14px]">
                 {ms.map((m) => {
-                  const ops = canWrite ? attendanceOps({ status: m.attendance_status, tableStatus: m.dining_tables!.status, startsAt: s.starts_at, now: clock, hasFeedback: gaveFeedback.has(m.id) }) : [];
+                  const ops = canWrite ? attendanceOps({ status: m.attendance_status, tableStatus: m.dining_tables!.status, startsAt: s.starts_at, endsAt: s.ends_at, now: clock, hasFeedback: gaveFeedback.has(m.id), isCandidate: candidates.has(m.id) }) : [];
                   return (
                     <li key={m.id} id={`a-${m.id}`} className="scroll-mt-6">
                       <div className="flex items-center justify-between gap-2">
                         <Link href={`/admin/applicants/${m.id}`} className="hover:underline">{m.users.name}</Link>
                         <span className="flex items-center gap-1.5">
+                          {late.has(`${tid}:${m.user_id}`) && <Badge v={["늦는다고 알림", "candle"]} />}
                           {candidates.has(m.id) && <Badge v={["노쇼 후보", "danger"]} />}
                           {claimed.has(m.id) && <Badge v={["본인 참석 알림", "accent"]} />}
                           <Badge v={label(ATTEND, m.attendance_status)} />

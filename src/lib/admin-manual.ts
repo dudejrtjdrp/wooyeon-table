@@ -41,6 +41,13 @@ export async function venueSwapOptions(tableId: string): Promise<SwapCandidate[]
   return swapCandidates(list, { region: t.slots.region, party: party ?? 0, used: usedCount, currentVenueId: t.venue_id, failed });
 }
 
+/** 처리할 일을 예외 처리함에 연다. 같은 키로 닫혀 있던 건이면 다시 연다(dedupe 키는 한 건뿐이라) */
+async function openTodo(key: string, row: { kind: string; ref_type: string; ref_id: string; reason: string }, actor: string) {
+  const { data: re } = await db().from("exceptions").update({ ...row, status: "open", resolution: null, resolved_by: null, resolved_at: null }).eq("dedupe_key", key).neq("status", "open").select("id");
+  for (const x of re ?? []) await logStatus({ entityType: "exception", entityId: x.id, field: "status", from: "resolved", to: "open", actor, reason: row.reason });
+  if (!re?.length) await db().from("exceptions").upsert({ ...row, dedupe_key: key }, { onConflict: "dedupe_key", ignoreDuplicates: true });
+}
+
 /**
  * 운영자가 테이블 식당을 바꾼다. 모임 시작 전, 같은 동네·일정에서 자리가 남은 식당으로만.
  * 1) 테이블 식당을 조건부로 바꾸고(두 번 눌러도 한 번) 이력  2) 예약 기록을 새 식당으로 고쳐 다시 요청
@@ -51,7 +58,8 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
   const actor = `admin:${adminId}`;
   const t = await swapTable(tableId);
   if (!t) return { ok: false, message: "테이블을 찾지 못했어요" };
-  const can = canSwapVenue({ status: t.status, hasVenue: !!t.venue_id, startsAt: t.slots.starts_at, now: await now() });
+  const clock = await now();
+  const can = canSwapVenue({ status: t.status, hasVenue: !!t.venue_id, startsAt: t.slots.starts_at, now: clock });
   if (!can.ok) return { ok: false, message: can.reason };
   const pick = (await venueSwapOptions(tableId)).find((o) => o.venueId === venueId);
   if (!pick) return { ok: false, message: "고른 식당은 이 일정에 남은 자리가 없거나 이 테이블 인원을 받을 수 없어요. 목록을 새로 고쳐 다시 골라 주세요" };
@@ -60,7 +68,7 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
 
   const { data: moved } = await db().from("dining_tables").update({ venue_id: pick.venueId }).eq("id", tableId).eq("venue_id", fromId).in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY"]).select("id");
   if (!moved?.length) return { ok: false, message: "그 사이 식당이나 테이블 상태가 바뀌었어요. 새로 고쳐 확인해 주세요" };
-  await logStatus({ entityType: "dining_table", entityId: tableId, field: "venue_id", from: fromName, to: pick.name, actor, reason: `[운영자 식당 변경] ${reason}` });
+  const changeId = await logStatus({ entityType: "dining_table", entityId: tableId, field: "venue_id", from: fromName, to: pick.name, actor, reason: `[운영자 식당 변경] ${reason}` });
 
   // 예약 기록 (테이블당 한 줄): 새 식당으로 고쳐 처음부터 다시 요청
   const { data: v } = await db().from("venues").select("name,address,booking_channel,booking_url").eq("id", pick.venueId).single();
@@ -71,7 +79,7 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
   if (old) {
     await db()
       .from("reservations")
-      .update({ venue_id: pick.venueId, channel, status: "REQUESTED", attempts: 0, last_error: null, external_ref: null, mode: "mock", party_size: party ?? 0, deep_link: deepLink(channel, v?.name ?? pick.name, v?.address ?? "", v?.booking_url ?? null), updated_at: new Date().toISOString() })
+      .update({ venue_id: pick.venueId, channel, status: "REQUESTED", attempts: 0, last_error: null, external_ref: null, mode: "mock", party_size: party ?? 0, deep_link: deepLink(channel, v?.name ?? pick.name, v?.address ?? "", v?.booking_url ?? null), updated_at: clock.toISOString() })
       .eq("id", old.id);
     await logStatus({ entityType: "reservation", entityId: old.id, field: "status", from: old.status, to: "REQUESTED", actor, reason: `운영자가 식당을 바꿔 다시 예약 요청: ${fromName} → ${pick.name} (${CHANNEL_LABEL[channel]})` });
   }
@@ -83,8 +91,8 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
     const tpl = await loadTemplates();
     const msg = render("venue_changed", { ...slotVars(t.slots.starts_at), venue: pick.name }, tpl);
     const roomId = await ensureRoom(tableId);
-    // 같은 식당으로 다시 바꾸는 경우도 있어 키에 시각을 넣는다(중복은 위 조건부 변경이 막는다)
-    const stamp = Date.now();
+    // 같은 식당으로 다시 바꾸는 경우도 있어 키를 이번 변경 이력에 묶는다(다시 실행해도 한 번만)
+    const stamp = changeId ?? clock.getTime();
     await postSystem(roomId, `${msg.body}\n장소: ${v?.name ?? pick.name}\n주소: ${v?.address ?? ""}\n예약명: ${t.reservation_name ?? ""}`, { dedupeKey: `venue-admin:${tableId}:${pick.venueId}:${stamp}`, meta: { type: "notice" } });
     const { data: ms } = await db().from("applications").select("id,user_id").eq("table_id", tableId).eq("match_status", "CONFIRMED").eq("attendance_status", "SCHEDULED");
     for (const m of ms ?? []) {
@@ -94,12 +102,22 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
   }
 
   // 예약: 자동 채널이면 바로 시도(세 번 안 되면 기존 흐름대로 다른 식당 → 예외). 전화 예약은 운영자가 걸고 '예약 완료로 표시'
+  // 전화 예약은 자동으로 시도하면 바로 실패로 보고 다른 식당으로 바꿔 버려(운영자가 고른 식당이 무시됨) 시도하지 않고,
+  // 예외 처리함에 '직접 예약 필요'로 올려 둔다. 그래야 운영자가 잊어도 모임 전에 처리할 일로 남는다
   let booking: string;
-  if (!old) {
+  if (channel === "phone") {
+    if (!old) {
+      const { data: tb } = await db().from("dining_tables").select("reservation_name").eq("id", tableId).single();
+      await db().from("reservations").upsert(
+        { table_id: tableId, venue_id: pick.venueId, channel, status: "REQUESTED", party_size: party ?? 0, reserved_for: t.slots.starts_at, reservation_name: tb?.reservation_name ?? `우연한식탁 ${tableId.slice(0, 4).toUpperCase()}`, deep_link: deepLink(channel, v?.name ?? pick.name, v?.address ?? "", v?.booking_url ?? null) },
+        { onConflict: "table_id", ignoreDuplicates: true },
+      );
+    }
+    await openTodo(`reservation:${tableId}`, { kind: "reservation", ref_type: "venue_phone", ref_id: tableId, reason: `운영자가 전화 예약 식당(${pick.name})으로 바꿨어요. 식당에 전화로 예약한 뒤 '직접 예약함'을 눌러 주세요` }, actor);
+    booking = "전화 예약 식당이라 예외 처리함에 '직접 예약 필요'로 올렸어요. 예약한 뒤 '직접 예약함'을 눌러 주세요";
+  } else if (!old) {
     await requestReservation(tableId);
     booking = "예약을 요청했어요";
-  } else if (channel === "phone") {
-    booking = "전화 예약 식당이라 직접 예약한 뒤 '예약 완료로 표시'를 눌러 주세요";
   } else {
     const st = await attemptReservation(tableId);
     booking = st === "CONFIRMED" ? `${CHANNEL_LABEL[channel]} 예약이 확정됐어요` : `${CHANNEL_LABEL[channel]} 예약이 아직 안 됐어요. 자동으로 다시 시도해요`;
@@ -107,11 +125,16 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
   const { data: after } = await db().from("reservations").select("status").eq("table_id", tableId).maybeSingle();
   if (after?.status === "CONFIRMED") {
     // 식당이 정해지고 예약까지 됐으니 이 테이블의 식당 부족·예약 실패 예외는 닫는다
-    const at = new Date().toISOString();
+    const at = clock.toISOString();
     const { data: closed } = await db().from("exceptions").update({ status: "resolved", resolution: `운영자 식당 변경: ${pick.name}`, resolved_by: adminId, resolved_at: at }).in("dedupe_key", [`reservation:${tableId}`, `venue:${tableId}`]).eq("status", "open").select("id");
     for (const x of closed ?? []) await logStatus({ entityType: "exception", entityId: x.id, field: "status", from: "open", to: "resolved", actor, reason: `운영자 식당 변경: ${pick.name}` });
   }
-  const oldRef = old?.status === "CONFIRMED" ? ` ${fromName} 예약${old.external_ref ? `(${old.external_ref})` : ""}은 직접 취소해 주세요.` : "";
+  // 이전 식당 예약은 취소 연동이 없어, 확정돼 있었으면 예외 처리함에 '이전 예약 취소'로 남긴다(안 그러면 그 식당에 노쇼 예약이 생긴다)
+  let oldRef = "";
+  if (old?.status === "CONFIRMED") {
+    await openTodo(`reservation-cancel:${tableId}:${fromId}`, { kind: "reservation", ref_type: "venue_cancel", ref_id: tableId, reason: `식당을 바꿔 ${fromName} 예약${old.external_ref ? `(${old.external_ref})` : ""}이 남아 있어요. 식당에 취소한 뒤 '이전 예약 취소함'을 눌러 주세요` }, actor);
+    oldRef = ` ${fromName} 예약 취소는 예외 처리함에 올려 뒀어요.`;
+  }
   return { ok: true, message: `${fromName}에서 ${pick.name}(으)로 바꿨어요. ${notice ? `단체방과 참가자 ${told}명에게 알렸어요. ` : ""}${booking}.${oldRef}` };
 }
 
@@ -119,7 +142,7 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
 // 2. 참석 상태 바꾸기
 // ─────────────────────────────────────────────
 
-type AttendApp = { id: string; user_id: string; attendance_status: string | null; table_id: string | null; users: { name: string }; dining_tables: { id: string; status: string; slots: { starts_at: string } } | null };
+type AttendApp = { id: string; user_id: string; attendance_status: string | null; table_id: string | null; users: { name: string }; dining_tables: { id: string; status: string; slots: { starts_at: string; ends_at: string } } | null };
 
 /**
  * 운영자가 체크인·노쇼·참석 예정으로 되돌리기를 한다. 조건부로 바꿔 두 번 눌러도 한 번만.
@@ -129,12 +152,13 @@ type AttendApp = { id: string; user_id: string; attendance_status: string | null
  */
 export async function setAttendance(appId: string, op: AttendOp, note: string, adminId: string): Promise<Result> {
   const actor = `admin:${adminId}`;
-  const { data } = await db().from("applications").select("id,user_id,attendance_status,table_id,users(name),dining_tables(id,status,slots(starts_at))").eq("id", appId).eq("match_status", "CONFIRMED").maybeSingle();
+  const { data } = await db().from("applications").select("id,user_id,attendance_status,table_id,users(name),dining_tables(id,status,slots(starts_at,ends_at))").eq("id", appId).eq("match_status", "CONFIRMED").maybeSingle();
   const a = data as unknown as AttendApp | null;
   if (!a?.dining_tables) return { ok: false, message: "테이블이 정해진 신청만 바꿀 수 있어요" };
   const { data: fb } = op === "revert" ? await db().from("feedbacks").select("application_id").eq("application_id", appId).maybeSingle() : { data: null };
+  const { data: cand } = op === "noshow" ? await db().from("exceptions").select("id").eq("dedupe_key", `noshow:${appId}`).eq("status", "open").maybeSingle() : { data: null };
   const t = await now();
-  const chk = attendanceChange(op, { status: a.attendance_status, tableStatus: a.dining_tables.status, startsAt: a.dining_tables.slots.starts_at, now: t, hasFeedback: !!fb });
+  const chk = attendanceChange(op, { status: a.attendance_status, tableStatus: a.dining_tables.status, startsAt: a.dining_tables.slots.starts_at, endsAt: a.dining_tables.slots.ends_at, now: t, hasFeedback: !!fb, isCandidate: !!cand });
   if (!chk.ok) return { ok: false, message: chk.reason };
 
   // 운영자 처리는 앱 체크인이 아니라 checked_in_at을 비워 둔다(예외 처리함의 '참석으로 정정'과 같다)
@@ -145,7 +169,7 @@ export async function setAttendance(appId: string, op: AttendOp, note: string, a
   await logStatus({ entityType: "application", entityId: appId, field: "attendance_status", from: chk.from, to: chk.to, actor, reason: why });
 
   const key = `noshow:${appId}`;
-  const at = new Date().toISOString();
+  const at = t.toISOString();
   if (op === "revert") {
     // 노쇼 후보 예외는 신청마다 한 건(dedupe)이라, 닫힌 채로 두면 모임이 끝날 때 자동으로 다시 올라오지 않는다. 그래서 다시 연다
     const ended = a.dining_tables.status === "DONE";
@@ -195,6 +219,15 @@ export async function runMatchNow(roundId: string, adminId: string): Promise<Res
   const { round, check } = await matchNowCheck(roundId);
   if (!round || !check.ok) return { ok: false, message: check.ok ? "회차를 찾지 못했어요" : check.reason };
   await logStatus({ entityType: "round", entityId: roundId, field: "match_run", to: "운영자 실행", actor, reason: `운영자가 지금 매칭 실행${check.early ? " (신청 마감 전)" : ""}` });
+  // 마감 전에 돌리면 신청 마감·매칭 시각을 지금으로 당긴다. 그래야 결제 화면·토스 승인·참가자 화면의 '매칭 시각이 지났는지' 확인이
+  // 그대로 걸려, 돌린 뒤에 결제해 아무 테이블에도 못 들어가고 대기로 남는 사람이 생기지 않는다(남은 결제 대기는 '결제 전 마감'으로 보인다)
+  const nowAt = await now();
+  const t = nowAt.toISOString();
+  for (const [field, v] of [["apply_deadline", round.apply_deadline], ["match_at", round.match_at]] as const) {
+    if (new Date(v) <= nowAt) continue;
+    const { data: moved } = await db().from("rounds").update({ [field]: t }).eq("id", roundId).eq(field, v).select("id");
+    if (moved?.length) await logStatus({ entityType: "round", entityId: roundId, field, from: v, to: t, actor, reason: "운영자가 지금 매칭을 돌려 시각을 당김" });
+  }
   const { runRound } = await import("./matching/runner");
   let out;
   try {

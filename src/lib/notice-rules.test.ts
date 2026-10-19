@@ -84,6 +84,6 @@ describe("운영자 공지", () => {
     expect(noticeSendCheck("3", ["a", "b"]).ok).toBe(false);
     expect(noticeSendCheck("0", []).ok).toBe(false);
     expect(noticeLink("table", "t1")).toBe("/tables/t1");
-    expect(noticeLink("round", "r1")).toBe("/notifications");
+    expect(noticeLink("round", "r1")).toBeUndefined();
   });
 });
