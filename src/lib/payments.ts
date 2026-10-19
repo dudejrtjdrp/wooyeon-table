@@ -1,6 +1,7 @@
 // 결제 승인과 환불을 한곳에서 처리한다. 모의 결제와 토스페이먼츠 결제가 같은 길로 들어온다.
 import { PASSES, type PassType, won } from "./constants";
 import { logStatus } from "./events";
+import { now } from "./clock";
 import { fmtSlot } from "./format";
 import { notify } from "./notify";
 import { db } from "./supabase";
@@ -150,9 +151,9 @@ export async function refundPayment(paymentId: string, appId: string, actor: str
       // 다시 시도 중이라는 알림은 보내지 않는다(참가자가 할 일이 없음). 상태는 내 신청 화면에 보인다
       return { ok: false, message: "결제사에서 환불이 한 번에 되지 않았어요. 10분 뒤 자동으로 다시 시도할게요. 따로 하실 일은 없어요." };
     }
-    await db().from("payments").update({ status: "REFUNDED", refunded_at: new Date().toISOString(), pg_raw: r.data }).eq("id", paymentId);
+    await db().from("payments").update({ status: "REFUNDED", refunded_at: (await now()).toISOString(), pg_raw: r.data }).eq("id", paymentId);
   } else {
-    await db().from("payments").update({ status: "REFUNDED", refunded_at: new Date().toISOString() }).eq("id", paymentId);
+    await db().from("payments").update({ status: "REFUNDED", refunded_at: (await now()).toISOString() }).eq("id", paymentId);
   }
   await db().from("applications").update({ payment_status: "REFUNDED" }).eq("id", appId);
   // 1회권은 돈으로 돌려줬으니 남은 횟수가 없다
@@ -162,7 +163,7 @@ export async function refundPayment(paymentId: string, appId: string, actor: str
     reason: `${reason}: 원결제수단 전액 환불 ${amount}${p.provider === "toss" ? " (토스페이먼츠 취소 완료)" : " (모의)"}`,
   });
   // 운영자에게 넘어가 있던 환불 실패 건이면 닫는다
-  await db().from("exceptions").update({ status: "resolved", resolution: "환불 다시 시도 성공", resolved_at: new Date().toISOString() }).eq("dedupe_key", `refund:${paymentId}`).eq("status", "open");
+  await db().from("exceptions").update({ status: "resolved", resolution: "환불 다시 시도 성공", resolved_at: (await now()).toISOString() }).eq("dedupe_key", `refund:${paymentId}`).eq("status", "open");
   if (notifyUser || app?.payment_status === "REFUND_FAILED") await tell("refunded", `refunded:${appId}`);
   return { ok: true, message: `결제하신 수단으로 ${amount}을 전액 돌려드렸어요.` };
 }

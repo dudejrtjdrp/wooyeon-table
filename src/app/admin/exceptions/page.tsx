@@ -203,7 +203,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                   ) : e.kind === "safety" ? (
                     <>
                       <button name="action" value="none" className={light}>조치 없음</button>
-                      <button name="action" value="warning" className={light}>경고</button>
+                      <ConfirmButton name="action" value="warning" confirm={`${rep?.reported?.name ?? "이 참가자"}님께 경고를 남겨요. 계정 상태가 경고로 바뀌고 처리 이력에 남아요. 계속할까요?`} className={light}>경고</ConfirmButton>
                       <ConfirmButton name="action" value="restricted" confirm={`${rep?.reported?.name ?? "이 참가자"}님의 참가를 제한해요. 운영자가 풀기 전까지 신청할 수 없어요. 계속할까요?`} className={dangerLight}>참가 제한</ConfirmButton>
                       <ConfirmButton name="action" value="banned" confirm={`${rep?.reported?.name ?? "이 참가자"}님을 영구 제한해요. 앞으로 신청할 수 없어요. 계속할까요?`} className={danger}>영구 제한</ConfirmButton>
                     </>
@@ -220,7 +220,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                     </>
                   ) : e.kind === "notification" && (e.ref_type === "chat_room" || e.ref_type === "notification") ? (
                     <>
-                      <button name="action" value="resend" className={primary}>다시 보내기</button>
+                      <ConfirmButton name="action" value="resend" confirm="같은 안내를 참가자에게 한 번 더 보내요. 보낸 알림은 되돌릴 수 없어요. 계속할까요?" className={primary}>다시 보내기</ConfirmButton>
                       <button name="action" value="done" className={light}>직접 연락함</button>
                     </>
                   ) : e.kind === "condition_conflict" && sug ? (

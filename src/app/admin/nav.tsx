@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CalendarRange, ChartNoAxesColumn, ChefHat, MapPin, CreditCard, Gauge, LayoutDashboard, MessageSquareText, MessagesSquare, ShieldCheck, SlidersHorizontal, UserCheck, Users, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, History, CalendarRange, ChartNoAxesColumn, ChefHat, MapPin, CreditCard, Gauge, LayoutDashboard, MessageSquareText, MessagesSquare, ShieldCheck, SlidersHorizontal, UserCheck, UserSearch, Users, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,6 +18,7 @@ const GROUPS = [
   ] },
   { name: "참가자", items: [
     { href: "/admin/applicants", label: "신청자", icon: Users },
+    { href: "/admin/members", label: "회원 찾기", icon: UserSearch },
     { href: "/admin/payments", label: "결제·환불", icon: CreditCard },
     { href: "/admin/feedback", label: "피드백·안전", icon: ShieldCheck },
   ] },
@@ -27,7 +28,8 @@ const GROUPS = [
     { href: "/admin/demand", label: "지역 수요", icon: MapPin },
     { href: "/admin/messages", label: "자동 메시지", icon: MessageSquareText },
     { href: "/admin/contents", label: "대화 콘텐츠", icon: MessagesSquare },
-    { href: "/admin/settings", label: "매칭 기준", icon: SlidersHorizontal },
+    { href: "/admin/settings", label: "매칭 기준·계정", icon: SlidersHorizontal },
+    { href: "/admin/audit", label: "변경 이력", icon: History },
   ] },
 ];
 

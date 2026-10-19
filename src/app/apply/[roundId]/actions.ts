@@ -55,7 +55,7 @@ export async function submitApplication(form: FormData) {
     .from("payments")
     .insert(
       owned
-        ? { user_id: me.id, amount: 0, pass_type: owned.pass_type, pass_id: owned.id, status: "PAID", provider: "pass", paid_at: new Date().toISOString() }
+        ? { user_id: me.id, amount: 0, pass_type: owned.pass_type, pass_id: owned.id, status: "PAID", provider: "pass", paid_at: (await now()).toISOString() }
         : { user_id: me.id, amount: PASSES[pass].amount, pass_type: pass, status: "PENDING", provider: "mock" },
     )
     .select("id")
@@ -71,7 +71,7 @@ export async function submitApplication(form: FormData) {
     match_status: "WAITING",
     resolution: null,
     match_reason: null,
-    submitted_at: new Date().toISOString(),
+    submitted_at: (await now()).toISOString(),
     areas,
     dates,
     near_ok: nearOk,

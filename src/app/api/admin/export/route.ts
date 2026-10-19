@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getMe } from "@/lib/auth";
+import { getMe, isActiveAdmin } from "@/lib/auth";
+import { logStatus } from "@/lib/events";
 import { ATTEND, MATCH, PAYMENT, ageBand } from "@/lib/labels";
 import { db } from "@/lib/supabase";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 // 참가자 목록과 테이블 결과 CSV (PRD 16장)
 export async function GET(req: Request) {
   const me = await getMe();
-  if (!me || me.role !== "admin") return NextResponse.json({ ok: false }, { status: 401 });
+  if (!isActiveAdmin(me)) return NextResponse.json({ ok: false }, { status: 401 });
   const roundId = new URL(req.url).searchParams.get("r") ?? "";
   const { data } = await db()
     .from("applications")
@@ -33,6 +34,8 @@ export async function GET(req: Request) {
         .join(","),
     ),
   );
+  // 개인정보가 담긴 목록이라 누가 언제 내려받았는지 남긴다
+  await logStatus({ entityType: "admin_export", entityId: me.id, field: "csv_export", to: String(rows.length), actor: `admin:${me.id}`, reason: `참가자·테이블 결과 CSV 내려받기 (회차 #${roundId.slice(0, 6)})` });
   return new NextResponse("﻿" + lines.join("\n"), {
     headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="applicants-${roundId.slice(0, 8)}.csv"` },
   });

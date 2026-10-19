@@ -1,4 +1,5 @@
-import { Badge, PageHeader, Panel, Stat, btnPrimary, ctl, td, th } from "@/components/admin-ui";
+import Link from "next/link";
+import { Badge, PageHeader, Panel, Stat, btnLight, btnPrimary, ctl, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime } from "@/lib/format";
 import { NOTICE } from "@/lib/labels";
@@ -21,7 +22,7 @@ export default async function Messages() {
 
   return (
     <div>
-      <PageHeader title="자동 메시지" desc="자동으로 나가는 안내 문구를 고치고, 언제 누구에게 나갔는지 확인해요. 실패하면 세 번까지 다시 보내고, 그래도 안 되면 예외 처리함에 올라와요." />
+      <PageHeader title="자동 메시지" desc="자동으로 나가는 안내 문구를 고치고, 언제 누구에게 나갔는지 확인해요. 실패하면 세 번까지 다시 보내고, 그래도 안 되면 예외 처리함에 올라와요." actions={<Link href="/admin/audit?kind=template" className={btnLight}>문구 변경 이력·되돌리기</Link>} />
       <div className="mt-6 grid grid-cols-3 gap-3">
         <Stat label="보냄" value={by("sent")} tone="leaf" />
         <Stat label="예약됨" value={by("pending")} />

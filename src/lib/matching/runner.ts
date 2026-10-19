@@ -100,6 +100,10 @@ export interface RunOutcome {
 export async function runRound(roundId: string, actor = "system", opts: { resumeFailed?: boolean } = {}): Promise<RunOutcome> {
   const settings = await loadSettings();
 
+  // 0. 닫힌(취소 포함) 회차는 돌리지 않는다: 운영자가 회차를 취소하는 사이 '지금 처리'가 눌려도 상태를 되살리지 않게
+  const { data: rnd } = await db().from("rounds").select("status").eq("id", roundId).maybeSingle();
+  if (!rnd || rnd.status === "closed") return { runId: "", alreadyRan: true, summary: { skipped: rnd ? "closed" : "missing" } };
+
   // 1. 실행 기록을 먼저 잡는다. 이미 있으면 중복 실행이므로 멈춘다
   let { data: run, error: runErr } = await db()
     .from("match_runs")
@@ -127,7 +131,7 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
   }
 
   try {
-    await db().from("rounds").update({ status: "matching" }).eq("id", roundId);
+    await db().from("rounds").update({ status: "matching" }).eq("id", roundId).in("status", ["open", "matching"]);
 
     // 2. 대상 불러오기: 제출 + 결제 완료 + 매칭 대기
     const { data: slotRows, error: slotErr } = await db().from("slots").select("id,region,sido,starts_at,max_tables").eq("round_id", roundId);
