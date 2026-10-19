@@ -1,6 +1,6 @@
 import { Download } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, Stat, Term, btn, btnDanger, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Stat, TableScroll, Term, btn, btnDanger, btnLight, ctl, table, td, tdNowrap, th } from "@/components/admin-ui";
 import { TIP } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
 import { applicationLive, manualRefundCheck } from "@/lib/cancel-rules";
@@ -33,14 +33,14 @@ export default async function Payments({ searchParams }: { searchParams: Promise
       <PageHeader
         title="결제·환불"
         desc={<>결제, 자동 환불, 환불 실패, <Term tip={TIP.이용권}>이용권</Term> 사용 내역이에요. 결제는 토스페이먼츠{tossLive() ? "" : " 테스트 모드"}로 승인·취소돼요.</>}
-        how={["이름·회차·상태로 거르기", "환불 실패는 예외 처리함에서 다시 요청", "신청이 끝난 결제만 여기서 사유를 적고 직접 환불"]}
+        how={["이름·회차·상태로 찾기", "환불 실패는 예외 처리함에서 다시 요청", "신청이 끝난 결제만 여기서 사유를 적고 직접 환불"]}
         actions={
           <a href={`/api/admin/payments${paymentSearch(f, 1)}`} className={btnLight} download>
             <Download size={16} />CSV 내려받기
           </a>
         }
       />
-      <p className="mt-6 text-[13px] text-muted">{filtered ? `아래 숫자는 거른 조건에 맞는 ${sum.count.toLocaleString("ko-KR")}건 기준이에요.` : "아래 숫자는 전체 결제 기준이에요."}</p>
+      <p className="mt-6 text-[13px] text-muted">{filtered ? `아래 숫자는 고른 조건에 맞는 ${sum.count.toLocaleString("ko-KR")}건 기준이에요.` : "아래 숫자는 전체 결제 기준이에요."}</p>
       <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="결제 완료 금액" value={won(sum.paidSum)} />
         <Stat label="자동 환불" value={`${sum.refundedN}건`} sub={won(sum.refundedSum)} />
@@ -89,35 +89,35 @@ export default async function Payments({ searchParams }: { searchParams: Promise
           </div>
         </div>
         <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
-          <button className={`${btn} bg-accent text-white`}>거르기</button>
-          {filtered && <Link href="/admin/payments" className={btnLight}>처음으로</Link>}
+          <button className={`${btn} whitespace-nowrap bg-accent text-white`}>조건으로 찾기</button>
+          {filtered && <Link href="/admin/payments" className={`${btnLight} whitespace-nowrap`}>조건 풀기</Link>}
           <span className="ml-auto text-[12px] text-muted">결제일은 서울 날짜예요. 아직 결제 전인 건은 만든 날로 봐요.</span>
         </div>
       </form>
       <p className="mt-5 text-[14px] text-muted">
-        {total === 0 ? "" : `${filtered ? "거른 결과" : "모두"} ${total.toLocaleString("ko-KR")}건 · 최신순${pages > 1 ? ` · ${PAYMENT_PAGE_SIZE}건씩` : ""}`}
+        {total === 0 ? "" : `${filtered ? "찾은 결과" : "모두"} ${total.toLocaleString("ko-KR")}건 · 최신순${pages > 1 ? ` · ${PAYMENT_PAGE_SIZE}건씩` : ""}`}
       </p>
-      <div className="mt-2 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
-        <table className="w-full min-w-[1040px] text-[14px]">
+      <TableScroll className="shadow-card mt-2 rounded-[20px] bg-card" label="결제 표">
+        <table className={`${table} min-w-[1040px]`}>
           <thead className="border-b border-line"><tr>{["시각", "참가자", "회차", "이용권", "결제 수단", "금액", "상태", "이용권 남은 횟수", "환불 시각", "환불"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">
             {rows.map((p) => (
               <tr key={p.id}>
-                <td className={`${td} text-muted`}>{fmtDateTime(p.paid_at ?? p.created_at)}</td>
-                <td className={td}>{p.applications[0] ? <Link href={`/admin/applicants/${p.applications[0].id}`} className="font-semibold text-accent hover:underline">{p.users.name}</Link> : p.users.name}</td>
-                <td className={td}>{p.applications.map((a) => a.rounds.title).join(", ") || "-"}</td>
-                <td className={td}>{p.provider === "pass" ? "보유 이용권 사용" : (PASSES[p.pass_type as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[p.pass_type ?? ""]) ?? "-"}</td>
-                <td className={td}>
+                <td className={`${tdNowrap} text-muted`}>{fmtDateTime(p.paid_at ?? p.created_at)}</td>
+                <td className={tdNowrap}>{p.applications[0] ? <Link href={`/admin/applicants/${p.applications[0].id}`} className="font-semibold text-accent hover:underline">{p.users.name}</Link> : p.users.name}</td>
+                <td className={`${td} min-w-[140px]`}>{p.applications.map((a) => a.rounds.title).join(", ") || "-"}</td>
+                <td className={`${td} min-w-[120px]`}>{p.provider === "pass" ? "보유 이용권 사용" : (PASSES[p.pass_type as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[p.pass_type ?? ""]) ?? "-"}</td>
+                <td className={`${td} min-w-[150px]`}>
                   {p.provider === "toss" ? (
                     <span>{methodText(p)}{p.receipt_url ? <> · <a href={p.receipt_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">영수증</a></> : null}</span>
                   ) : p.provider === "pass" ? "-" : <span className="text-muted">{methodText(p)}</span>}
                   {p.refund_error && <p className="mt-0.5 text-[12px] text-danger">{p.refund_error}</p>}
                 </td>
-                <td className={`${td} tabular-nums`}>{won(p.amount)}</td>
-                <td className={td}><Badge v={label(PAYMENT, p.status)} /></td>
-                <td className={td}>{p.passes ? `${p.passes.total_count}회 중 ${p.passes.remaining}회 남음${p.passes.expires_at ? `, ${fmtDateTime(p.passes.expires_at).split(" ").slice(0, 2).join(" ")}까지` : ""}` : "-"}</td>
-                <td className={`${td} text-muted`}>{p.refunded_at ? fmtDateTime(p.refunded_at) : "-"}</td>
-                <td className={`${td} min-w-[220px]`}>
+                <td className={`${tdNowrap} tabular-nums`}>{won(p.amount)}</td>
+                <td className={tdNowrap}><Badge v={label(PAYMENT, p.status)} /></td>
+                <td className={`${td} min-w-[170px]`}>{p.passes ? `${p.passes.total_count}회 중 ${p.passes.remaining}회 남음${p.passes.expires_at ? `, ${fmtDateTime(p.passes.expires_at).split(" ").slice(0, 2).join(" ")}까지` : ""}` : "-"}</td>
+                <td className={`${tdNowrap} text-muted`}>{p.refunded_at ? fmtDateTime(p.refunded_at) : "-"}</td>
+                <td className={`${td} min-w-[260px]`}>
                   {me.level === "full" && manualRefundCheck({ status: p.status, provider: p.provider, amount: p.amount, hasApplication: p.applications.length > 0 }).ok ? (() => {
                     const a = p.applications[0];
                     // 신청이 진행 중이면 돈만 돌려주지 않는다. 대리 취소하면 같은 규칙으로 환불도 함께 된다 (cancel-rules.ts)
@@ -149,8 +149,8 @@ export default async function Payments({ searchParams }: { searchParams: Promise
             ))}
           </tbody>
         </table>
-        {!rows.length && <p className="p-10 text-center text-muted">{filtered ? "조건에 맞는 결제가 없어요. 거르기를 풀어 보세요." : f.page > 1 ? "이 쪽에는 결제가 없어요. 앞 쪽으로 가 보세요." : "결제 내역이 없어요."}</p>}
-      </div>
+        {!rows.length && <p className="p-10 text-center text-muted">{filtered ? "조건에 맞는 결제가 없어요. 조건을 풀어 보세요." : f.page > 1 ? "이 쪽에는 결제가 없어요. 앞 쪽으로 가 보세요." : "결제 내역이 없어요."}</p>}
+      </TableScroll>
       {pages > 1 && (
         <nav aria-label="쪽 넘기기" className="mt-4 flex items-center justify-center gap-2">
           {f.page > 1 ? <Link href={`/admin/payments${paymentSearch(f, f.page - 1)}`} className={btnLight}>이전</Link> : <span className={`${btnLight} pointer-events-none opacity-40`}>이전</span>}

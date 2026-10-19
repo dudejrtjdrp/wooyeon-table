@@ -15,7 +15,7 @@ import { db } from "@/lib/supabase";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { canSwapVenue } from "@/lib/admin-manual-rules";
 import { venueSwapOptions } from "@/lib/admin-manual";
-import { ConfirmButton } from "../../confirm-button";
+import { ConfirmButton, SubmitButton } from "../../confirm-button";
 import { reservationAction, venueAction } from "./actions";
 import { OpsPanel } from "./ops-panel";
 
@@ -208,8 +208,8 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
                   <form action={reservationAction} className="flex flex-wrap items-center gap-2 pt-1">
                     <input type="hidden" name="table_id" value={t.id} />
                     <input name="ref" placeholder="직접 예약했다면 예약번호" className="h-10 min-w-40 flex-1 rounded-xl border border-line bg-field px-3 text-[13px]" />
-                    <button name="op" value="manual" className="h-10 rounded-xl border border-accent/40 px-3 text-[13px] font-semibold text-accent">예약 완료로 표시</button>
-                    <button name="op" value="retry" className="h-10 rounded-xl bg-accent px-3 text-[13px] font-semibold text-white">다시 시도</button>
+                    <SubmitButton name="op" value="manual" className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-accent/40 px-3 text-[13px] font-semibold text-accent">예약 완료로 표시</SubmitButton>
+                    <SubmitButton name="op" value="retry" className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-accent px-3 text-[13px] font-semibold text-white">다시 시도</SubmitButton>
                   </form>
                 )}
               </div>
