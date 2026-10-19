@@ -16,7 +16,7 @@ const TABLE_STATUS: Record<string, [string, "muted" | "accent" | "leaf" | "candl
 export default async function Tables({ searchParams }: { searchParams: Promise<{ r?: string }> }) {
   await requireAdmin();
   const { r } = await searchParams;
-  const { rounds, round } = await roundsAndCurrent(r);
+  const { round, options } = await roundsAndCurrent(r);
   const { data } = round
     ? await db().from("dining_tables").select("id,status,score,reservation_name,slots(starts_at,region),venues(name),chat_rooms(id),applications(id,attendance_status,match_status)").eq("round_id", round.id).order("created_at")
     : { data: [] };
@@ -32,7 +32,7 @@ export default async function Tables({ searchParams }: { searchParams: Promise<{
         title="테이블·단체방"
         desc={<>확정된 테이블마다 참가자, 배정된 식당, <Term tip={TIP.단체방}>단체방</Term>, 안내 발송 상태를 봐요.</>}
         how={["오른쪽에서 회차 고르기", "일시를 눌러 테이블 상세 열기", <>상세에서 식당·예약·안내를 확인하고, 필요하면 <Term tip={TIP.긴급수정}>긴급 수정</Term></>]}
-        actions={<RoundPicker rounds={rounds} current={round?.id} />}
+        actions={<RoundPicker rounds={options} current={round?.id} />}
       />
       <div className="mt-6 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[820px] text-[14px]">

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge, PageHeader, Panel, RoundPicker, Term, btnDanger, btnLight, btnPrimary, ctl, td, th } from "@/components/admin-ui";
 import { Optional, Required } from "@/components/ui";
 import { roundsAndCurrent } from "@/lib/admin-data";
+import { roundLabel } from "@/lib/round-label";
 import { requireAdmin } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { DEFAULT_REGIONS, OPEN_REGIONS } from "@/lib/constants";
@@ -42,7 +43,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   // 회차 만들기에서 검증에 걸리면 넣었던 값을 그대로 채워 둔다
   let draft: Draft = {};
   try { draft = f ? (JSON.parse(f) as Draft) : {}; } catch { draft = {}; }
-  const { rounds: picker, round: cur0 } = await roundsAndCurrent(r);
+  const { rounds: picker, round: cur0, options: pickerOpts } = await roundsAndCurrent(r);
   // 고치기 탭은 고칠 수 있는 회차(모집 중)를 먼저 연다. 주소로 고른 회차가 있으면 그대로
   const cur = !r && tab === "edit" ? (picker.find((x) => x.status === "open") ?? cur0) : cur0;
   const { data: rounds } = await db().from("rounds").select("id,title,status,apply_deadline,match_at,slots(id,region,starts_at,ends_at,max_tables,application_slots(application_id))").order("match_at");
@@ -115,7 +116,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   const { data: takenRows } = await db().from("slots").select("region,starts_at,rounds!inner(status)").gte("starts_at", t.toISOString()).neq("rounds.status", "closed");
   const taken = (takenRows ?? []).map((x) => ({ region: x.region as string, starts_at: x.starts_at as string }));
   const copyHref = (x: { title: string; slots: { region: string; starts_at: string; ends_at: string; max_tables: number }[] }) => copyRoundHref(copyRoundDraft(x, t, taken));
-  const pickerIn = (k: RoundTab) => <RoundPicker rounds={picker} current={rid} extra={<input type="hidden" name="tab" value={k} />} />;
+  const pickerIn = (k: RoundTab) => <RoundPicker rounds={pickerOpts} current={rid} extra={<input type="hidden" name="tab" value={k} />} />;
 
   return (
     <div>
@@ -216,7 +217,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                     <tbody>
                       {rounds.map((x) => (
                         <tr key={x.id} className={x.id === rid ? "bg-accent-soft/50" : ""}>
-                          <td className={`${td} font-semibold text-ink`}><Link href={roundsHref({ r: x.id })} className="hover:underline">{x.title}</Link></td>
+                          <td className={`${td} font-semibold text-ink`}><Link href={roundsHref({ r: x.id })} className="hover:underline">{roundLabel(x.title, x.slots.map((s) => s.starts_at))}</Link></td>
                           <td className={td}><Badge v={ROUND_STATUS[statusOf(x)] ?? [x.status, "muted"]} /></td>
                           <td className={`${td} whitespace-nowrap tabular-nums text-muted`}>{fmtDateTime(x.apply_deadline)}</td>
                           <td className={`${td} whitespace-nowrap tabular-nums text-muted`}>{fmtDateTime(x.match_at)}</td>

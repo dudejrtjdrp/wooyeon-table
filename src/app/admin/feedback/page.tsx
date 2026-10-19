@@ -37,7 +37,7 @@ export default async function Feedback({ searchParams }: { searchParams: Promise
     personId ? Promise.resolve([] as Person[]) : findPeople(pq),
     personId ? db().from("users").select("id,name").eq("id", personId).eq("role", "user").maybeSingle() : Promise.resolve({ data: null }),
   ]);
-  const { rounds, round } = await roundsAndCurrent(r);
+  const { round, options } = await roundsAndCurrent(r);
   const { data: tables } = round ? await db().from("dining_tables").select("id").eq("round_id", round.id) : { data: [] };
   const ids = (tables ?? []).map((t) => t.id);
   const [{ data: fbs }, { data: prefs }, { data: reports }, { count: attended }] = await Promise.all([
@@ -62,7 +62,7 @@ export default async function Feedback({ searchParams }: { searchParams: Promise
         title="피드백·안전"
         desc="만족도와 사람별 선호는 다음 매칭에 바로 반영돼요. 신고는 접수 즉시 두 사람을 분리하고, 조치는 예외 처리함에서 해요."
         how={["오른쪽에서 회차 고르고 만족도 보기", "'안전 신고'에서 검토 대기 건 확인", "경고·참가 제한은 예외 처리함에서", "아래에서 한 사람이 남기고 받은 것 찾아보기"]}
-        actions={<RoundPicker rounds={rounds} current={round?.id} />}
+        actions={<RoundPicker rounds={options} current={round?.id} />}
       />
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-6">
         <Stat label="응답률" value={attended ? `${Math.round((f.length / attended) * 100)}%` : "-"} sub={`참석 ${attended ?? 0}명 중 ${f.length}명`} />

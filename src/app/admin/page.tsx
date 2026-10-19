@@ -16,6 +16,7 @@ import { db } from "@/lib/supabase";
 import { ConfirmButton } from "./confirm-button";
 import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants } from "./demo-actions";
 import { loadMetricsInput } from "./metrics/load";
+import { roundLabel } from "@/lib/round-label";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -28,7 +29,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const t = await now();
   const { data: clock } = await db().from("app_clock").select("offset_seconds").eq("id", 1).single();
 
-  const { data: rounds } = await db().from("rounds").select("id,title,status,match_at,apply_deadline").order("match_at");
+  const { data: rounds } = await db().from("rounds").select("id,title,status,match_at,apply_deadline,slots(starts_at)").order("match_at");
   const round = rounds?.find((x) => x.id === r) ?? rounds?.find((x) => x.status !== "closed") ?? rounds?.[0];
   const nextRound = rounds?.find((x) => round && x.match_at > round.match_at);
 
@@ -113,10 +114,10 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             {retrying ? <span className="ml-2 font-semibold text-warn">알림 {retrying}건 다시 보내는 중</span> : null}
           </p>
         </div>
-        <form className="flex items-center gap-2 lg:mr-[400px]" aria-label="회차 고르기">
-          <select name="r" defaultValue={round?.id} className={ctl}>
+        <form className="flex min-w-0 max-w-full items-center gap-2 lg:mr-[400px]" aria-label="회차 고르기">
+          <select name="r" defaultValue={round?.id} className={`${ctl} min-w-0 max-w-full`}>
             {rounds?.map((x) => (
-              <option key={x.id} value={x.id}>{x.title}</option>
+              <option key={x.id} value={x.id}>{roundLabel(x.title, x.slots.map((s) => s.starts_at))}</option>
             ))}
           </select>
           <button className={btnLight}>보기</button>
@@ -182,7 +183,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               );
             })}
           </ol>
-          <p className="mt-3 border-t border-line pt-3 text-[13px] text-muted">{round.title} · 매칭 {fmtDateTime(round.match_at)}{run?.finished_at ? ` · 매칭 실행 ${fmtDateTime(run.finished_at)}` : ""}</p>
+          <p className="mt-3 border-t border-line pt-3 text-[13px] text-muted">{roundLabel(round.title, round.slots.map((s) => s.starts_at))} · 매칭 {fmtDateTime(round.match_at)}{run?.finished_at ? ` · 매칭 실행 ${fmtDateTime(run.finished_at)}` : ""}</p>
         </section>
       )}
 

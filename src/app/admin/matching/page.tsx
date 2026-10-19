@@ -1,4 +1,4 @@
-import { ChevronDown, Heart, Settings2, ShieldCheck, Sparkles, Users, UsersRound } from "lucide-react";
+import { ChevronDown, Heart, Search, Settings2, ShieldCheck, Sparkles, Users, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { Badge, PageHeader, Term, btnLight, btnPrimary, ctl, th } from "@/components/admin-ui";
@@ -11,19 +11,23 @@ import type { ScoreDetail } from "@/lib/matching/types";
 import { DEFAULT_SETTINGS, pairKey } from "@/lib/matching/types";
 import { sidoOf } from "@/lib/regions";
 import { db } from "@/lib/supabase";
+import { roundsAndCurrent } from "@/lib/admin-data";
+import { hits, tableHits } from "@/lib/match-search";
 import { matchNowCheck } from "@/lib/admin-manual";
 import { ConfirmButton } from "../confirm-button";
 import { runNowAction } from "./actions";
+import { ExpandAll } from "./expand-all";
 
 export const dynamic = "force-dynamic";
 
 const PART_LABEL: Record<string, string> = { age: "연령대", gender: "성비", mbti: "MBTI", interests: "관심사", wanted: "희망 성향", fresh: "새로운 사람" };
 
-export default async function MatchingMonitor({ searchParams }: { searchParams: Promise<{ r?: string }> }) {
+export default async function MatchingMonitor({ searchParams }: { searchParams: Promise<{ r?: string; q?: string }> }) {
   const me = await requireAdmin();
-  const { r } = await searchParams;
-  const { data: rounds } = await db().from("rounds").select("id,title,status,match_at").order("match_at");
-  const round = rounds?.find((x) => x.id === r) ?? rounds?.find((x) => x.status === "matched") ?? rounds?.[0];
+  const { r, q: q0 } = await searchParams;
+  const q = (q0 ?? "").trim().slice(0, 40);
+  const { rounds } = await roundsAndCurrent(r);
+  const round = rounds.find((x) => x.id === r) ?? rounds.find((x) => x.status === "matched") ?? rounds[0];
   if (!round)
     return (
       <div>
@@ -95,17 +99,20 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
 
   const st = (k: string) => Number((summary as Record<string, unknown>)[k] ?? 0);
   const REASON_TONE = ["bg-accent-soft text-accent", "bg-leaf/10 text-leaf", "bg-[#f0ecfd] text-[#6a4fd6]"];
+  // 검색: 걸린 테이블은 펼쳐서 보여 준다
+  const foundN = q ? tables.filter((t) => tableHits(q, { names: apps.filter((a) => a.table_id === t.id).map((a) => a.users.name), reservationName: t.reservation_name, venueName: t.venues?.name ?? null, region: t.slots.region })).length : 0;
+  const failedHit = q ? failed.filter((a) => hits(q, a.users.name)).length : 0;
 
   return (
     <div>
       <PageHeader
         title="자동 매칭 모니터"
         desc={<>신청 마감 시각에 결제한 사람끼리 자동으로 꾸린 테이블과 그 이유예요. 모자란 테이블은 자동 <Term tip={TIP.재배치}>재배치</Term>까지 해 본 뒤 결과가 여기 남아요.</>}
-        how={[<>위에서 <Term tip={TIP.회차}>회차</Term> 고르기</>, "실행 요약에서 확정·재배치·실패 수 보기", <>테이블마다 <Term tip={TIP.매칭점수}>매칭 점수</Term>와 충돌 확인</>, "오른쪽 '테이블에 못 든 사람'의 사유 보기"]}
+        how={[<>위에서 <Term tip={TIP.회차}>회차</Term> 고르기</>, "실행 요약에서 확정·재배치·실패 수 보기", <>테이블마다 <Term tip={TIP.매칭점수}>매칭 점수</Term>와 충돌 확인</>, "'테이블에 못 든 사람'에서 사유 보기", "문의가 오면 이름·예약명·식당으로 검색"]}
         actions={
-          <form className="flex gap-2">
-            <select name="r" defaultValue={round.id} className={ctl} aria-label="회차">
-              {rounds?.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+          <form className="flex min-w-0 max-w-full flex-wrap gap-2">
+            <select name="r" defaultValue={round.id} className={`${ctl} min-w-0 max-w-full`} aria-label="회차">
+              {rounds.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
             </select>
             <button className={btnLight}>보기</button>
           </form>
@@ -150,24 +157,86 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
       )}
       {run?.status === "running" && <p className="mt-3 rounded-xl bg-warn-soft px-4 py-3 text-[14px] text-warn">매칭이 아직 도는 중이에요. 보통 1분 안에 끝나요. 새로 고침해 보세요.</p>}
 
-      <div className="mt-6 grid items-start gap-4 xl:grid-cols-[1fr_340px]">
-        <div className="space-y-4">
+      {/* 못 든 사람: 고정(sticky)·안쪽 스크롤 없이 페이지와 함께 흐른다 */}
+      <section className="shadow-card mt-6 rounded-[20px] bg-card p-5" aria-labelledby="failed-title">
+        <h2 id="failed-title" className="text-[19px] font-bold text-ink">테이블에 못 든 사람 <span className="text-[15px] font-medium text-muted">· {failed.length}명</span></h2>
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {failed.map((a) => (
+            <li key={a.id} className={`min-w-0 rounded-2xl border p-4 ${hits(q, a.users.name) ? "border-accent ring-2 ring-accent/30" : "border-line"}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[17px] font-bold text-ink">{a.users.name}</p>
+                  <p className="text-[13px] text-muted">{ageBand(a.users.profiles?.birth_year, year)} · {a.users.profiles?.gender === "M" ? "남" : "여"} · {a.users.profiles?.mbti ?? "-"}</p>
+                </div>
+                <span className="shrink-0 whitespace-nowrap"><Badge v={label(MATCH, a.match_status)} /></span>
+              </div>
+              <p className="mt-3 border-t border-line pt-3 text-[13px] leading-relaxed text-[#4c5368]"><span className="mr-2 text-muted">사유</span>{a.match_reason ?? "-"}</p>
+              <p className="mt-1 text-[12px] text-muted">재배치 시도 {a.realloc_count}번{failedAt.get(a.id) ? ` · 실패 ${fmtDateTime(failedAt.get(a.id)!)}` : ""}</p>
+            </li>
+          ))}
+          {!failed.length && <li className="py-6 text-center text-[14px] text-muted sm:col-span-2 xl:col-span-3">모두 테이블에 앉았어요.</li>}
+        </ul>
+      </section>
+
+      {/* 테이블 목록: 접어서 한 줄로 보고, 문의가 오면 검색해서 펼친다 */}
+      <section className="mt-8" aria-labelledby="tables-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="tables-title" className="text-[20px] font-bold tracking-[-0.02em] text-ink">꾸려진 테이블 <span className="text-[15px] font-medium text-muted">· {tables.length}개</span></h2>
+          {tables.length > 0 && <ExpandAll />}
+        </div>
+        <form className="mt-3 flex flex-wrap items-center gap-2" role="search" aria-label="테이블 검색">
+          <input type="hidden" name="r" value={round.id} />
+          <label className="relative min-w-0 flex-1 basis-60">
+            <span className="sr-only">이름·예약명·식당으로 찾기</span>
+            <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden="true" />
+            <input name="q" type="search" defaultValue={q} maxLength={40} placeholder="참가자 이름, 예약명, 식당 이름" className={`${ctl} w-full pl-10`} />
+          </label>
+          <button className={btnLight}>찾기</button>
+          {q && <Link href={`/admin/matching?r=${round.id}`} className="whitespace-nowrap px-2 text-[13px] font-semibold text-muted hover:text-ink">검색 지우기</Link>}
+        </form>
+        {q && (
+          <p className="mt-2 text-[13px] text-muted" aria-live="polite">
+            &lsquo;{q}&rsquo; {foundN ? <>테이블 <b className="text-ink">{foundN}개</b>를 찾아 펼쳤어요</> : "에 맞는 테이블이 없어요"}{failedHit ? ` · 못 든 사람 중 ${failedHit}명` : ""}
+          </p>
+        )}
+
+        <div className="mt-4 space-y-3">
           {tables.map((t) => {
             const d = t.score_detail;
             const members = apps.filter((a) => a.table_id === t.id);
             const reasons = t.explanation.reasons ?? [];
             const cf = conflictsOf(members);
             const cfN = cf.block + cf.report + cf.avoid;
+            const open = tableHits(q, { names: members.map((m) => m.users.name), reservationName: t.reservation_name, venueName: t.venues?.name ?? null, region: t.slots.region });
             return (
-              <article key={t.id} className="shadow-card rounded-[20px] bg-card p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-[24px] font-bold tracking-[-0.03em] text-ink">{fmtDay(t.slots.starts_at)} · {t.slots.region} <span className="text-[15px] font-medium text-muted">{fmtTime(t.slots.starts_at)}</span></h2>
-                  <Badge v={label(TABLE, t.status)} />
-                </div>
-                <div className="mt-4 rounded-[18px] border border-line p-5">
+              <details key={t.id} data-mt open={open} className={`shadow-card group min-w-0 rounded-[20px] bg-card ${open ? "ring-2 ring-accent/30" : ""}`}>
+                <summary className="flex cursor-pointer list-none items-start gap-3 rounded-[20px] p-4 hover:bg-accent-soft/20 focus-visible:outline-2 focus-visible:outline-accent sm:p-5 [&::-webkit-details-marker]:hidden">
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-[17px] font-bold text-ink">{t.slots.region} · {t.venues?.name ?? "식당 미배정"}</span>
+                      <span className="whitespace-nowrap text-[13px] text-muted">{fmtDay(t.slots.starts_at)} {fmtTime(t.slots.starts_at)}</span>
+                      <span className="whitespace-nowrap"><Badge v={label(TABLE, t.status)} /></span>
+                      {cfN > 0 && <span className="whitespace-nowrap rounded-full bg-danger/10 px-2 py-0.5 text-[12px] font-semibold text-danger">충돌 {cfN}쌍</span>}
+                    </span>
+                    <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#4c5368]">
+                      <span className="whitespace-nowrap font-semibold text-ink">{members.length}명</span>
+                      <span className="whitespace-nowrap font-semibold text-accent">매칭 {Math.round(Number(t.score))}점</span>
+                      {t.reservation_name && <span className="whitespace-nowrap">예약명 <b className="font-semibold text-ink">{t.reservation_name}</b></span>}
+                      <span className="min-w-0 break-keep">{t.venues?.address ?? "주소 없음"}</span>
+                    </span>
+                    <span className="mt-2 flex flex-wrap gap-1.5" aria-label="참가자">
+                      {members.map((m) => (
+                        <span key={m.id} className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[13px] font-medium ${hits(q, m.users.name) ? "bg-accent text-white" : "bg-field text-ink"}`}>{m.users.name}</span>
+                      ))}
+                    </span>
+                  </span>
+                  <ChevronDown size={20} aria-hidden="true" className="mt-1 shrink-0 text-muted transition group-open:rotate-180" />
+                </summary>
+
+                <div className="border-t border-line p-4 sm:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[21px] font-bold text-ink">{t.venues?.name ?? "식당 미배정"} · {members.length}명</p>
+                    <div className="min-w-0">
+                      <p className="text-[19px] font-bold text-ink">{t.venues?.name ?? "식당 미배정"} · {members.length}명</p>
                       <p className="mt-1 text-[14px] text-muted">{t.venues?.address ?? "예외 처리함에서 식당을 다시 배정할 수 있어요"}{t.reservation_name ? ` · 예약명 ${t.reservation_name}` : ""}</p>
                     </div>
                     <div className="rounded-2xl bg-accent-soft/60 px-5 py-3 text-right">
@@ -176,48 +245,48 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                       {typeof d?.gate === "number" && d.gate !== Number(t.score) && <p className="text-[12px] text-muted">확정 판정 {Math.round(d.gate)}점 (성비 감점 제외)</p>}
                     </div>
                   </div>
-                  <div className="mt-5 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
-                    <div className="overflow-x-auto">
-                    <table className="w-full min-w-[520px] text-[14px]">
-                      <thead><tr>{["이름 · 배치 사유", "연령대", "성별", "MBTI", "희망 일정·동네", "희망 상대", "재배치"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+                  {/* 표가 넓으면 이 상자 안에서만 가로로 밀린다 */}
+                  <div className="mt-5 overflow-x-auto rounded-xl border border-line">
+                    <table className="w-full min-w-[820px] text-[14px]">
+                      <thead><tr>{["이름 · 배치 사유", "연령대", "성별", "MBTI", "희망 일정·동네", "희망 상대", "재배치"].map((h) => <th key={h} className={`${th} whitespace-nowrap first:rounded-none last:rounded-none`}>{h}</th>)}</tr></thead>
                       <tbody className="divide-y divide-line">
                         {members.map((mb) => {
                           const w = wantedOf(mb, members);
                           const pickedSlot = mb.application_slots.some((x) => x.slot_id === t.slot_id);
                           return (
                           <tr key={mb.id} className="align-top">
-                            <td className="px-4 py-2.5">
+                            <td className="w-[340px] min-w-[260px] px-4 py-2.5">
                               <span className="block font-medium text-ink">{mb.users.name}</span>
-                              {mb.match_reason && <span className="mt-0.5 block max-w-[260px] text-[12px] leading-snug text-muted">{mb.match_reason}</span>}
+                              {mb.match_reason && <span className="mt-0.5 block text-[12px] leading-snug text-muted">{mb.match_reason}</span>}
                             </td>
                             <td className="whitespace-nowrap px-4 py-2.5 text-[#4c5368]">{ageBand(mb.users.profiles?.birth_year, year)}</td>
-                            <td className="px-4 py-2.5 text-[#4c5368]">{mb.users.profiles?.gender === "M" ? "남" : "여"}</td>
-                            <td className="px-4 py-2.5 text-[#4c5368]">{mb.users.profiles?.mbti ?? "-"}</td>
-                            <td className="px-4 py-2.5 text-[13px]">{pickedSlot ? <span className="text-ink2">고른 일정</span> : (mb.areas ?? []).some((x) => x === t.slots.region || x === `${sidoOf(t.slots.region)} 전체`) ? <span className="text-ink2">고른 동네</span> : <span className="rounded-full bg-warn-soft px-2 py-0.5 font-semibold text-warn">가까운 동네로 이동</span>}</td>
-                            <td className="px-4 py-2.5 text-[13px]">{!w ? <span className="text-muted">고르지 않음</span> : w.ok ? <span className="text-ink2" title={w.want.join(", ")}>충족 {w.n}명</span> : <span className="rounded-full bg-warn-soft px-2 py-0.5 font-semibold text-warn" title={w.want.join(", ")}>못 맞춤</span>}</td>
-                            <td className="px-4 py-2.5 text-[13px] tabular-nums">{mb.realloc_count > 0 ? <span className="rounded-full bg-warn-soft px-2 py-0.5 font-semibold text-warn">{mb.realloc_count}회</span> : <span className="text-muted">0회</span>}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 text-[#4c5368]">{mb.users.profiles?.gender === "M" ? "남" : "여"}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 text-[#4c5368]">{mb.users.profiles?.mbti ?? "-"}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 text-[13px]">{pickedSlot ? <span className="text-ink2">고른 일정</span> : (mb.areas ?? []).some((x) => x === t.slots.region || x === `${sidoOf(t.slots.region)} 전체`) ? <span className="text-ink2">고른 동네</span> : <span className="rounded-full bg-warn-soft px-2 py-0.5 font-semibold text-warn">가까운 동네로 이동</span>}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 text-[13px]">{!w ? <span className="text-muted">고르지 않음</span> : w.ok ? <span className="text-ink2" title={w.want.join(", ")}>충족 {w.n}명</span> : <span className="rounded-full bg-warn-soft px-2 py-0.5 font-semibold text-warn" title={w.want.join(", ")}>못 맞춤</span>}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 text-[13px] tabular-nums">{mb.realloc_count > 0 ? <span className="rounded-full bg-warn-soft px-2 py-0.5 font-semibold text-warn">{mb.realloc_count}회</span> : <span className="text-muted">0회</span>}</td>
                           </tr>
                           );
                         })}
                       </tbody>
                     </table>
-                    </div>
-                    <ul className="space-y-3.5 self-center">
-                      {Object.entries(d.parts).map(([k, v]) => {
-                        const pct = Math.round(Number(v) * 100);
-                        return (
-                          <li key={k} className="flex items-center gap-3 text-[14px]">
-                            <span className="w-20 shrink-0 text-ink">{PART_LABEL[k]}</span>
-                            <span className="h-2 flex-1 overflow-hidden rounded-full bg-line"><span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} /></span>
-                            <span className="w-8 text-right font-semibold tabular-nums text-accent">{pct}</span>
-                          </li>
-                        );
-                      })}
-                      {d.bonus ? <li className="text-[13px] text-leaf">서로 다시 만나고 싶다고 한 쌍 +{d.bonus}점</li> : null}
-                      {d.guideBonus ? <li className="text-[13px] text-leaf">즐겁게 다녀간 재참가자가 첫 참가자와 함께 앉음 +{d.guideBonus}점 <span className="text-muted">(총점에만)</span></li> : null}
-                      {d.penalty ? <li className="text-[13px] text-danger">지난번 만족도가 낮았던 조합 {d.coolPairs}쌍이 다시 앉음 −{d.penalty}점 <span className="text-muted">(총점에만)</span></li> : null}
-                    </ul>
                   </div>
+                  <p className="mt-1.5 text-[12px] text-muted lg:hidden">표는 옆으로 밀어서 나머지 칸을 볼 수 있어요.</p>
+                  <ul className="mt-5 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                    {Object.entries(d.parts).map(([k, v]) => {
+                      const pct = Math.round(Number(v) * 100);
+                      return (
+                        <li key={k} className="flex items-center gap-3 text-[14px]">
+                          <span className="w-20 shrink-0 whitespace-nowrap text-ink">{PART_LABEL[k]}</span>
+                          <span className="h-2 flex-1 overflow-hidden rounded-full bg-line"><span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} /></span>
+                          <span className="w-8 text-right font-semibold tabular-nums text-accent">{pct}</span>
+                        </li>
+                      );
+                    })}
+                    {d.bonus ? <li className="text-[13px] text-leaf sm:col-span-2">서로 다시 만나고 싶다고 한 쌍 +{d.bonus}점</li> : null}
+                    {d.guideBonus ? <li className="text-[13px] text-leaf sm:col-span-2">즐겁게 다녀간 재참가자가 첫 참가자와 함께 앉음 +{d.guideBonus}점 <span className="text-muted">(총점에만)</span></li> : null}
+                    {d.penalty ? <li className="text-[13px] text-danger sm:col-span-2">지난번 만족도가 낮았던 조합 {d.coolPairs}쌍이 다시 앉음 −{d.penalty}점 <span className="text-muted">(총점에만)</span></li> : null}
+                  </ul>
                   <div className="mt-5 grid grid-cols-1 gap-3 rounded-2xl bg-field p-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Strip I={UsersRound} k="나이 차" v={`${d.ageGap}살`} sub={`${d.ageGap <= DEFAULT_SETTINGS.maxAgeGap ? `${DEFAULT_SETTINGS.maxAgeGap}살 이내 규칙 지킴` : `${DEFAULT_SETTINGS.maxAgeGap}살 규칙 넘음`} · 여성 ${d.female}명, 남성 ${d.male}명`} danger={d.ageGap > DEFAULT_SETTINGS.maxAgeGap} />
                     <Strip I={Heart} k="공통 관심사" v={d.commonInterests.slice(0, 2).join(" · ") || "-"} sub={`MBTI ${d.mbtiList.join(" · ")}`} />
@@ -238,32 +307,12 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                     <Link href={`/admin/tables/${t.id}`} className="font-semibold text-accent">테이블 상세 →</Link>
                   </p>
                 </div>
-              </article>
+              </details>
             );
           })}
           {run && !tables.length && <p className="shadow-card rounded-[20px] bg-card p-10 text-center text-muted">꾸려진 테이블이 없어요.</p>}
         </div>
-
-        <aside className="shadow-card rounded-[20px] bg-card p-5 xl:sticky xl:top-6">
-          <h2 className="text-[19px] font-bold text-ink">테이블에 못 든 사람 <span className="text-[15px] font-medium text-muted">· {failed.length}명</span></h2>
-          <ul className="mt-4 space-y-3">
-            {failed.map((a) => (
-              <li key={a.id} className="rounded-2xl border border-line p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-[17px] font-bold text-ink">{a.users.name}</p>
-                    <p className="text-[13px] text-muted">{ageBand(a.users.profiles?.birth_year, year)} · {a.users.profiles?.gender === "M" ? "남" : "여"} · {a.users.profiles?.mbti ?? "-"}</p>
-                  </div>
-                  <Badge v={label(MATCH, a.match_status)} />
-                </div>
-                <p className="mt-3 border-t border-line pt-3 text-[13px] leading-relaxed text-[#4c5368]"><span className="mr-2 text-muted">사유</span>{a.match_reason ?? "-"}</p>
-                <p className="mt-1 text-[12px] text-muted">재배치 시도 {a.realloc_count}번{failedAt.get(a.id) ? ` · 실패 ${fmtDateTime(failedAt.get(a.id)!)}` : ""}</p>
-              </li>
-            ))}
-            {!failed.length && <li className="py-6 text-center text-[14px] text-muted">모두 테이블에 앉았어요.</li>}
-          </ul>
-        </aside>
-      </div>
+      </section>
     </div>
   );
 }
