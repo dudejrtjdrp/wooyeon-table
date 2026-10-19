@@ -38,7 +38,7 @@ async function save(form: FormData) {
   redirect(`/admin/settings?m=${encodeURIComponent("저장했어요. 다음 자동 매칭부터 이 기준으로 점수를 매겨요")}`);
 }
 
-/** 미리보기용: 확정된 테이블이 있는 최근 두 회차의 테이블 점수 내역 (해제된 테이블은 뺀다). 참가자 정보는 넘기지 않는다 */
+/** 미리보기용: 확정된 테이블이 있는 최근 다섯 회차의 테이블 점수 내역 (해제된 테이블은 뺀다). 참가자 정보는 넘기지 않는다 */
 async function pastRounds(): Promise<PastRound[]> {
   const { data } = await db()
     .from("dining_tables")
@@ -56,7 +56,7 @@ async function pastRounds(): Promise<PastRound[]> {
   }
   return [...byRound.entries()]
     .sort((a, b) => b[1].at.localeCompare(a[1].at))
-    .slice(0, 2)
+    .slice(0, 5)
     .map(([id, g]) => ({
       id,
       title: g.title,
