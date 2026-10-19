@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { botsNeeded, chooseBots, makeBot, nextGender } from "./join";
 import { arrivalMinutes, hasBatchim, iyeyo, josa, persona } from "./persona";
-import { phaseOpen, pickNoShow, planReplies, planTable, spreadTimes } from "./plan";
+import { beforeAnchor, phaseOpen, pickNoShow, planReplies, planTable, spreadTimes } from "./plan";
 import { categoryWord, ARRIVE_EARLY, ARRIVE_ON_TIME, BYE, DAY_MENU, DAY_PLAN, DAY_QA, GREET, GREET_MORE, LATE_ARRIVE, LATE_WARN, clockWord, intents, replyTo, reviewFor, topicReply } from "./scripts";
 import { parseTopics } from "./bots";
 
@@ -192,5 +192,20 @@ describe("join", () => {
 describe("parseTopics", () => {
   it("번호 붙은 줄만", () => {
     expect(parseTopics("모두 모이셨나요? 오늘의 대화 주제예요.\n1. 여행\n2. 영화\n\n아이스브레이킹\n· 게임")).toEqual(["여행", "영화"]);
+  });
+});
+
+describe("시작 전 봇 말은 대화 주제 공지 앞에", () => {
+  it("공지 바로 앞이 좁아도 모두 공지보다 앞, 순서대로", () => {
+    const anchor = 1_000_000;
+    // 앞 메시지가 공지 0.5초 전이고, 끼워 넣을 말이 3개
+    const at = beforeAnchor([anchor + 5000, anchor + 9000, anchor + 2000], anchor - 500, anchor);
+    expect(at).toHaveLength(3);
+    for (const x of at) expect(x).toBeLessThan(anchor);
+    for (let i = 1; i < at.length; i++) expect(at[i]).toBeGreaterThan(at[i - 1]);
+  });
+  it("여유가 있으면 원래 시각을 지킨다", () => {
+    const anchor = 10_000_000;
+    expect(beforeAnchor([anchor - 600_000], anchor - 3_600_000, anchor)[0]).toBe(anchor - 600_000);
   });
 });

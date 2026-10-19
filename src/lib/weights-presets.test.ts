@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "./matching/types";
-import { PRESET_MAX, SEED_PRESETS, matchPreset, parsePresets, presetChange, presetError, presetValue, shares, toHundred } from "./weights-presets";
+import { PRESET_MAX, SEED_PRESETS, matchPreset, parsePresets, presetChange, presetError, presetValue, priorityError, shares, toHundred } from "./weights-presets";
 
 describe("parsePresets", () => {
   it("설정이 없으면 기본 템플릿 네 개, 다 지웠으면(빈 목록) 그대로 빈 목록", () => {
@@ -64,9 +64,21 @@ describe("shares", () => {
 describe("presetChange", () => {
   const a = SEED_PRESETS[1];
   it("추가·삭제·수정을 한 줄로", () => {
-    expect(presetChange(null, presetValue(a))).toBe("매칭 템플릿 '대화가 잘 통하게' 추가 (연령대 18 · 성비 18 · MBTI 24 · 관심사 26 · 희망 성향 10 · 새로운 사람 4 · 최소 점수 50)");
+    expect(presetChange(null, presetValue(a))).toBe("매칭 템플릿 '대화가 잘 통하게' 추가 (연령대 22 · 성비 20 · MBTI 20 · 관심사 20 · 희망 성향 12 · 새로운 사람 6 · 최소 점수 50)");
     expect(presetChange(presetValue(a), null)).toBe("매칭 템플릿 '대화가 잘 통하게' 삭제");
     const b = { ...a, name: "대화 위주", weights: { ...a.weights, mbti: 30 }, minScore: 55 };
-    expect(presetChange(presetValue(a), presetValue(b))).toBe("매칭 템플릿 '대화 위주' 이름 대화가 잘 통하게 → 대화 위주 · MBTI 24 → 30 · 최소 점수 50 → 55");
+    expect(presetChange(presetValue(a), presetValue(b))).toBe("매칭 템플릿 '대화 위주' 이름 대화가 잘 통하게 → 대화 위주 · MBTI 20 → 30 · 최소 점수 50 → 55");
+  });
+});
+
+describe("PRD 우선순위 지키기 (M8)", () => {
+  it("기본 템플릿은 모두 연령대 ≥ 성비 ≥ MBTI ≥ 관심사 ≥ 희망 성향", () => {
+    for (const p of SEED_PRESETS) expect(priorityError(p.weights), p.name).toBeNull();
+  });
+  it("순서를 어기면 막고 무엇이 문제인지 알려 준다", () => {
+    const e = priorityError({ age: 18, gender: 18, mbti: 24, interests: 26, wanted: 10, fresh: 4 });
+    expect(e).toContain("성비(18) ≥ MBTI(24)");
+    // 새로운 사람 비율은 순위 밖이라 커도 된다
+    expect(priorityError({ age: 22, gender: 20, mbti: 14, interests: 14, wanted: 8, fresh: 22 })).toBeNull();
   });
 });

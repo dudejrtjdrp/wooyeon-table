@@ -1,3 +1,4 @@
+import { meetingEnded } from "@/lib/meeting-time";
 import { AI_PHOTO_NOTE, isAiPhoto } from "@/lib/venue-photo-kind";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
@@ -56,7 +57,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   const live = list.filter((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED") && !unpaidClosed(a));
   // 모임이 끝난 테이블은 체크인을 안 했어도 진행 중으로 보지 않는다 (지난 모임 카드가 'D-day'로 계속 남던 문제)
   // 테이블 화면과 같은 기준: 끝난 시각이 지났거나 테이블이 '모임 끝'(DONE)이면 지난 모임
-  const ended = (a: ActiveRow) => a.dining_tables?.status === "DONE" || Boolean(a.dining_tables?.slots && new Date(a.dining_tables.slots.ends_at) <= t);
+  const ended = (a: ActiveRow) => meetingEnded(a.dining_tables, t);
   const ongoing = live.filter((a) => !["ATTENDED", "NO_SHOW"].includes(a.attendance_status ?? "") && !ended(a));
   const active = ongoing[0] ?? null;
   const next = me.hasProfile && !active ? await nextPick(me.id) : null;

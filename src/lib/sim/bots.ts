@@ -10,7 +10,7 @@ import { kstDay } from "../regions";
 import { db } from "../supabase";
 import { type JoinProfile, botsNeeded, chooseBots, makeBot, nextGender } from "./join";
 import { arrivalMinutes, persona } from "./persona";
-import { msgKey, phaseOpen, pickNoShow, planReplies, planTable, spreadTimes } from "./plan";
+import { beforeAnchor, msgKey, phaseOpen, pickNoShow, planReplies, planTable, spreadTimes } from "./plan";
 import { type Ctx, categoryWord, reviewFor } from "./scripts";
 
 export const BOTS_KEY = "demo.bots";
@@ -201,7 +201,7 @@ async function scheduled(tb: Table, t: Date): Promise<number> {
   if (early.length && contentAt !== null) {
     const before = room.msgs.filter((m) => Date.parse(m.created_at) < contentAt).at(-1);
     const lo = before ? Date.parse(before.created_at) : contentAt - 60_000 * (early.length + 1);
-    const at = spreadTimes(early.map((m) => Math.min(m.real, contentAt - 1000)), lo, contentAt - 1000);
+    const at = beforeAnchor(early.map((m) => m.real), lo, contentAt);
     early.forEach((m, k) => rows.push({ userId: m.userId, body: m.body, key: m.key, at: at[k] }));
   }
   const at = spreadTimes(rest.map((m) => m.real), last, realNow);
@@ -371,7 +371,10 @@ async function botsJoinOnce(appId: string): Promise<{ joined: number; locked: bo
     .insert(ids.map((id) => ({ user_id: id, round_id: app.round_id, payment_id: payOf.get(id), application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: paidAt, areas: [slot.region], dates: [kstDay(slot.starts_at)], near_ok: false })))
     .select("id");
   await db().from("application_slots").insert((apps ?? []).map((a) => ({ application_id: a.id, slot_id: slot.id })));
-  for (const a of apps ?? []) await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: "DRAFT", to: "SUBMITTED", actor: ACTOR, reason: `시연 봇이 같은 일정에 함께 신청 (${slot.region})` });
+  for (const a of apps ?? []) {
+    await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: "DRAFT", to: "SUBMITTED", actor: ACTOR, reason: `시연 봇이 같은 일정에 함께 신청 (${slot.region})` });
+    await logStatus({ entityType: "application", entityId: a.id, field: "payment_status", from: "PENDING", to: "PAID", actor: ACTOR, reason: "시연 봇 모의 결제(1회권 9,900원)" });
+  }
   return { joined: apps?.length ?? 0, locked: true };
 }
 

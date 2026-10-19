@@ -32,7 +32,7 @@ export const PRESET_DESC_MAX = 60;
 /** 처음 쓰는 곳(설정에 matching.presets가 없을 때) 보여 줄 기본 템플릿 */
 export const SEED_PRESETS: Preset[] = [
   { id: "base", name: "골고루(기본)", desc: "또래·성비를 먼저 맞추고 나머지를 고르게 봐요.", weights: { age: 25, gender: 22, mbti: 18, interests: 15, wanted: 12, fresh: 8 }, minScore: 50 },
-  { id: "talk", name: "대화가 잘 통하게", desc: "관심사와 대화 성향이 맞는 사람끼리 묶어요.", weights: { age: 18, gender: 18, mbti: 24, interests: 26, wanted: 10, fresh: 4 }, minScore: 50 },
+  { id: "talk", name: "대화가 잘 통하게", desc: "또래·성비는 지키면서 MBTI·관심사 몫을 키워요.", weights: { age: 22, gender: 20, mbti: 20, interests: 20, wanted: 12, fresh: 6 }, minScore: 50 },
   { id: "peer", name: "비슷한 또래끼리", desc: "나이 차를 최대한 줄여요.", weights: { age: 38, gender: 22, mbti: 12, interests: 12, wanted: 10, fresh: 6 }, minScore: 50 },
   { id: "fresh", name: "새로운 만남 위주", desc: "전에 같이 앉은 적 없는 사람끼리 묶어요.", weights: { age: 22, gender: 20, mbti: 14, interests: 14, wanted: 8, fresh: 22 }, minScore: 50 },
 ];
@@ -71,8 +71,23 @@ export function presetError(p: { name: string; desc: string; weights: Record<str
   if (!WEIGHT_KEYS.every((k) => isScore(p.weights[k]))) return "항목 점수는 0~100 사이 정수로 적어 주세요";
   if (weightSum(p.weights) <= 0) return "항목 점수를 하나 이상 0보다 크게 적어 주세요";
   if (!isScore(p.minScore)) return "최소 점수는 0~100 사이 정수로 적어 주세요";
+  const order = priorityError(p.weights);
+  if (order) return order;
   if (others.some((o) => o.id !== selfId && o.name === name)) return "같은 이름의 템플릿이 이미 있어요";
   if (!selfId && others.length >= PRESET_MAX) return `템플릿은 ${PRESET_MAX}개까지 만들 수 있어요. 안 쓰는 것을 지우고 다시 해 주세요`;
+  return null;
+}
+
+/** PRD 선호 우선순위(연령대 ≥ 성비 ≥ MBTI ≥ 관심사 ≥ 희망 성향)를 어긴 곳. 새로운 사람 비율은 순위 밖이라 보지 않는다 */
+const PRIORITY: { k: WeightKey; label: string }[] = [
+  { k: "age", label: "연령대" }, { k: "gender", label: "성비" }, { k: "mbti", label: "MBTI" }, { k: "interests", label: "관심사" }, { k: "wanted", label: "희망 성향" },
+];
+export function priorityError(w: Partial<Record<WeightKey, number>> | Record<string, number>): string | null {
+  for (let i = 1; i < PRIORITY.length; i++) {
+    const hi = PRIORITY[i - 1], lo = PRIORITY[i];
+    const ww = w as Record<string, number>;
+    if ((Number(ww[lo.k]) || 0) > (Number(ww[hi.k]) || 0)) return `PRD 우선순위대로 ${hi.label}(${ww[hi.k]}) ≥ ${lo.label}(${ww[lo.k]})여야 해요. 연령대 → 성비 → MBTI → 관심사 → 희망 성향 순서로 점수를 같거나 작게 맞춰 주세요`;
+  }
   return null;
 }
 

@@ -8,7 +8,7 @@ import { Term } from "@/components/term";
 import { TIP } from "@/lib/admin-glossary";
 import type { Weights } from "@/lib/matching/types";
 import { type PastTable, previewSentence, previewTables } from "@/lib/weights-preview";
-import { type Preset, WEIGHT_DESC, WEIGHT_KEYS, WEIGHT_LABEL, type WeightKey, matchPreset, sameCriteria, shares, toHundred, weightSum } from "@/lib/weights-presets";
+import { type Preset, WEIGHT_DESC, WEIGHT_KEYS, WEIGHT_LABEL, type WeightKey, matchPreset, priorityError, sameCriteria, shares, toHundred, weightSum } from "@/lib/weights-presets";
 import { AddPresetForm, EditPresetForm } from "./preset-forms";
 
 // 항목 색 (어드민 초록 계열, 흰 글자 4.5:1 이상). 막대·점·미리보기 칩에 같이 쓴다
@@ -73,6 +73,7 @@ export function WeightsForm({ initial, min, defaults, defaultMin, readOnly, acti
   // 처음엔 테이블이 더 많은 회차를 보여 준다 (시연 회차처럼 한두 개뿐인 회차보다 비교가 잘 보이게)
   const [roundId, setRoundId] = useState(() => [...rounds].sort((a, b) => b.tables.length - a.tables.length)[0]?.id ?? "");
   const total = weightSum(w);
+  const orderErr = priorityError(w);
   const s = shares(w);
   const set = (k: string, v: number) => setW((c) => ({ ...c, [k]: clamp(v) }));
   const dirty = !sameCriteria(w, minScore, initial, min);
@@ -204,9 +205,9 @@ export function WeightsForm({ initial, min, defaults, defaultMin, readOnly, acti
               <p className="text-[13px] text-muted">조회 전용 계정이라 저장할 수 없어요. 숫자를 바꿔 아래 미리보기만 해 볼 수 있어요.</p>
             ) : (
               <>
-                <button disabled={!dirty || total <= 0} className={`${btnPrimary} h-12 px-6 text-[15px] disabled:opacity-50`}>이 기준으로 저장</button>
-                <p className="min-w-0 flex-1 text-[13px] text-muted" aria-live="polite">
-                  {dirty ? <>저장하지 않은 변경이 있어요{picked ? ` (${picked.name})` : ""}. 저장하면 다음 자동 매칭부터 적용돼요.</> : "저장된 기준 그대로예요. 바꾼 기록은 변경 이력에서 되돌릴 수 있어요."}
+                <button disabled={!dirty || total <= 0 || Boolean(orderErr)} className={`${btnPrimary} h-12 px-6 text-[15px] disabled:opacity-50`}>이 기준으로 저장</button>
+                <p className={`min-w-0 flex-1 text-[13px] ${orderErr ? "font-semibold text-danger" : "text-muted"}`} aria-live="polite">
+                  {orderErr ? orderErr : dirty ? <>저장하지 않은 변경이 있어요{picked ? ` (${picked.name})` : ""}. 저장하면 다음 자동 매칭부터 적용돼요.</> : "저장된 기준 그대로예요. 바꾼 기록은 변경 이력에서 되돌릴 수 있어요."}
                 </p>
               </>
             )}
@@ -253,19 +254,21 @@ export function WeightsForm({ initial, min, defaults, defaultMin, readOnly, acti
             </div>
             <ul className="mt-3 divide-y divide-line">
               {preview.rows.map((r) => {
-                const d = Math.round((r.after - r.before) * 10) / 10;
+                // 최소 점수와 견주는 건 확정 판정 점수라 그걸 크게 보여 준다. 조합 고를 때 쓰는 점수(성비 감점 포함)는 작게
+                const d = Math.round((r.gateAfter - r.gateBefore) * 10) / 10;
                 return (
                   <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-3">
                     <div className="min-w-0 flex-1 basis-[180px]">
                       <p className="truncate text-[14px] font-semibold text-ink">{r.label}</p>
-                      <p className="text-[12px] text-muted">확정 판정 {pts(r.gateBefore)}{r.gateAfter !== r.gateBefore ? ` → ${pts(r.gateAfter)}` : ""}점 (성비 감점 제외)</p>
+                      <p className="text-[12px] text-muted">조합 점수 {pts(r.before)}{r.after !== r.before ? ` → ${pts(r.after)}` : ""}점 (성비 감점 포함, 조합 고를 때만 씀)</p>
                     </div>
                     {r.top && <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold text-white" style={{ background: COLOR[r.top.key] }}>{WEIGHT_LABEL[r.top.key]} {signed(r.top.delta)}</span>}
                     {r.below && <span className="rounded-full bg-warn px-2 py-0.5 text-[12px] font-semibold text-white">최소 점수 미달</span>}
-                    <p className="flex shrink-0 items-center gap-1.5 text-[15px] tabular-nums" aria-label={`점수 ${pts(r.before)}점에서 ${pts(r.after)}점`}>
-                      <span className="text-muted">{pts(r.before)}</span>
+                    <p className="flex shrink-0 items-center gap-1.5 text-[15px] tabular-nums" aria-label={`확정 판정 점수 ${pts(r.gateBefore)}점에서 ${pts(r.gateAfter)}점`}>
+                      <span className="text-[12px] text-muted">확정 판정</span>
+                      <span className="text-muted">{pts(r.gateBefore)}</span>
                       <ArrowRight size={14} className="text-muted" aria-hidden="true" />
-                      <b className="text-[17px] text-ink">{pts(r.after)}점</b>
+                      <b className="text-[17px] text-ink">{pts(r.gateAfter)}점</b>
                       <span className={`w-12 text-right text-[12px] font-semibold ${d > 0 ? "text-accent" : d < 0 ? "text-warn" : "text-muted"}`}>{d === 0 ? "같음" : signed(d)}</span>
                     </p>
                   </li>

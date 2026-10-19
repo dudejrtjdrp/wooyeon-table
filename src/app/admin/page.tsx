@@ -98,6 +98,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const metrics = round ? computeMetrics(await loadMetricsInput(), round.id) : [];
   const mt = (k: string) => metrics.find((x) => x.key === k);
   const realloc = mt("realloc_success");
+  const matchSuccess = mt("match_success");
+  const autoConfirm = mt("auto_confirm");
   const rq = round ? `?r=${round.id}` : "";
 
   return (
@@ -195,7 +197,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <h2 className="mt-8 text-[20px] font-bold tracking-[-0.02em] text-ink">주요 현황 <span className="text-[14px] font-medium text-muted">{round.title} 기준</span></h2>
           <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             <Kpi href={`/admin/applicants${rq}`} I={Users} label="신청" value={`${list.length}명`} sub={`결제 완료 ${paid.length}명`} />
-            <Kpi href={`/admin/matching${rq}`} I={ChartColumn} label="자동 매칭 성공률" value={matchRate === null ? "매칭 전" : `${matchRate}%`} sub={`확정 ${confirmed.length}명 · 테이블 ${tableCount ?? 0}개`} />
+            {/* 운영 지표 화면과 같은 정의(computeMetrics match_success·auto_confirm)로 보여 준다: 한 번이라도 확정된 결제자 ÷ 매칭이 끝난 결제자 */}
+            <Kpi href={`/admin/matching${rq}`} I={ChartColumn} label="자동 매칭 성공률" value={!ranMatching ? "매칭 전" : matchSuccess ? metricValue(matchSuccess) ?? "-" : matchRate === null ? "-" : `${matchRate}%`} sub={matchSuccess && ranMatching ? `확정 ${matchSuccess.numerator}명 ÷ 결제 ${matchSuccess.denominator}명 · 테이블 ${autoConfirm?.denominator ?? tableCount ?? 0}개` : `확정 ${confirmed.length}명 · 테이블 ${tableCount ?? 0}개`} />
             <Kpi href={`/admin/matching${rq}`} I={Shuffle} label={<>자동 <Term inLink tip={TIP.재배치}>재배치</Term> 성공률</>} value={realloc ? metricValue(realloc) ?? "대상 없음" : "-"} sub={realloc ? `대상 ${realloc.denominator}명 중 ${realloc.numerator}명이 재배치로 확정` : undefined} />
             <Kpi href={`/admin/applicants${rq}${rq ? "&" : "?"}s=CHOOSING`} I={UserRound} label={<><Term inLink tip={TIP.대체일정}>대체 일정</Term>·환불 선택 대기</>} value={`${waitingChoice.length}명`} sub="다른 일정·보관·환불을 아직 안 고름 (자리 기다리기를 고른 사람 제외)" danger={waitingChoice.length > 0} />
             <Kpi href={`/admin/attendance${rq}`} I={ChartPie} label="참석률" value={attendRate === null ? "모임 전" : `${attendRate}%`} sub={<>참석 {attended.length} · 늦은 취소 {lateCancel} · <Term inLink tip={TIP.노쇼후보}>노쇼 후보</Term> {roundNoShow}</>} />

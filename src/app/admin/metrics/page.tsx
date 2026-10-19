@@ -40,7 +40,6 @@ export default async function Metrics({ searchParams }: { searchParams: Promise<
 
   const noShowWait = waitingNoShow(input, round?.id);
   const noShowSeries = waitingNoShowSeries(input, sr("no_show"));
-  const noShowDelta = metricDelta({ unit: "count", higherIsBetter: false }, noShowSeries, round?.id);
   const flow = funnel(metrics);
   const scope = round ? round.title : "전체 회차 누적";
 
@@ -100,9 +99,9 @@ export default async function Metrics({ searchParams }: { searchParams: Promise<
               <>
                 <span className={`text-[14px] font-semibold ${noShowWait ? "text-danger" : "text-muted"}`}>확인 기다리는 <Term inLink tip={TIP.노쇼후보}>노쇼 후보</Term></span>
                 <span className={`text-[44px] font-bold leading-none tracking-[-0.03em] ${noShowWait ? "text-danger" : "text-ink"}`}>{n(noShowWait)}<span className="ml-0.5 text-[22px]">명</span></span>
-                <DeltaLine d={noShowDelta} />
+                {/* 지금 열린 건수라 최근 회차일수록 확인할 시간이 짧아 작게 나온다. 회차끼리 비교하면 오해를 부르니 '지난 회차보다'는 보이지 않는다 */}
                 <span className="text-[13px] text-muted">{noShowWait ? "노쇼로 확정하거나 참석으로 고쳐야 노쇼율이 정확해져요" : "확인할 후보가 없어요"}</span>
-                <span className="mt-1 block"><Sparkline points={noShowSeries} unit="count" tone="bad" /></span>
+                <span className="mt-1 block"><Sparkline points={noShowSeries} unit="count" tone="bad" /><span className="mt-1 block text-[12px] text-faint">회차별로 아직 확인 안 한 후보 수</span></span>
                 <span className="sr-only">{`회차별 확인 기다리는 노쇼 후보: ${noShowSeries.map((p) => `${p.title} ${p.value}명`).join(", ") || "없음"}`}</span>
                 <More text="노쇼율 자세히" />
               </>

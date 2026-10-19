@@ -138,3 +138,14 @@ export function pickNoShow(tableId: string, botIds: string[]): string | null {
   const sorted = [...botIds].sort();
   return sorted[Math.floor(rand(tableId, "noshow-who") * sorted.length)];
 }
+
+/**
+ * 기준 메시지(대화 주제 공지) 앞에 끼워 넣을 시각들. 모두 anchor보다 앞이고 서로 1초 이상 떨어진다.
+ * 앞 메시지(lower)와 공지 사이가 좁으면 lower를 앞으로 당겨서라도 공지 뒤로 밀리지 않게 한다
+ */
+export function beforeAnchor(dues: number[], lower: number, anchor: number): number[] {
+  if (!dues.length) return [];
+  const top = anchor - 1000;
+  const lo = Math.min(lower, top - dues.length * 1000);
+  return spreadTimes(dues.map((d) => Math.min(d, top)), lo, top).map((x) => Math.min(x, top));
+}

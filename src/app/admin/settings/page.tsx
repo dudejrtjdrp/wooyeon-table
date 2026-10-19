@@ -17,7 +17,7 @@ import { setAdminActive, setLevel } from "./account-actions";
 import { CreateAdminForm, ResetPasswordForm } from "./accounts";
 import { fmtSlot } from "@/lib/format";
 import { pastTableOf } from "@/lib/weights-preview";
-import { parsePresets, weightSum } from "@/lib/weights-presets";
+import { parsePresets, priorityError, weightSum } from "@/lib/weights-presets";
 import { type PastRound, WeightsForm } from "./weights-form";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,8 @@ async function save(form: FormData) {
   // 이전 값도 남겨서 변경 이력에서 무엇이 바뀌었는지 보이고, 그 값으로 되돌릴 수 있게 한다
   const from = await currentWeightsValue();
   if (weightSum(weights) <= 0) redirect(`/admin/settings?e=${encodeURIComponent("항목 점수를 하나 이상 0보다 크게 적어 주세요")}`);
+  const order = priorityError(weights);
+  if (order) redirect(`/admin/settings?e=${encodeURIComponent(order)}`);
   const to = weightsValue(weights, min);
   if (from === to) redirect(`/admin/settings?m=${encodeURIComponent("바뀐 것이 없어요")}`);
   await db().from("settings").upsert([{ key: "matching.weights", value: weights }, { key: "matching.min_score", value: min }]);

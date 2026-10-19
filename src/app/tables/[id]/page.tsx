@@ -40,7 +40,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   } | null;
   if (!t) redirect(`/?m=${encodeURIComponent("이 모임을 찾지 못했어요. 내 모임은 단체방 탭에서 볼 수 있어요")}`);
 
-  const { data: resv } = await db().from("reservations").select("channel,status,external_ref").eq("table_id", id).maybeSingle();
+  const { data: resv } = await db().from("reservations").select("channel,status,external_ref,mode").eq("table_id", id).maybeSingle();
   const { data: memRaw } = await db()
     .from("applications")
     .select("id,user_id,attendance_status,users(name,profiles(job,gender,birth_year,interests,food_restrictions))")
@@ -174,7 +174,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
           <h2 className="text-[18px] font-bold">찾아가는 길</h2>
           <div className="mt-3 rounded-[18px] bg-card p-4">
             <p className="text-[15px] font-semibold">{t.venues?.address ?? "식당이 정해지면 주소를 알려드릴게요"}</p>
-            {resv && <p className="mt-1 text-[13px] text-muted">{resv.status === "CONFIRMED" ? `${CHANNEL_LABEL[resv.channel as Channel]} 예약 확정${resv.external_ref ? ` · ${resv.external_ref}` : ""}` : "운영팀이 예약하고 있어요"}</p>}
+            {resv && <p className="mt-1 text-[13px] text-muted">{resv.status === "CONFIRMED" ? `${CHANNEL_LABEL[resv.channel as Channel]} 예약 확정${resv.external_ref ? ` · ${resv.external_ref}` : ""}${resv.mode === "mock" ? " (시연용 모의 예약이라 실제 식당에는 예약되지 않았어요)" : ""}` : "운영팀이 예약하고 있어요"}</p>}
             {maps && <MapButtons links={maps} />}
             {(t.reservation_name || t.venues?.price_range) && (
               <dl className="mt-3 space-y-1.5 border-t border-line2 pt-3 text-[14px]">
