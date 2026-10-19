@@ -50,7 +50,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const endedAt = app.dining_tables ? new Date(app.dining_tables.slots.starts_at).getTime() + 3 * 3600_000 : null;
   const ended = app.match_status === "CONFIRMED" && app.attendance_status === "SCHEDULED" && endedAt !== null && endedAt <= t.getTime();
   const h = ended
-    ? { ...h0, label: "지난 모임", tone: "muted" as const, desc: "모임이 끝났어요. 참석 확인과 후기는 모임 정보에서 볼 수 있어요." }
+    ? { ...h0, label: "지난 모임", tone: "muted" as const, desc: "모임이 끝났어요. 참석 확인과 후기는 '테이블과 단체방 보기'에서 할 수 있어요." }
     : h0;
   const slots = app.application_slots.map((x) => x.slots).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const paid = !["PENDING", "FAILED"].includes(app.payment_status);
@@ -61,8 +61,8 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     { label: "신청", done: true, when: app.submitted_at ? fmtSlot(app.submitted_at) : "", note: "신청이 완료됐어요." },
     { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : new Date(app.rounds.match_at) <= t ? "결제 전에 마감됐어요. 빠져나간 돈은 없어요." : "결제를 마쳐야 매칭에 들어가요." },
     { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: "신청 인원을 모아 테이블을 꾸려요." },
-    { label: "테이블 확정 · 안내", done: matched, when: "", note: "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
-    { label: "모임", done: app.attendance_status === "ATTENDED" || ended, when: "", note: app.attendance_status !== "ATTENDED" && ended ? "모임이 끝났어요. 참석 확인과 후기는 모임 정보에서 볼 수 있어요." : "정해진 식당에서 저녁을 함께 먹어요." },
+    { label: "테이블 확정 · 안내", done: matched, when: "", note: matched ? "식당과 함께 앉을 분들을 알려 드렸어요." : "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
+    { label: "모임", done: app.attendance_status === "ATTENDED" || ended, when: "", note: app.attendance_status !== "ATTENDED" && ended ? "모임이 끝났어요. 참석 확인과 후기는 '테이블과 단체방 보기'에서 할 수 있어요." : "정해진 식당에서 저녁을 함께 먹어요." },
   ];
   // 매칭 실패면 '테이블 확정' 단계가 아직 올 것처럼 보이지 않게, 그 자리에서 실패와 다음 할 일을 말한다
   if (app.match_status === "ALTERNATIVE_OFFERED") {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ChevronDown, Lock } from "lucide-react";
 import { ConfirmSubmit, CountedTextarea, ErrorText, Optional, PageTitle, PrimaryButton, Required, Screen, SectionCard, StarRating, inputCls } from "@/components/ui";
@@ -11,8 +12,19 @@ export default async function Feedback({ params, searchParams }: { params: Promi
   const me = await requireMe();
   const { id } = await params;
   const { e } = await searchParams;
-  const { data: mine } = await db().from("applications").select("id").eq("table_id", id).eq("user_id", me.id).maybeSingle();
+  const { data: mine } = await db().from("applications").select("id,attendance_status").eq("table_id", id).eq("user_id", me.id).maybeSingle();
   if (!mine) redirect("/");
+  // 후기는 체크인한(참석한) 사람만 남길 수 있다: 폼을 다 채운 뒤 막히지 않게 먼저 알려 준다
+  if (mine.attendance_status !== "ATTENDED")
+    return (
+      <Screen title="모임 후기" back={`/tables/${id}`}>
+        <PageTitle className="mt-4" title="후기는 참석한 분만" accent="남길 수 있어요" sub="체크인 기록이 없어 지금은 후기를 남길 수 없어요. 참석했다면 테이블 화면의 '참석했는데 체크인을 못 했어요'나 문의하기로 알려 주세요." />
+        <div className="mt-6 flex flex-col gap-2">
+          <Link href={`/tables/${id}`} className="flex h-[52px] items-center justify-center rounded-[14px] bg-accent text-[16px] font-extrabold text-white">테이블 화면으로</Link>
+          <Link href="/help" className="flex h-11 items-center justify-center text-[14px] font-semibold text-accent">문의하기</Link>
+        </div>
+      </Screen>
+    );
   const { data: fb } = await db().from("feedbacks").select("*").eq("application_id", mine.id).maybeSingle();
   const { data: othersRaw } = await db().from("applications").select("user_id,users(name,profiles(job))").eq("table_id", id).neq("user_id", me.id);
   const others = (othersRaw ?? []) as unknown as { user_id: string; users: { name: string; profiles: { job: string | null } | null } }[];
