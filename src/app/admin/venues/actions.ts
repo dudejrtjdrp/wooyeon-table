@@ -169,15 +169,15 @@ function formToRow(form: FormData) {
 }
 
 /** 식당 한 곳 추가·고치기 (식당 관리 화면의 폼). 엑셀과 같은 기준으로 검사하고, 사용 중이면 모집 중 일정 재고를 맞춘다 */
-export async function saveVenue(form: FormData) {
+export async function saveVenue(_prev: { error: string } | null, form: FormData): Promise<{ error: string } | null> {
   const me = await requireAdminWrite("/admin/venues");
   const id = String(form.get("id") ?? "");
-  const back = id ? `/admin/venues/${id}` : "/admin/venues/new";
   const r = parseVenueRow(formToRow(form));
-  if (!r.ok) redirect(`${back}?e=${encodeURIComponent(r.errors.join(" · "))}`);
+  if (!r.ok) return { error: r.errors.join(" · ") };
   const v = r.value;
-  const { data: same } = await db().from("venues").select("id").eq("region", v.region).eq("name", v.name).neq("id", id || "00000000-0000-0000-0000-000000000000").maybeSingle();
-  if (same) redirect(`${back}?e=${encodeURIComponent(`${v.region}에 '${v.name}'이(가) 이미 있어요`)}`);
+  const dupMsg = `${v.region}에 '${v.name}'이(가) 이미 있어요`;
+  const { data: same } = await db().from("venues").select("id").eq("region", v.region).eq("name", v.name).neq("id", id || "00000000-0000-0000-0000-000000000000").limit(1);
+  if (same?.length) return { error: dupMsg };
   const actor = `admin:${me.id}`;
   let venueId = id;
   if (id) {
@@ -186,13 +186,13 @@ export async function saveVenue(form: FormData) {
     const keys = ["name", "region", ...Object.keys(FIELD_LABEL)] as const;
     const label = (k: string) => (k === "name" ? "이름" : k === "region" ? "동네" : FIELD_LABEL[k]);
     const diff = keys.filter((k) => String((cur as Record<string, unknown>)[k] ?? "") !== String((v as Record<string, unknown>)[k] ?? ""));
-    if (!diff.length) redirect(`${back}?m=${encodeURIComponent("바뀐 칸이 없어요")}`);
+    if (!diff.length) return { error: "바뀐 칸이 없어요" };
     const { error } = await db().from("venues").update(v).eq("id", id);
-    if (error) redirect(`${back}?e=${encodeURIComponent("저장하지 못했어요. 다시 눌러 주세요")}`);
+    if (error) return { error: error.code === "23505" ? dupMsg : "저장하지 못했어요. 다시 눌러 주세요" };
     await logStatus({ entityType: "venue", entityId: id, field: "edit", from: diff.map((k) => `${label(k)}=${(cur as Record<string, unknown>)[k] ?? ""}`).join("; "), to: diff.map((k) => `${label(k)}=${(v as Record<string, unknown>)[k] ?? ""}`).join("; "), actor, reason: `식당 고침: ${v.name}` });
   } else {
     const { data: ins, error } = await db().from("venues").insert(v).select("id").single();
-    if (error || !ins) redirect(`${back}?e=${encodeURIComponent("저장하지 못했어요. 다시 눌러 주세요")}`);
+    if (error || !ins) return { error: error?.code === "23505" ? dupMsg : "저장하지 못했어요. 다시 눌러 주세요" };
     venueId = ins.id;
     await logStatus({ entityType: "venue", entityId: venueId, field: "status", to: "created", actor, reason: `식당 추가: ${v.region} ${v.name}` });
   }

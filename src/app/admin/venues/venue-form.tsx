@@ -1,6 +1,12 @@
-import { ctl, btnPrimary } from "@/components/admin-ui";
+"use client";
+
+import { startTransition, useActionState } from "react";
 import { AREAS, CHANNELS, CHANNEL_NAMES, SHEET_PRICES, venueToSheet, type VenueRow } from "@/lib/venue-sheet";
 import { saveVenue } from "./actions";
+
+// admin-ui.tsx는 서버 전용 모듈을 함께 불러와서, 클라이언트에서는 같은 클래스만 따로 둔다
+const ctl = "h-11 rounded-xl border border-line bg-card px-3.5 text-[14px] text-ink outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/10";
+const btnPrimary = "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-4 text-[14px] font-semibold transition active:scale-[.98] bg-accent text-white shadow-cta";
 
 const label = "flex flex-col gap-1.5 text-[13px] font-semibold text-ink2";
 const hint = "text-[12px] font-normal text-muted";
@@ -11,8 +17,14 @@ export function VenueForm({ venue, ro }: { venue?: Partial<VenueRow> & { id: str
   const val = (k: string) => (s[k] === undefined ? "" : String(s[k]));
   const back = Object.fromEntries(Object.entries(CHANNELS).map(([k, v]) => [v, k]));
   const outside = venue?.region && !AREAS.includes(venue.region);
+  const [res, run, pending] = useActionState(saveVenue, null);
   return (
-    <form action={saveVenue} className="grid gap-4 md:grid-cols-2">
+    // 검사에 걸려도 입력한 값이 남게: 폼 액션의 자동 초기화를 쓰지 않고 직접 보낸다
+    <form
+      onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); startTransition(() => run(fd)); }}
+      className="grid gap-4 md:grid-cols-2"
+    >
+      {res?.error && <p role="alert" className="rounded-xl bg-danger/10 px-4 py-3 text-[14px] font-semibold text-danger md:col-span-2">{res.error}</p>}
       {venue && <input type="hidden" name="id" value={venue.id} />}
       <label className={label}><span className="flex flex-wrap items-baseline gap-x-1.5">식당 이름 <span className="text-danger">*</span></span>
         <input name="name" required defaultValue={val("식당 이름")} className={ctl} disabled={ro} />
@@ -67,7 +79,7 @@ export function VenueForm({ venue, ro }: { venue?: Partial<VenueRow> & { id: str
       </label>
       {!ro && (
         <div className="flex items-center gap-3 md:col-span-2">
-          <button className={btnPrimary}>{venue ? "고친 내용 저장" : "식당 추가"}</button>
+          <button disabled={pending} className={`${btnPrimary} disabled:opacity-60`}>{pending ? "저장하는 중" : venue ? "고친 내용 저장" : "식당 추가"}</button>
           <span className="text-[13px] text-muted">{venue ? "바뀐 칸은 처리 이력에 남아요." : "배정함이면 모집 중인 같은 동네 일정마다 2테이블씩 잡아요."}</span>
         </div>
       )}
