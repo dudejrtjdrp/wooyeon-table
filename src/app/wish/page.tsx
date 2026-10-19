@@ -11,7 +11,7 @@ import { removeWish, saveWish } from "./actions";
 export const dynamic = "force-dynamic";
 
 /** 지역 수요 조사: 지금은 서울 4곳만 열고, 나머지는 열리면 알려 달라고 남긴다 */
-export default async function Wish({ searchParams }: { searchParams: Promise<{ sido?: string; area?: string; e?: string; m?: string }> }) {
+export default async function Wish({ searchParams }: { searchParams: Promise<{ sido?: string; area?: string; e?: string; m?: string; from?: string }> }) {
   const me = await getMe();
   const sp = await searchParams;
   if (!me) redirect(`/login?next=${encodeURIComponent(`/wish${sp.area ? `?area=${encodeURIComponent(sp.area)}` : ""}`)}`);
@@ -22,7 +22,7 @@ export default async function Wish({ searchParams }: { searchParams: Promise<{ s
   const choices = (cur?.areas ?? []).filter((a) => !OPEN_REGIONS.includes(a));
 
   return (
-    <Screen title="원하는 동네 남기기" back="/rounds">
+    <Screen title="원하는 동네 남기기" back={sp.from === "home" ? "/" : "/rounds"}>
       <Toast msg={sp.m} />
       <div className="flex items-start gap-4 pt-4">
         <div className="flex-1">
@@ -35,6 +35,7 @@ export default async function Wish({ searchParams }: { searchParams: Promise<{ s
       </div>
 
       <form method="get" className="mt-6">
+        {sp.from === "home" && <input type="hidden" name="from" value="home" />}
         <p className="text-[14px] font-extrabold text-ink2">시·도</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {[...SIDOS.map((s) => s.name), "그 밖"].map((n) => (
@@ -45,6 +46,7 @@ export default async function Wish({ searchParams }: { searchParams: Promise<{ s
 
       <form action={saveWish} className="mt-6 space-y-5">
         <input type="hidden" name="sido" value={sido} />
+        {sp.from === "home" && <input type="hidden" name="from" value="home" />}
         {choices.length > 0 && (
           <fieldset>
             <legend className="text-[14px] font-extrabold text-ink2">동네</legend>
@@ -80,7 +82,7 @@ export default async function Wish({ searchParams }: { searchParams: Promise<{ s
                 {w.notified_at ? (
                   <span className="text-[13px] font-bold text-accent">열렸어요</span>
                 ) : (
-                  <form action={removeWish}><input type="hidden" name="id" value={w.id} /><button className="h-11 px-2 text-[13px] text-muted underline underline-offset-4">지우기</button></form>
+                  <form action={removeWish}><input type="hidden" name="id" value={w.id} />{sp.from === "home" && <input type="hidden" name="from" value="home" />}<button className="h-11 px-2 text-[13px] text-muted underline underline-offset-4">지우기</button></form>
                 )}
               </li>
             ))}

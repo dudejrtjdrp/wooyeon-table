@@ -8,7 +8,7 @@ import { DEFAULT_REGIONS } from "@/lib/constants";
 import { SIDOS } from "@/lib/regions";
 import { fmtDateTime, fmtDay, fmtTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
-import { addVenue, createRound, setCapacity } from "./actions";
+import { createRound, setCapacity } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -136,19 +136,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                 </tbody>
               </table>
             </div>
-            {!ro && <>
-            <p className="mt-5 text-[15px] font-bold text-ink">식당 추가</p>
-            <form action={addVenue} className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-[110px_1fr_1.4fr_120px_auto]">
-              <select name="region" className={ctl} aria-label="동네 묶음">{SIDOS.map((s) => <optgroup key={s.name} label={s.name}>{s.areas.map((x) => <option key={x}>{x}</option>)}</optgroup>)}</select>
-              <input name="name" required placeholder="식당 이름 (필수)" className={ctl} />
-              <input name="address" required placeholder="주소 (필수)" className={ctl} />
-              <input name="price" placeholder="가격대 (선택)" className={ctl} />
-              <input name="rating" type="number" step="0.1" min="0" max="5" placeholder="리뷰 평점 (예: 4.5)" className={ctl} />
-              <select name="channel" className={ctl} aria-label="예약 채널" defaultValue="naver"><option value="naver">네이버 예약</option><option value="catchtable">캐치테이블</option><option value="phone">전화 예약</option></select>
-              <input name="booking_url" placeholder="예약 페이지 주소 (선택)" className={ctl} />
-              <button className={btnPrimary}>식당 추가</button>
-            </form>
-            </>}
+            <p className="mt-4 text-[13px] text-muted">식당 추가·정보 고치기·배정 끄기는 <Link href="/admin/venues" className="font-semibold text-accent underline underline-offset-4">식당 관리</Link>에서 해요.</p>
           </Panel>
         </div>
 

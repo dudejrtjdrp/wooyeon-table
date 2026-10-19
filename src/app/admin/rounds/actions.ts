@@ -73,31 +73,6 @@ export async function createRound(form: FormData) {
   redirect(`/admin/rounds?r=${round!.id}&m=${encodeURIComponent(`'${title}' 회차를 만들었어요. 일정 ${rows.length}개, 식당 재고 ${vs.length}칸이 잡혔고 ${when}에 매칭이 자동으로 돌아요. 결과는 자동 매칭 모니터에서 볼 수 있어요`)}`);
 }
 
-export async function addVenue(form: FormData) {
-  const me = await requireAdminWrite("/admin/rounds");
-  const name = String(form.get("name") ?? "").trim();
-  const region = String(form.get("region"));
-  const address = String(form.get("address") ?? "").trim();
-  if (!name || !address) redirect(`/admin/rounds?e=${encodeURIComponent("식당 이름과 주소를 채워 주세요")}`);
-  const rating = Number(form.get("rating") ?? "");
-  const channel = String(form.get("channel") ?? "");
-  const { data: v } = await db()
-    .from("venues")
-    .insert({
-      name, region, address,
-      price_range: String(form.get("price") ?? "") || null,
-      rating: Number.isFinite(rating) && rating > 0 ? Math.min(5, rating) : null,
-      booking_channel: ["naver", "catchtable", "phone"].includes(channel) ? channel : null,
-      booking_url: String(form.get("booking_url") ?? "").trim() || null,
-    })
-    .select("id")
-    .single();
-  const { data: slots } = await db().from("slots").select("id,rounds!inner(status)").eq("region", region).eq("rounds.status", "open");
-  if (slots?.length) await db().from("venue_slots").insert(slots.map((s) => ({ venue_id: v!.id, slot_id: s.id, tables_available: 2 })));
-  await logStatus({ entityType: "venue", entityId: v!.id, field: "status", to: "created", actor: `admin:${me.id}`, reason: `식당 추가: ${region} ${name}${slots?.length ? ` (모집 중인 일정 ${slots.length}곳에 2테이블씩)` : ""}` });
-  revalidatePath("/admin/rounds");
-  redirect(`/admin/rounds?m=${encodeURIComponent(`${name}을(를) 추가했어요${slots?.length ? `. 모집 중인 일정 ${slots.length}곳에 2테이블씩 잡았어요` : ""}`)}`);
-}
 
 /** 식당 재고: 일정별로 이 식당이 받을 수 있는 테이블 수 */
 export async function setCapacity(form: FormData) {
