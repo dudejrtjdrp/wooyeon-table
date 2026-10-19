@@ -60,13 +60,13 @@ export const SAMPLE_VARS: Record<string, string> = {
   recommendation: "늘 오시던 금요일 홍대·합정·연남 · 10월 30일(금) 저녁 7:30", alternatives: "옮길 수 있는 일정: 10월 다섯째 주 저녁(10월 30일(금)·10월 31일(토), 홍대·합정·연남·강남·역삼·선릉). ",
 };
 
-/** 단체방 하루 전 공지의 {reservation_line}. 식당이 아직 없으면 예약명 대신 테이블 화면 안내 */
+/** 단체방 하루 전 공지의 {reservation_line}. 식당이 아직 없으면 예약명 대신 모임 정보 안내 */
 export const reservationLine = (reservation: string | null | undefined) =>
-  reservation ? `예약명은 '${reservation}'이에요.` : "식당과 예약명은 테이블 화면에서 확인해 주세요.";
+  reservation ? `예약명은 '${reservation}'이에요.` : "식당과 예약명은 모임 정보에서 확인해 주세요.";
 
 /** 확정 알림의 {venue_info}. 식당이 정해졌으면 예약명, 아직이면 언제 알려 주는지 */
 export const venueInfo = (venue: string | null | undefined, reservation: string | null | undefined) =>
-  venue ? `예약명은 '${reservation ?? "우연한식탁"}'이에요. 주소와 지도는 테이블 화면에서 볼 수 있어요. ` : "식당은 정해지는 대로 단체방과 알림으로 알려 드릴게요. ";
+  venue ? `예약명은 '${reservation ?? "우연한식탁"}'이에요. 주소와 지도는 모임 정보에서 볼 수 있어요. ` : "식당은 정해지는 대로 단체방과 알림으로 알려 드릴게요. ";
 
 export async function loadTemplates(): Promise<Record<string, { title?: string; body?: string }>> {
   const { data } = await db().from("settings").select("value").eq("key", "msg.templates").maybeSingle();

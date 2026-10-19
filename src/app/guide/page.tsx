@@ -202,7 +202,7 @@ export default async function Guide() {
 
         <Step n={7} who="참가자 (확정된 사람)" title="참가자가 단체방에서 매칭 결과·식당·큐레이션·행사 안내를 본다"
           actions={ok ? <><As login={ok.users.login_id} to={`/tables/${ok.table_id}`}>확정된 참가자 {withRo(ok.users.name)} · 테이블</As><As login={ok.users.login_id} to={`/tables/${ok.table_id}/chat`}>단체방</As></> : afterDeadline}>
-          <p>확정된 참가자로 들어가면 홈에 <b>테이블과 단체방 보기</b>가 떠요. 테이블 화면에서 함께 묶인 이유와 식당을, 단체방에서 안내 공지를 확인해요.</p>
+          <p>확정된 참가자로 들어가면 홈에 <b>모임 정보 보기</b>가 떠요. 모임 정보에서 함께 묶인 이유와 식당을, 단체방에서 안내 공지를 확인해요.</p>
         </Step>
 
         <Step n={8} who="참가자 (매칭 못 된 사람)" title="매칭 못 된 참가자에게 다른 일정을 추천하고, 이동·환불 선택이 자동 처리된다"

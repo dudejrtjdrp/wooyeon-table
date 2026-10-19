@@ -15,3 +15,17 @@ export const failureMoment = (logged: Date, matchAt?: string | null) => (matchAt
 /** 본인이 '참석했는데 체크인을 못 했어요'라고 알린 노쇼 후보를 사유 문장에서 알아보는 표시 (화면 세 곳이 같은 값을 쓴다) */
 export const CLAIM_MARK = "체크인을 못 했어요";
 export const isClaimed = (reason: string | null | undefined) => (reason ?? "").includes(CLAIM_MARK);
+
+/**
+ * 끝난 모임에서 참석 확인·후기 안내 한 줄. 신청 상세·후기 화면이 같은 문장을 쓴다(모임 정보 화면의 버튼과 맞게).
+ * - 체크인함: 후기 남기기
+ * - 체크인 없음, 알릴 수 있는 기한 안, 아직 안 알림: 모임 정보에서 알려 달라
+ * - 이미 알림: 운영팀 확인 중
+ * - 기한 지남: 후기는 못 남기고 문의하기로
+ */
+export function afterMeetingNote(o: { attended: boolean; canClaim: boolean; claimed: boolean }): { text: string; contact: boolean } {
+  if (o.attended) return { text: "모임이 끝났어요. 후기는 '모임 정보 보기'에서 남길 수 있어요.", contact: false };
+  if (o.claimed) return { text: "참석했다고 알려 주셨어요. 운영팀이 확인하면 후기를 남길 수 있어요.", contact: false };
+  if (o.canClaim) return { text: "체크인 기록이 없어요. 참석했다면 '모임 정보 보기'에서 '참석했는데 체크인을 못 했어요'를 눌러 주세요.", contact: false };
+  return { text: "체크인 기록이 없어 후기는 남길 수 없어요. 참석했다면 문의하기로 알려 주세요.", contact: true };
+}

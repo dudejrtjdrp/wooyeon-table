@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canClaimAttended, failureMoment, shouldNudgeCheckIn } from "./attendance-rules";
+import { afterMeetingNote, canClaimAttended, failureMoment, shouldNudgeCheckIn } from "./attendance-rules";
 
 const at = (s: string) => new Date(`2026-10-23T${s}:00+09:00`);
 const start = at("19:30"), end = at("22:00");
@@ -21,5 +21,14 @@ describe("체크인 시간 판정", () => {
     expect(failureMoment(logged, "2026-10-28T00:00:00+09:00").toISOString()).toBe(new Date("2026-10-28T00:00:00+09:00").toISOString());
     expect(failureMoment(logged, "2026-10-01T00:00:00+09:00")).toBe(logged);
     expect(failureMoment(logged, null)).toBe(logged);
+  });
+});
+
+describe("끝난 모임 안내", () => {
+  it("참석·알림 여부·기한에 따라 할 수 있는 일만 말한다", () => {
+    expect(afterMeetingNote({ attended: true, canClaim: false, claimed: false }).text).toContain("후기는");
+    expect(afterMeetingNote({ attended: false, canClaim: true, claimed: false }).text).toContain("참석했는데 체크인을 못 했어요");
+    expect(afterMeetingNote({ attended: false, canClaim: true, claimed: true }).text).toContain("운영팀이 확인");
+    expect(afterMeetingNote({ attended: false, canClaim: false, claimed: false })).toMatchObject({ contact: true });
   });
 });
