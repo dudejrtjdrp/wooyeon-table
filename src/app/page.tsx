@@ -161,7 +161,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
               <Link key={`${u.roundId}${u.startsAt}`} href={`/apply/${u.roundId}`} className="flex w-[216px] shrink-0 snap-start flex-col gap-1.5 rounded-[16px] bg-card p-4 active:bg-line2">
                 <span className="self-start rounded-full bg-field px-2.5 py-1 text-[12px] font-semibold text-ink2">{ddayLabel(dday(u.startsAt, t))} · {u.regions.length}개 동네</span>
                 <span className="mt-1 text-[16px] font-bold text-ink">{fmtSlot(u.startsAt)}</span>
-                <span className="text-[13px] text-muted">{fmtDay(u.deadline)} 마감 · {won(PASSES.single.amount)}</span>
+                <span className="text-[13px] text-muted">{fmtSlot(u.deadline)} 마감 · {won(PASSES.single.amount)}</span>
               </Link>
             ))}
           </div>
