@@ -11,11 +11,11 @@ const CHECK = (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
 
-const Dot = ({ on }: { on: boolean }) => <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${on ? "bg-accent" : "bg-dot"}`}>{on && CHECK}</span>;
+const Dot = ({ on }: { on: boolean }) => <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${on ? "bg-accent" : "border-2 border-box bg-card"}`}>{on && CHECK}</span>;
 
-/** 태그: 고른 동네는 초록, 옆 동네는 연한 초록, 조금 멀어요는 회색 */
+/** 태그: 고른 동네는 주홍, 옆 동네는 연한 주홍, 조금 멀어요는 회색 (앱 색과 맞춤) */
 const Tag = ({ t }: { t: string }) => (
-  <span className={`inline-flex h-6 shrink-0 items-center rounded-[12px] px-2 text-[12px] font-bold ${t === "고른 동네" ? "bg-accent text-white" : t === "옆 동네" ? "bg-[#CFE3D8] text-accent-text" : "bg-[#EEF1EF] text-ink2"}`}>{t}</span>
+  <span className={`inline-flex h-6 shrink-0 items-center rounded-[12px] px-2 text-[12px] font-bold ${t === "고른 동네" ? "bg-accent text-white" : t === "옆 동네" ? "bg-accent-soft text-accent-text" : "bg-field text-ink2"}`}>{t}</span>
 );
 
 

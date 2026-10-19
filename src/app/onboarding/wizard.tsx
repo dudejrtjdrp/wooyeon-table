@@ -44,7 +44,7 @@ function Row({ on, onClick, children, sub, disabled, right }: { on: boolean; onC
         {sub && <span className={`mt-0.5 block text-[13px] font-normal ${on ? "text-ink2" : "text-muted"}`}>{sub}</span>}
       </span>
       {right}
-      <span className={`flex size-6 shrink-0 items-center justify-center rounded-full transition ${on ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
+      <span className={`flex size-6 shrink-0 items-center justify-center rounded-full transition ${on ? "bg-accent" : "border-2 border-box bg-card"}`}>{on && CHECK}</span>
     </button>
   );
 }
@@ -312,7 +312,7 @@ export function OnboardingWizard({
               onClick={() => setV((c) => ({ ...c, agree_terms: !allAgree, agree_privacy: !allAgree, agree_policy: !allAgree, agree_marketing: !allAgree }))}
               className={`flex h-16 w-full items-center gap-3 rounded-[16px] px-[18px] text-left transition ${allAgree ? "bg-accent-soft" : "bg-row"}`}
             >
-              <span className={`flex size-[26px] items-center justify-center rounded-full ${allAgree ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
+              <span className={`flex size-[26px] items-center justify-center rounded-full ${allAgree ? "bg-accent" : "border-2 border-box bg-card"}`}>{allAgree && CHECK}</span>
               <span className={`text-[17px] font-extrabold ${allAgree ? "text-accent-text" : "text-ink"}`}>모두 동의할게요</span>
             </button>
             <ul className="mt-2.5 px-2">
@@ -324,7 +324,8 @@ export function OnboardingWizard({
               ] as const).map(([k, tag, label, d]) => (
                 <li key={k} className="flex items-center gap-1">
                   <button type="button" role="checkbox" aria-checked={v[k]} onClick={() => set(k, !v[k])} className="flex min-h-[52px] flex-1 items-center gap-3 text-left">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={v[k] ? "var(--accent)" : "#c9d2cd"} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                    {/* 안 고르면 빈 칸, 고르면 채운 칸 + 체크 (회색 체크는 고른 것처럼 보여서 쓰지 않는다) */}
+                    <span className={`flex size-[22px] shrink-0 items-center justify-center rounded-[6px] ${v[k] ? "bg-accent" : "border-2 border-box bg-card"}`}>{v[k] && CHECK}</span>
                     <span className="text-[15px] text-ink2"><span className={`font-bold ${tag === "[필수]" ? "text-accent" : "text-faint"}`}>{tag}</span> {label}</span>
                   </button>
                   {d && <button type="button" onClick={() => setDoc(d)} className="flex h-11 items-center px-2 text-[13px] text-faint underline underline-offset-[3px]">보기</button>}

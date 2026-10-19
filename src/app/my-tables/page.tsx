@@ -13,7 +13,7 @@ import { maybeTick } from "@/lib/pipeline";
 export const dynamic = "force-dynamic";
 
 type A = {
-  id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null;
+  id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; resolution: string | null;
   table_id: string | null; created_at: string;
   rounds: { title: string; match_at: string };
   dining_tables: { id: string; slots: { starts_at: string; region: string } | null; venues: { name: string; address: string; price_range: string | null } | null } | null;
@@ -26,7 +26,7 @@ export default async function MyTables() {
   const t = await now();
   const { data } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,table_id,created_at,rounds(title,match_at),dining_tables(id,slots(starts_at,region),venues(name,address,price_range))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at),dining_tables(id,slots(starts_at,region),venues(name,address,price_range))")
     .eq("user_id", me.id)
     .order("created_at", { ascending: false });
   const apps = (data ?? []) as unknown as A[];
@@ -81,15 +81,22 @@ export default async function MyTables() {
         );
       })}
 
-      {pending.length > 0 && !upcoming.length && (
-        <Link href="/rounds" className="mt-5 flex min-h-[64px] items-center justify-between rounded-[18px] bg-card px-5 py-3">
-          <span>
-            <span className="block text-[16px] font-extrabold">진행 중인 신청 {pending.length}건</span>
-            <span className="mt-0.5 block text-[13px] text-muted">테이블이 정해지면 여기서 단체방이 열려요.</span>
-          </span>
-          <ChevronRight size={18} className="shrink-0 text-[#9a8c7e]" />
-        </Link>
-      )}
+      {/* 진행 중인 신청: 상태를 그대로 보여 주고, 매칭 실패면 '단체방이 열려요' 대신 다음 방법 고르기로 보낸다 */}
+      {pending.length > 0 && !upcoming.length && (() => {
+        const a = pending[0];
+        const h = headline(a, t);
+        const failed = a.match_status === "ALTERNATIVE_OFFERED" && a.resolution !== "wait";
+        return (
+          <Link href={pending.length > 1 ? "/rounds" : failed ? `/applications/${a.id}/resolve` : `/applications/${a.id}`} className="mt-5 flex min-h-[64px] items-center gap-3 rounded-[18px] bg-card px-5 py-3">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[16px] font-extrabold">{pending.length > 1 ? `진행 중인 신청 ${pending.length}건` : a.rounds.title}</span>
+              <span className="mt-0.5 block text-[13px] text-muted">{failed ? "다음 방법을 골라 주세요." : "테이블이 정해지면 여기서 단체방이 열려요."}</span>
+            </span>
+            {pending.length === 1 && <Pill tone={h.tone}>{h.label}</Pill>}
+            <ChevronRight size={18} className="shrink-0 text-[#9a8c7e]" />
+          </Link>
+        );
+      })()}
 
       {past.length > 0 && (
         <>
