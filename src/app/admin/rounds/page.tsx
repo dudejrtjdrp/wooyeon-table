@@ -111,8 +111,10 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   const help = "mt-1.5 block text-[12px] text-muted";
   const rid = cur?.id;
   // 고치기·식당 재고 탭에서 회차를 바꿔도 같은 탭에 머문다
-  // 회차 복제: 저장하지 않고 새 회차 탭을 이 회차 값(다음 주 같은 요일)으로 채워 연다
-  const copyHref = (x: { title: string; slots: { region: string; starts_at: string; ends_at: string; max_tables: number }[] }) => copyRoundHref(copyRoundDraft(x, t));
+  // 회차 복제: 저장하지 않고 새 회차 탭을 이 회차 값(같은 요일, 열 수 있는 가장 가까운 주)으로 채워 연다
+  const { data: takenRows } = await db().from("slots").select("region,starts_at,rounds!inner(status)").gte("starts_at", t.toISOString()).neq("rounds.status", "closed");
+  const taken = (takenRows ?? []).map((x) => ({ region: x.region as string, starts_at: x.starts_at as string }));
+  const copyHref = (x: { title: string; slots: { region: string; starts_at: string; ends_at: string; max_tables: number }[] }) => copyRoundHref(copyRoundDraft(x, t, taken));
   const pickerIn = (k: RoundTab) => <RoundPicker rounds={picker} current={rid} extra={<input type="hidden" name="tab" value={k} />} />;
 
   return (
@@ -139,7 +141,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
               <>
                 {draft.from && (
                   <p className="mb-4 rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-[13px] text-ink" aria-live="polite">
-                    &lsquo;{draft.from}&rsquo;의 요일·시각·동네·최대 테이블을 채웠어요. 날짜는 같은 요일 다음 주로 잡았으니 확인하고 고쳐 주세요. 아직 저장한 건 없어요.
+                    &lsquo;{draft.from}&rsquo;의 요일·시각·동네·최대 테이블을 채웠어요. 날짜는 같은 요일로, 마감이 안 지났고 이미 열린 회차와 겹치지 않는 가장 가까운 주로 잡았으니 확인하고 고쳐 주세요. 아직 저장한 건 없어요.
                   </p>
                 )}
                 <p className="mb-5 text-[13px] text-muted">이름·날짜·동네만 채우면 마감과 매칭 시각은 운영 규칙대로 잡혀요. 만들면 날짜×동네마다 <Term tip={TIP.slot}>일정</Term>이 생기고, 그 동네 제휴 식당이 일정마다 2테이블씩 잡혀요.</p>

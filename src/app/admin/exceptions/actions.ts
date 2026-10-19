@@ -32,7 +32,7 @@ export async function reopenException(form: FormData) {
   };
   const { data: ex } = await db().from("exceptions").select("id,kind,status,resolution,ref_type,ref_id").eq("id", id).maybeSingle();
   if (!ex) return go("e", "이 예외를 찾지 못했어요. 이미 지워졌을 수 있어요");
-  const check = canReopen({ status: ex.status, note: form.get("note"), kind: ex.kind });
+  const check = canReopen({ status: ex.status, note: form.get("note"), kind: ex.kind, refType: ex.ref_type });
   if (!check.ok) return go("e", check.reason);
   // 처리 결과 칸은 비워 열린 상태로 돌린다. 이전 처리(누가·무엇)는 처리 이력에 그대로 남는다
   const { data: changed } = await db().from("exceptions").update({ status: "open", resolution: null, resolved_by: null, resolved_at: null }).eq("id", id).eq("status", "resolved").select("id");

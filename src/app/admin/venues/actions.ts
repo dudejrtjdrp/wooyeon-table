@@ -221,7 +221,7 @@ export async function toggleVenue(form: FormData) {
 }
 
 /**
- * 식당 지우기. 아무 데도 안 쓰인 식당만 지운다(사진도 함께). 배정·예약·재고 기록이 있으면 지우지 않고 '배정 끄기'를 안내한다.
+ * 식당 지우기. 배정된 테이블·예약 기록이 없는 식당만 지운다(일정별 재고·사진은 함께). 기록이 있으면 지우지 않고 '배정 끄기'를 안내한다.
  * 처리 이력은 식당이 사라져도 남는다(status_events는 식당 id만 들고 있다)
  */
 export async function deleteVenue(form: FormData) {
@@ -229,7 +229,9 @@ export async function deleteVenue(form: FormData) {
   const id = String(form.get("id") ?? "");
   const { data: cur } = await db().from("venues").select("id,name,region,active,photo_url").eq("id", id).maybeSingle();
   if (!cur) redirect(`/admin/venues?e=${encodeURIComponent("식당을 찾지 못했어요. 이미 지워졌을 수 있어요")}`);
-  const check = canDeleteVenue(await venueUsage(id));
+  const usage = await venueUsage(id).catch(() => null);
+  if (!usage) redirect(`/admin/venues/${id}?e=${encodeURIComponent("이 식당이 쓰인 기록을 확인하지 못해 지우지 않았어요. 잠시 뒤 다시 해 주세요")}`);
+  const check = canDeleteVenue(usage);
   if (!check.ok) redirect(`/admin/venues/${id}?e=${encodeURIComponent(check.reason)}`);
   // 한 번에 지운다: 일정별 재고(venue_slots)와 사진(venue_photos)은 외래 키 on delete cascade로 함께 지워지고,
   // 그 사이 배정·예약이 생겼으면 외래 키에 걸려 아무것도 지워지지 않는다(반쯤 지워진 상태가 생기지 않게)

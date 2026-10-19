@@ -35,7 +35,8 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
   const rows = ((inv ?? []) as unknown as { slot_id: string; tables_available: number; slots: { starts_at: string; region: string; rounds: { title: string; status: string } } }[])
     .sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at));
   // 지우기: 배정·예약 기록이 하나도 없을 때만 (기록 보존). 일정별 재고는 함께 정리
-  const del = canDeleteVenue(await venueUsage(id));
+  const usage = await venueUsage(id).catch(() => null);
+  const del = usage ? canDeleteVenue(usage) : ({ ok: false, reason: "쓰인 기록을 확인하지 못해 지금은 지울 수 없어요. 잠시 뒤 새로고침해 주세요" } as const);
   const usedIn = (sid: string) => (used ?? []).filter((u) => u.slot_id === sid).length;
 
   return (

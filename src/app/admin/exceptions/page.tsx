@@ -9,7 +9,7 @@ import { db } from "@/lib/supabase";
 import { PageHeader, Term } from "@/components/admin-ui";
 import { TIP, reasonText } from "@/lib/admin-glossary";
 import { ConfirmButton } from "../confirm-button";
-import { EXCEPTION_VIEWS, REOPEN_ELSEWHERE, exceptionsHref, openRank, parseExceptionView, reopenConfirm, sortOpenFirst, viewStatus } from "@/lib/exception-view";
+import { EXCEPTION_VIEWS, exceptionsHref, reopenElsewhere, openRank, parseExceptionView, reopenConfirm, sortOpenFirst, viewStatus } from "@/lib/exception-view";
 import { ADMIN_NOTE_MIN } from "@/lib/cancel-rules";
 import { reopenException, resolveException } from "./actions";
 
@@ -148,7 +148,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
     <div>
       <PageHeader
         title="예외 처리함"
-        desc={<>자동으로 풀지 못한 일(<Term tip={TIP.예외}>예외</Term>)만 모았어요. 오래된 것부터 보여 줘요. 정상 흐름은 여기에 올라오지 않아요.</>}
+        desc={<>자동으로 풀지 못한 일(<Term tip={TIP.예외}>예외</Term>)만 모았어요. 처리할 것은 오래된 것부터 보여 줘요. 정상 흐름은 여기에 올라오지 않아요.</>}
         how={["위 유형 버튼으로 거르기", "'왜'와 '먼저 할 일' 읽기", "카드 아래 버튼 하나 누르기 (메모는 선택)", "처리한 건은 '처리한 것'에서 확인·다시 열기"]}
       />
       <nav aria-label="예외 보기" className="mt-6 flex gap-1 overflow-x-auto border-b border-line">
@@ -220,12 +220,12 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                   처리됨 · {e.resolution ?? "처리 완료"} · {e.resolved_by ? `운영자 ${resolverName.get(e.resolved_by) ?? ""}` : "자동"}{e.resolved_at ? ` · ${fmtDateTime(e.resolved_at)}` : ""}
                 </p>
               )}
-              {e.status === "resolved" && canAct && REOPEN_ELSEWHERE[e.kind] && (
+              {e.status === "resolved" && canAct && reopenElsewhere(e.kind, e.ref_type, e.ref_id) && (
                 <p className="mt-3 text-[13px] text-muted">
-                  {REOPEN_ELSEWHERE[e.kind]}. <Link href="/admin/attendance" className="font-semibold text-accent-text underline underline-offset-4">참석 관리로</Link>
+                  {reopenElsewhere(e.kind, e.ref_type, e.ref_id)!.reason}. <Link href={reopenElsewhere(e.kind, e.ref_type, e.ref_id)!.href} className="font-semibold text-accent-text underline underline-offset-4">{reopenElsewhere(e.kind, e.ref_type, e.ref_id)!.label}</Link>
                 </p>
               )}
-              {e.status === "resolved" && canAct && !REOPEN_ELSEWHERE[e.kind] && (
+              {e.status === "resolved" && canAct && !reopenElsewhere(e.kind, e.ref_type, e.ref_id) && (
                 <form action={reopenException} className="mt-3 flex flex-wrap items-center gap-2">
                   <input type="hidden" name="id" value={e.id} />
                   <input type="hidden" name="back" value={back} />

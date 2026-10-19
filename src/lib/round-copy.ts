@@ -42,24 +42,39 @@ export function nextWeekTitle(title: string, firstDate: string): string | null {
 }
 
 /**
- * 복제 값 만들기. 날짜는 같은 요일로 한 주씩 미루되, 신청 마감(모임 주 화요일 밤 12시)이 아직 안 지난 가장 가까운 주로 잡는다.
+ * 복제 값 만들기. 날짜는 같은 요일로 한 주씩 미루되, 신청 마감(모임 주 화요일 밤 12시)이 아직 안 지났고
+ * 이미 열린 회차와 날짜·동네가 겹치지 않는 가장 가까운 주로 잡는다.
  * 마감·매칭 시각은 비워 두어 새 날짜에 맞춰 운영 규칙대로 다시 잡히게 한다. 일정이 없으면 이름만 채운다
  */
-export function copyRoundDraft(src: CopySource, now: Date): RoundDraft {
+/** 이미 열려 있는 일정(취소·종료 회차 제외). 같은 날짜·같은 동네면 겹친다고 본다 */
+export type TakenSlot = { region: string; starts_at: string };
+
+/** 새로 만들 일정 중 이미 있는 일정과 같은 날짜·동네인 것들 ("10월 30일 홍대·합정·연남") */
+export function slotClashes(rows: { region: string; date: string }[], taken: TakenSlot[]): { region: string; date: string }[] {
+  const key = (region: string, date: string) => `${date}|${region}`;
+  const have = new Set(taken.map((t) => key(t.region, kstDate(t.starts_at))));
+  return rows.filter((r) => have.has(key(r.region, r.date)));
+}
+
+export function copyRoundDraft(src: CopySource, now: Date, taken: TakenSlot[] = []): RoundDraft {
   const slots = [...src.slots].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   if (!slots.length) return { title: `${src.title} (복사)`, from: src.title };
   const first = slots[0];
   const time = kstClock(first.starts_at);
   const duration = Math.max(60, Math.round((Date.parse(first.ends_at) - Date.parse(first.starts_at)) / 60_000));
   const dates0 = [...new Set(slots.map((s) => kstDate(s.starts_at)))].slice(0, COPY_MAX_DATES);
+  const regions0 = [...new Set(slots.map((s) => s.region))];
+  // 마감이 안 지났고, 이미 열린 회차와 같은 날짜·동네가 하나도 없는 가장 가까운 주
   let weeks = 1;
   while (weeks < 60) {
-    const cut = roundCutoff(dates0.map((d) => `${addDays(d, weeks * 7)}T${time}:00+09:00`));
-    if (cut && cut.getTime() > now.getTime()) break;
+    const ds = dates0.map((d) => addDays(d, weeks * 7));
+    const cut = roundCutoff(ds.map((d) => `${d}T${time}:00+09:00`));
+    const clash = slotClashes(ds.flatMap((date) => regions0.map((region) => ({ region, date }))), taken).length > 0;
+    if (cut && cut.getTime() > now.getTime() && !clash) break;
     weeks++;
   }
   const dates = dates0.map((d) => addDays(d, weeks * 7));
-  const regions = [...new Set(slots.map((s) => s.region))];
+  const regions = regions0;
   const maxTables = Math.max(...slots.map((s) => s.max_tables || 1));
   return {
     title: nextWeekTitle(src.title, dates[0]) ?? `${src.title} (복사)`,

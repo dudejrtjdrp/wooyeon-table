@@ -39,13 +39,21 @@ export const viewStatus = (v: ExceptionView): "open" | "resolved" | null => (v =
  * 다시 열 수 있나. 처리한 건만, 사유(4자 이상)를 적어야 연다.
  * 다시 열어도 처리하면서 바뀐 데이터(환불·제재·배정 등)는 그대로 둔다. 확인 문구에 그 점을 적는다
  */
-/** 다시 열 수 없는 종류와 대신 갈 곳. 노쇼 후보는 다시 열어도 참석 상태가 정해져 있어 정정으로 이어지지 않는다 */
-export const REOPEN_ELSEWHERE: Record<string, string> = {
-  no_show: "노쇼 후보는 다시 열지 않아요. 참석을 바로잡으려면 참석 관리에서 '참석 예정으로 되돌리기'를 해 주세요",
-};
+/**
+ * 다시 열 수 없는 예외와 대신 바로잡을 곳. 노쇼는 다시 열어도 참석·계정 상태가 이미 정해져 있어 정정으로 이어지지 않는다.
+ * - 노쇼 후보(신청 단위): 참석 관리의 '참석 예정으로 되돌리기'
+ * - 노쇼 누적 제한 검토(회원 단위, ref_type user): 회원 상세의 계정 상태 바꾸기
+ */
+export function reopenElsewhere(kind: string, refType?: string | null, refId?: string | null): { reason: string; href: string; label: string } | null {
+  if (kind !== "no_show") return null;
+  if (refType === "user")
+    return { reason: "노쇼 누적 제한 검토는 다시 열지 않아요. 제한을 풀거나 걸려면 회원 상세에서 계정 상태를 바꿔 주세요", href: refId ? `/admin/members/${refId}` : "/admin/members", label: "회원 상세로" };
+  return { reason: "노쇼 후보는 다시 열지 않아요. 참석을 바로잡으려면 참석 관리에서 '참석 예정으로 되돌리기'를 해 주세요", href: "/admin/attendance", label: "참석 관리로" };
+}
 
-export function canReopen(o: { status: string; note: unknown; kind?: string }): { ok: true; note: string } | { ok: false; reason: string } {
-  if (o.kind && REOPEN_ELSEWHERE[o.kind]) return { ok: false, reason: REOPEN_ELSEWHERE[o.kind] };
+export function canReopen(o: { status: string; note: unknown; kind?: string; refType?: string | null }): { ok: true; note: string } | { ok: false; reason: string } {
+  const elsewhere = o.kind ? reopenElsewhere(o.kind, o.refType) : null;
+  if (elsewhere) return { ok: false, reason: elsewhere.reason };
   if (o.status !== "resolved") return { ok: false, reason: "이미 열려 있는 예외예요" };
   const note = cleanNote(o.note);
   if (!note) return { ok: false, reason: "다시 여는 이유를 4자 이상 적어 주세요" };

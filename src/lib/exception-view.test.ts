@@ -30,6 +30,10 @@ describe("다시 열기", () => {
     expect(ns.ok).toBe(false);
     if (!ns.ok) expect(ns.reason).toContain("참석 예정으로 되돌리기");
     expect(canReopen({ status: "resolved", note: "다시 검토할게요", kind: "safety" }).ok).toBe(true);
+    // 노쇼 누적 제한 검토(회원 단위)는 회원 상세로
+    const rv = canReopen({ status: "resolved", note: "제한을 풀어야 해요", kind: "no_show", refType: "user" });
+    expect(rv.ok).toBe(false);
+    if (!rv.ok) expect(rv.reason).toContain("회원 상세");
   });
   it("확인 문구에 바뀐 데이터는 되돌리지 않는다고 적는다", () => {
     expect(reopenConfirm("노쇼 확정")).toContain("(노쇼 확정)은 되돌리지 않아요");

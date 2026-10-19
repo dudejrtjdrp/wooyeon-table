@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyRoundDraft, copyRoundHref, nextWeekTitle } from "./round-copy";
+import { copyRoundDraft, copyRoundHref, nextWeekTitle, slotClashes } from "./round-copy";
 
 const slot = (region: string, start: string, max = 4, minutes = 150) => ({ region, starts_at: start, ends_at: new Date(Date.parse(start) + minutes * 60_000).toISOString(), max_tables: max });
 // 10월 23일(금)·24일(토) 저녁 7:30 (서울)
@@ -7,7 +7,7 @@ const SRC = { title: "10월 넷째 주 저녁", slots: [slot("홍대", "2026-10-
 const MON = new Date("2026-10-19T00:00:00Z"); // 10월 19일(월) 오전 9시
 
 describe("회차 복제 값", () => {
-  it("같은 요일 다음 주로 날짜를, 시각·진행 시간·동네·최대 테이블을 그대로 채운다", () => {
+  it("겹치는 회차가 없으면 같은 요일 다음 주로 날짜를, 시각·진행 시간·동네·최대 테이블을 그대로 채운다", () => {
     const d = copyRoundDraft(SRC, MON);
     expect(d.dates).toEqual(["2026-10-30", "2026-10-31"]);
     expect(d.time).toBe("19:30");
@@ -31,6 +31,19 @@ describe("회차 복제 값", () => {
     expect(new Date("2026-10-23T00:00:00Z").getUTCDay()).toBe(5); // 금요일 그대로
     expect(d.time).toBe("19:00");
     expect(d.title).toBe("10월 넷째 주 저녁");
+  });
+  it("이미 열린 회차와 같은 날짜·동네가 있는 주는 건너뛴다", () => {
+    // 10월 30일 홍대가 이미 다른 회차에 있으면 그다음 주로
+    const d = copyRoundDraft(SRC, MON, [{ region: "홍대", starts_at: "2026-10-30T10:30:00Z" }]);
+    expect(d.dates).toEqual(["2026-11-06", "2026-11-07"]);
+    // 다른 동네만 겹치면 그대로 다음 주
+    expect(copyRoundDraft(SRC, MON, [{ region: "강남", starts_at: "2026-10-30T10:30:00Z" }]).dates).toEqual(["2026-10-30", "2026-10-31"]);
+  });
+  it("겹치는 일정을 서울 날짜 기준으로 찾는다", () => {
+    // 10월 30일 밤 11시(서울)는 UTC로 30일 14시 → 같은 날
+    expect(slotClashes([{ region: "홍대", date: "2026-10-30" }, { region: "잠실", date: "2026-10-30" }], [{ region: "홍대", starts_at: "2026-10-30T14:00:00Z" }])).toEqual([{ region: "홍대", date: "2026-10-30" }]);
+    // 10월 31일 새벽 1시(서울)는 다른 날
+    expect(slotClashes([{ region: "홍대", date: "2026-10-30" }], [{ region: "홍대", starts_at: "2026-10-30T16:00:00Z" }])).toEqual([]);
   });
   it("날짜 칸이 두 개라 앞의 두 날짜만 옮긴다", () => {
     const d = copyRoundDraft({ title: "주말", slots: [slot("홍대", "2026-10-23T10:30:00Z"), slot("홍대", "2026-10-24T10:30:00Z"), slot("홍대", "2026-10-25T10:30:00Z")] }, MON);

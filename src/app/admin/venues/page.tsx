@@ -42,7 +42,7 @@ export default async function Venues({ searchParams }: { searchParams: Promise<R
         <Panel title={`제휴 식당 ${venues.length}곳 · ${regions.length}개 동네${noPhoto ? ` · 사진 없는 곳 ${noPhoto}곳` : ""}`}>
           {/* 거르기는 주소에 남는다(새로 고침·공유해도 같은 목록) */}
           <form className="mb-4 flex flex-wrap items-end gap-2" role="search" aria-label="식당 찾기">
-            <label className="block min-w-48 flex-1"><span className="text-[12px] font-semibold text-muted">이름·주소</span><input name="q" defaultValue={f.q} placeholder="예: 을지로, 파스타" className={`${ctl} mt-1 w-full`} /></label>
+            <label className="block min-w-48 flex-1"><span className="text-[12px] font-semibold text-muted">이름·주소</span><input name="q" defaultValue={f.q} placeholder="예: 을지로, 한식당" className={`${ctl} mt-1 w-full`} /></label>
             <label className="block"><span className="text-[12px] font-semibold text-muted">동네</span>
               <select name="region" defaultValue={f.region ?? ""} className={`${ctl} mt-1 block`}><option value="">모든 동네</option>{regions.map((r) => <option key={r} value={r}>{r}</option>)}</select>
             </label>
