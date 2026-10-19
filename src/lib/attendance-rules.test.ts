@@ -30,5 +30,7 @@ describe("끝난 모임 안내", () => {
     expect(afterMeetingNote({ attended: false, canClaim: true, claimed: false }).text).toContain("참석했는데 체크인을 못 했어요");
     expect(afterMeetingNote({ attended: false, canClaim: true, claimed: true }).text).toContain("운영팀이 확인");
     expect(afterMeetingNote({ attended: false, canClaim: false, claimed: false })).toMatchObject({ contact: true });
+    // 알린 뒤 운영자가 노쇼로 정했으면 '확인 중'이 아니라 문의하기
+    expect(afterMeetingNote({ attended: false, canClaim: false, claimed: true, status: "NO_SHOW" })).toMatchObject({ contact: true });
   });
 });

@@ -52,7 +52,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const ended = app.match_status === "CONFIRMED" && app.attendance_status === "SCHEDULED" && endedAt !== null && endedAt <= t.getTime();
   // 체크인 없이 끝난 모임: 알릴 수 있는 기한·이미 알렸는지에 따라 할 수 있는 일만 안내 (모임 정보·후기 화면과 같은 문장)
   const claimed = ended ? Boolean((await db().from("status_events").select("id").eq("entity_id", app.id).eq("field", "attendance_claim").limit(1)).data?.length) : false;
-  const afterNote = ended ? afterMeetingNote({ attended: false, canClaim: canClaimAttended(app.attendance_status, new Date(app.dining_tables!.slots.ends_at), t), claimed }) : null;
+  const afterNote = ended ? afterMeetingNote({ attended: false, canClaim: canClaimAttended(app.attendance_status, new Date(app.dining_tables!.slots.ends_at), t), claimed, status: app.attendance_status }) : null;
   const h = ended && afterNote
     ? { ...h0, label: "지난 모임", tone: "muted" as const, desc: afterNote.text }
     : h0;
