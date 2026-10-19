@@ -39,7 +39,8 @@ export default async function Feedback({ params, searchParams }: { params: Promi
     <Screen title="모임 후기" back={`/tables/${id}`}>
       {blocked ? (
         <>
-          <PageTitle className="mt-4" title="후기는 참석한 분만" accent="남길 수 있어요" sub={note ? note.text : "모임이 끝나고 체크인한 분만 후기를 남길 수 있어요."} />
+          <PageTitle className="mt-4" title="후기는 참석한 분만" accent="남길 수 있어요" sub={note ? note.text : "모임이 끝나면 체크인한 분이 후기를 남길 수 있어요."} />
+          <p className="mt-4 text-[13px] text-muted">불편한 일이 있었다면 참석 여부와 상관없이 아래에서 신고할 수 있어요.</p>
           <div className="mt-6 flex flex-col gap-2">
             {note?.contact ? (
               <Link href="/help" className="flex h-[52px] items-center justify-center rounded-[14px] bg-accent text-[16px] font-extrabold text-white">문의하기</Link>
