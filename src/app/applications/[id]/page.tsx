@@ -42,7 +42,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     rounds: { id: string; title: string; match_at: string; apply_deadline: string };
     application_slots: { slots: Slot }[];
   } | null;
-  if (!app || app.user_id !== me.id) redirect("/");
+  if (!app || app.user_id !== me.id) redirect(`/?m=${encodeURIComponent("이 신청을 찾지 못했어요. 내 신청은 일정 탭에서 볼 수 있어요")}`);
 
   const t = await now();
   const h = headline(app, t);

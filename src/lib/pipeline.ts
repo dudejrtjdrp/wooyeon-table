@@ -563,7 +563,20 @@ async function feedbackSafetyNet(t: Date, tpl: Awaited<ReturnType<typeof loadTem
  * 하루 전 리마인드를 보내는 순간의 정보로 다시 쓴다. 키는 remind:<신청 id>(운영자가 옮긴 경우 remind:<신청 id>:<테이블 id>).
  * 이제 보낼 이유가 없으면(취소·테이블 해제) null, 같은 신청에 이미 리마인드가 나갔어도 null.
  */
-async function freshReminder(notificationId: string, key: string, tpl: Awaited<ReturnType<typeof loadTemplates>>): Promise<{ title: string; body: string; link: string } | null> {
+/**
+ * 단체방 하루 전 안내를 지금 식당·예약명으로 다시 쓴다.
+ * 테이블이 해제됐거나 모임이 시작됐으면 skip(다시 올릴 이유가 없음). 테이블을 못 찾으면 body 없이 돌려 원래 문구를 쓰게 한다
+ */
+export async function freshRoomReminder(tableId: string): Promise<{ skip?: true; body?: string }> {
+  const { data } = await db().from("dining_tables").select("id,status,reservation_name,slots(starts_at,region),venues(name)").eq("id", tableId).maybeSingle();
+  const tb = data as unknown as { status: string; reservation_name: string | null; slots: { starts_at: string; region: string } | null; venues: { name: string } | null } | null;
+  if (!tb?.slots) return {};
+  if (["DISSOLVED", "DONE", "IN_PROGRESS"].includes(tb.status) || new Date(tb.slots.starts_at) <= (await now())) return { skip: true };
+  const tpl = await loadTemplates();
+  return { body: render("reminder_chat", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "", reservation: tb.reservation_name ?? "", reservation_line: reservationLine(tb.reservation_name) }, tpl).body };
+}
+
+export async function freshReminder(notificationId: string, key: string, tpl: Awaited<ReturnType<typeof loadTemplates>>): Promise<{ title: string; body: string; link: string } | null> {
   const appId = key.split(":")[1];
   const { data: app } = await db().from("applications").select("id,match_status,attendance_status,table_id").eq("id", appId).maybeSingle();
   if (!app || app.match_status !== "CONFIRMED" || app.attendance_status !== "SCHEDULED" || !app.table_id) return null;

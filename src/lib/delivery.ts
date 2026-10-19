@@ -94,7 +94,15 @@ export async function retrySystemMessages(nowMs = Date.now()): Promise<number> {
   for (const [key, f] of byKey) {
     if (done.has(key) || f.tries >= MAX_TRIES) continue;
     if (nowMs - f.last < RETRY_GAP_MIN * 60_000) continue;
-    await postSystem(f.roomId, f.p.body, { dedupeKey: key, meta: f.p.meta, retry: true });
+    // 하루 전 안내는 지금 식당·예약명으로 다시 쓰고, 해제·시작된 테이블이면 올리지 않는다 (운영자 다시 보내기와 같은 판단)
+    let body = f.p.body;
+    if (key.startsWith("remind:")) {
+      const { freshRoomReminder } = await import("./pipeline");
+      const fresh = await freshRoomReminder(key.slice("remind:".length));
+      if (fresh.skip) continue;
+      body = fresh.body ?? body;
+    }
+    await postSystem(f.roomId, body, { dedupeKey: key, meta: f.p.meta, retry: true });
     n++;
   }
   return n;
@@ -115,6 +123,13 @@ export async function resendSystem(exceptionKey: string): Promise<boolean> {
     .maybeSingle();
   if (!data) return false;
   const p = JSON.parse(data.reason ?? "{}") as Payload;
+  // 하루 전 안내는 실패 당시 문구가 아니라 지금 식당·예약명으로 다시 쓴다. 테이블이 해제됐거나 이미 시작했으면 올리지 않는다
+  if (key.startsWith("remind:")) {
+    const { freshRoomReminder } = await import("./pipeline");
+    const fresh = await freshRoomReminder(key.slice("remind:".length));
+    if (fresh.skip) return false;
+    return postSystem(data.entity_id, fresh.body ?? p.body, { dedupeKey: key, meta: p.meta, retry: true });
+  }
   return postSystem(data.entity_id, p.body, { dedupeKey: key, meta: p.meta, retry: true });
 }
 
@@ -153,4 +168,62 @@ export async function retryPushes(nowMs = Date.now()): Promise<number> {
   const { pushNotifications } = await import("./push");
   await pushNotifications(due);
   return due.length;
+}
+
+/**
+ * 운영자가 알림 한 건을 다시 보낸다 (자동 메시지 화면에서. 예외 처리함의 '다시 보내기'도 이 함수를 쓴다).
+ * 알림함 저장이 실패했던 알림(failed)은 알림함에 넣고, 푸시도 다시 보낸다. 등록 기기가 없거나 알림함 전용 알림이면 알림함만으로 성공.
+ * 성공하면 이 알림 때문에 열려 있던 발송 실패 예외도 닫는다
+ */
+/** 다시 보낼 이유가 사라졌으면 그 까닭(사람 말). 하루 전 안내는 지금 식당·예약명으로 다시 쓴다 */
+async function staleOrFresh(id: string, key: string | null): Promise<{ skip?: string; patch?: { title: string; body: string; link: string } }> {
+  if (!key) return {};
+  const appId = key.split(":")[1];
+  if (key.startsWith("remind:")) {
+    const { freshReminder } = await import("./pipeline");
+    const { loadTemplates } = await import("./templates");
+    const fresh = await freshReminder(id, key, await loadTemplates());
+    return fresh ? { patch: fresh } : { skip: "참석이 취소됐거나 테이블이 바뀌었거나 이미 안내가 나가, 다시 보내지 않았어요" };
+  }
+  if (key.startsWith("payment_pending:")) {
+    const { data: a } = await db().from("applications").select("application_status,payment_status").eq("id", appId).maybeSingle();
+    if (!a || a.application_status === "CANCELED" || !["PENDING", "FAILED"].includes(a.payment_status)) return { skip: "이미 결제했거나 취소된 신청이라 결제 안내를 다시 보내지 않았어요" };
+  }
+  if (key.startsWith("feedback:") || key.startsWith("feedback-remind:")) {
+    const { data: f } = await db().from("feedbacks").select("application_id").eq("application_id", appId).maybeSingle();
+    if (f) return { skip: "이미 후기를 남겨 후기 요청을 다시 보내지 않았어요" };
+  }
+  return {};
+}
+
+export async function resendNotification(id: string, adminId: string): Promise<{ ok: boolean; skipped?: string }> {
+  const { now } = await import("./clock");
+  const t = (await now()).toISOString();
+  const { data: before } = await db().from("notifications").select("status,sent_at,dedupe_key").eq("id", id).maybeSingle();
+  if (!before) return { ok: false };
+  const check = await staleOrFresh(id, before.dedupe_key);
+  // 이유가 사라진 알림은 보내지 않는다 (상태값은 pending·sent·failed뿐이라 그대로 두고 까닭만 알린다)
+  if (check.skip) return { ok: false, skipped: check.skip };
+  const { error } = await db()
+    .from("notifications")
+    .update({ ...(check.patch ?? {}), status: "sent", sent_at: before.status === "sent" ? before.sent_at : t, last_error: null })
+    .eq("id", id);
+  if (error) return { ok: false };
+  const { pushNotifications } = await import("./push");
+  await pushNotifications([id]);
+  const { data: n } = await db().from("notifications").select("status,last_error").eq("id", id).maybeSingle();
+  const ok = n?.status === "sent" && !n.last_error;
+  if (ok) {
+    const resolution = "자동 메시지 화면에서 다시 보내기 성공";
+    const { data: closed } = await db()
+      .from("exceptions")
+      .update({ status: "resolved", resolution, resolved_by: adminId, resolved_at: t })
+      .eq("kind", "notification")
+      .eq("ref_type", "notification")
+      .eq("ref_id", id)
+      .eq("status", "open")
+      .select("id");
+    for (const x of closed ?? []) await logStatus({ entityType: "exception", entityId: x.id, field: "status", from: "open", to: "resolved", actor: `admin:${adminId}`, reason: resolution }).catch(() => null);
+  }
+  return { ok };
 }

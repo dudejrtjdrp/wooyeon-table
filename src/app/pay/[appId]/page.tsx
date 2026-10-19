@@ -20,7 +20,7 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
     .eq("id", appId)
     .maybeSingle();
   const app = data as unknown as { id: string; user_id: string; payment_id: string; payment_status: string; rounds: { title: string; match_at: string }; payments: { amount: number; pass_type: PassType; status: string } } | null;
-  if (!app || app.user_id !== me.id) redirect("/");
+  if (!app || app.user_id !== me.id) redirect(`/?m=${encodeURIComponent("이 결제 화면을 찾지 못했어요. 내 신청은 일정 탭에서 볼 수 있어요")}`);
   if (app.payments.status === "PAID") redirect(`/applications/${appId}`);
   const passDef = PASSES[app.payments.pass_type] ?? PASSES.single;
   // 매칭 시각이 지난 뒤에는 결제를 받지 않는다. 받으면 이미 끝난 매칭에 돈만 내게 된다

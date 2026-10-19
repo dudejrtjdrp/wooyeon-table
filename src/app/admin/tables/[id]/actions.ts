@@ -27,6 +27,21 @@ export async function emergencyAction(form: FormData) {
   back(r.ok ? "m" : "e", r.message);
 }
 
+/** 운영자가 테이블 식당을 바꾼다 (모임 시작 전, 같은 동네·일정에서 자리가 남은 식당). 사유 필수 */
+export async function venueAction(form: FormData) {
+  const tableId = String(form.get("table_id"));
+  const me = await requireAdminWrite(`/admin/tables/${tableId}#venue`);
+  const back = (k: "m" | "e", msg: string) => redirect(`/admin/tables/${tableId}?${k}=${encodeURIComponent(msg)}#venue`);
+  const reason = String(form.get("reason") ?? "").trim();
+  const bad = checkReason(reason);
+  if (bad) back("e", bad.message);
+  const venueId = String(form.get("venue_id") ?? "");
+  if (!venueId) back("e", "바꿀 식당을 골라 주세요");
+  const { swapVenue } = await import("@/lib/admin-manual");
+  const r = await swapVenue(tableId, venueId, reason, me.id);
+  back(r.ok ? "m" : "e", r.message);
+}
+
 /** 식당 예약: 다시 시도하거나, 운영자가 직접 예약한 것으로 표시 */
 export async function reservationAction(form: FormData) {
   const tableId = String(form.get("table_id"));

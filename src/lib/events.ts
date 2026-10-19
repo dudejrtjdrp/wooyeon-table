@@ -10,8 +10,9 @@ export async function logStatus(e: {
   actor: string;
   reason?: string;
   matchRunId?: string;
-}) {
-  await db().from("status_events").insert({
+}): Promise<string | null> {
+  // 기록 id를 돌려준다: 이 변경에 묶인 알림 중복 방지 키 등에 쓴다
+  const { data } = await db().from("status_events").insert({
     entity_type: e.entityType,
     entity_id: e.entityId,
     field: e.field,
@@ -20,5 +21,6 @@ export async function logStatus(e: {
     actor: e.actor,
     reason: e.reason ?? null,
     match_run_id: e.matchRunId ?? null,
-  });
+  }).select("id").maybeSingle();
+  return data?.id != null ? String(data.id) : null;
 }

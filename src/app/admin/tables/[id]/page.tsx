@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, PageHeader, Panel } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, btnInk, ctl } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/format";
 import { ATTEND, actorLabel, ageBand, eventText, label } from "@/lib/labels";
@@ -12,7 +12,10 @@ import { TYPE_LABEL } from "@/lib/contents";
 import { pickContents } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
-import { reservationAction } from "./actions";
+import { canSwapVenue } from "@/lib/admin-manual-rules";
+import { venueSwapOptions } from "@/lib/admin-manual";
+import { ConfirmButton } from "../../confirm-button";
+import { reservationAction, venueAction } from "./actions";
 import { OpsPanel } from "./ops-panel";
 
 const OFFER: Record<string, [string, "muted" | "accent" | "leaf" | "danger"]> = {
@@ -63,7 +66,11 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
     active ? seatCandidates(id) : Promise.resolve([]),
   ]);
   // 생년 전체 대신 연령대와 테이블 나이 차만 보여 준다(8살 규칙 확인용)
-  const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "numeric" }).format(await now()));
+  const clock = await now();
+  const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "numeric" }).format(clock));
+  // 운영자 식당 바꾸기: 모임 시작 전, 같은 동네·일정에서 자리가 남은 식당만 (lib/admin-manual-rules.ts)
+  const swap = canSwapVenue({ status: t.status, hasVenue: !!t.venues, startsAt: t.slots.starts_at, now: clock });
+  const swapOptions = swap.ok && me.level === "full" ? await venueSwapOptions(id) : [];
   const years = members.map((m) => m.users.profiles?.birth_year).filter((y): y is number => !!y);
   const ageGap = years.length ? Math.max(...years) - Math.min(...years) : null;
   const seated = members.filter((m) => m.attendance_status === "SCHEDULED" || m.attendance_status === "ATTENDED");
@@ -137,6 +144,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
             </ul>
             {active && <p className="mt-2 text-[12px] text-muted">다음 순서 대기자 {waiters.length}명{waiters.length ? `: ${waiters.slice(0, 3).map((w) => w.name).join(", ")}` : ""}</p>}
           </Panel>
+          <div id="venue" className="scroll-mt-6">
           <Panel title="식당">
             {t.venues ? (
               <dl className="space-y-1.5 text-[14px]">
@@ -148,7 +156,38 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
                 <div><dt className="inline text-muted">시간 </dt><dd className="inline">{fmtTime(t.slots.starts_at)}~{fmtTime(t.slots.ends_at)}</dd></div>
               </dl>
             ) : <p className="text-[14px] text-danger">배정된 식당이 없어요. 예외 처리함에서 다시 배정할 수 있어요.</p>}
+            {t.venues && me.level === "full" && (
+              <details className="group mt-4 rounded-xl border border-line open:bg-paper/60">
+                <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">
+                  <span className="text-[14px] font-semibold">식당 바꾸기</span>
+                  <span className="text-[12px] text-muted group-open:hidden">열기</span>
+                </summary>
+                <div className="space-y-2.5 px-4 pb-4">
+                  {!swap.ok ? <p className="text-[13px] text-muted">{swap.reason}</p> : !swapOptions.length ? (
+                    <p className="text-[13px] text-muted">{t.slots.region} 같은 일정에 자리가 남은 다른 식당이 없어요. <Link href="/admin/venues" className="font-semibold text-accent hover:underline">식당 재고</Link>에서 이 일정 테이블 수를 늘려 주세요.</p>
+                  ) : (
+                    <form action={venueAction} className="space-y-2.5">
+                      <input type="hidden" name="table_id" value={t.id} />
+                      <select name="venue_id" required className={`${ctl} w-full`}>
+                        {swapOptions.map((o) => (
+                          <option key={o.venueId} value={o.venueId}>
+                            {o.name} · 평점 {o.rating ?? "-"} · {CHANNEL_LABEL[(o.channel ?? "phone") as Channel]} · 남은 {o.left}테이블{o.failedBefore ? " · 예약 안 됐던 곳" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="block">
+                        <span className="text-[12px] font-semibold text-ink">사유 <span className="text-danger">(필수)</span></span>
+                        <input name="reason" required minLength={4} placeholder="예: 식당 사정으로 그날 영업 안 함" className={`${ctl} mt-1 w-full`} />
+                      </label>
+                      <p className="text-[12px] text-muted">같은 동네·같은 일정에서 자리가 남은 식당만, 평점 순이에요. 바꾸면 예약을 새로 요청하고, 첫 공지가 나간 테이블이면 단체방과 참가자에게 바로 알려요.</p>
+                      <ConfirmButton confirm={`${t.venues.name} 대신 고른 식당으로 바꾸고 예약을 새로 요청해요. 단체방과 참가자에게 바로 알려 되돌릴 수 없어요. 계속할까요?`} className={btnInk}>식당 바꾸기</ConfirmButton>
+                    </form>
+                  )}
+                </div>
+              </details>
+            )}
           </Panel>
+          </div>
           <div id="reservation" className="scroll-mt-6">
           <Panel title="식당 예약">
             {resv ? (

@@ -93,6 +93,10 @@ export const FIELD: Record<string, string> = {
   edit: "고침",
   import: "엑셀로 넣기",
   photo: "사진",
+  venue_id: "식당",
+  match_run: "매칭 실행",
+  remaining: "남은 횟수",
+  announcement: "운영자 공지",
 };
 export const fieldLabel = (f: string) => FIELD[f] ?? (f.startsWith("template:") ? "자동 메시지 문구" : f.includes(".") ? "설정" : "기타 변경");
 
@@ -106,6 +110,7 @@ const COMMON_VALUE: Record<string, string> = {
   SENT: "성공", FAILED: "실패", SUBMITTED: "제출", OFFERED: "제안", ACCEPTED: "수락", DECLINED: "거절", EXPIRED: "기한 지남", VOID: "무효",
   JOINED: "합류", REQUESTED: "요청", CONFIRMED: "확정", CANCELED: "취소", updated: "수정", created: "등록", true: "켬", false: "끔",
   pending: "보내는 중", sent: "보냄", failed: "실패", full: "전체 권한", viewer: "조회 전용", reset: "초기화", uploaded: "올림",
+  open: "열림", reviewed: "검토 끝", resolved: "처리됨",
 };
 const VALUE_MAPS: Record<string, Record<string, [string, Tone]>> = {
   payment_status: PAYMENT, match_status: MATCH, attendance_status: ATTEND, account_status: ACCOUNT, application_status: APP_STATUS,

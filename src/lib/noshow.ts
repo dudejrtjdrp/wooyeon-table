@@ -11,6 +11,15 @@ import { db } from "./supabase";
 export const NOSHOW_WINDOW_DAYS = 90;
 export const RESTRICT_DAYS = 30;
 
+/**
+ * 최근 기간 노쇼 횟수. 기간 안에 NO_SHOW로 바뀐 기록 중 지금도 노쇼인 신청만 센다
+ * (운영자가 '참석 예정으로 되돌린' 노쇼는 빼고, 되돌렸다 다시 노쇼가 된 신청도 한 번). 이번 신청은 늘 넣는다.
+ */
+export function countNoShows(events: { entity_id: string }[], stillNoShow: string[], current: string): number {
+  const live = new Set(stillNoShow);
+  return new Set([...events.map((e) => e.entity_id).filter((id) => live.has(id)), current]).size;
+}
+
 export type NoShowStep = "warn" | "restrict" | "review";
 export function noShowStep(count: number): NoShowStep {
   if (count >= 3) return "review";
@@ -21,6 +30,8 @@ export function noShowStep(count: number): NoShowStep {
 /** 노쇼가 확정된 뒤 부른다. 몇 번째인지 세고 단계에 맞게 처리한다 */
 export async function applyNoShowPolicy(userId: string, appId: string, actor: string, at = new Date()): Promise<NoShowStep> {
   const since = new Date(at.getTime() - NOSHOW_WINDOW_DAYS * 86400_000).toISOString();
+  // 운영자가 '참석 예정으로 되돌린' 노쇼는 세지 않는다: 지금도 노쇼인 신청만 (참석 관리의 실수 정정)
+  const stillNoShow = ((await db().from("applications").select("id").eq("user_id", userId).eq("attendance_status", "NO_SHOW")).data ?? []).map((a) => a.id);
   const { data } = await db()
     .from("status_events")
     .select("entity_id")
@@ -28,8 +39,8 @@ export async function applyNoShowPolicy(userId: string, appId: string, actor: st
     .eq("field", "attendance_status")
     .eq("to_value", "NO_SHOW")
     .gte("created_at", since)
-    .in("entity_id", (await db().from("applications").select("id").eq("user_id", userId)).data?.map((a) => a.id) ?? [appId]);
-  const count = new Set([...(data ?? []).map((e) => e.entity_id), appId]).size;
+    .in("entity_id", stillNoShow.length ? stillNoShow : [appId]);
+  const count = countNoShows(data ?? [], stillNoShow, appId);
   const step = noShowStep(count);
   if (step === "warn") {
     await db().from("users").update({ account_status: "warned" }).eq("id", userId).eq("account_status", "active");

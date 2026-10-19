@@ -1,11 +1,13 @@
+import { Download } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, Stat, btnDanger, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Stat, btn, btnDanger, btnLight, ctl, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { applicationLive, manualRefundCheck } from "@/lib/cancel-rules";
 import { LEGACY_PASS_LABEL, PASSES, isMembership, won } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
 import { PAYMENT, label } from "@/lib/labels";
-import { escapeLike } from "@/lib/members";
+import { PAYMENT_PAGE_SIZE, PAY_KINDS, PAY_METHODS, methodText, parsePaymentFilter, paymentFiltered, paymentSearch } from "@/lib/payment-filter";
+import { loadPaymentTotals, loadPayments } from "@/lib/payment-query";
 import { db } from "@/lib/supabase";
 import { tossLive } from "@/lib/toss";
 import { ConfirmButton } from "../confirm-button";
@@ -13,66 +15,87 @@ import { manualRefund } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function Payments({ searchParams }: { searchParams: Promise<{ s?: string; q?: string; r?: string }> }) {
+export default async function Payments({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await requireAdmin();
-  const { s, q: rawName, r } = await searchParams;
-  const name = (rawName ?? "").trim().slice(0, 40);
-  const { data: rounds } = await db().from("rounds").select("id,title").order("match_at", { ascending: false });
-  let q = db()
-    .from("payments")
-    .select("id,amount,status,provider,method,receipt_url,refund_error,pg_order_id,pass_type,paid_at,refunded_at,created_at,users(name),passes(remaining,total_count,expires_at),applications(id,match_status,attendance_status,application_status,rounds(title))")
-    .order("created_at", { ascending: false })
-    .limit(200);
-  if (s) q = q.eq("status", s);
-  // 이름은 회원에서, 회차는 그 회차 신청에 걸린 결제에서 거른다
-  let none = false;
-  if (name) {
-    const { data: us } = await db().from("users").select("id").ilike("name", `%${escapeLike(name)}%`).limit(200);
-    const ids = (us ?? []).map((u) => u.id);
-    if (ids.length) q = q.in("user_id", ids);
-    else none = true;
-  }
-  if (r) {
-    const { data: ap } = await db().from("applications").select("payment_id").eq("round_id", r).not("payment_id", "is", null);
-    const ids = [...new Set((ap ?? []).map((a) => a.payment_id as string))];
-    if (ids.length) q = q.in("id", ids);
-    else none = true;
-  }
-  const { data } = none ? { data: [] } : await q;
-  const rows = (data ?? []) as unknown as {
-    id: string; amount: number; status: string; provider: string; method: string | null; receipt_url: string | null; refund_error: string | null; pg_order_id: string | null; pass_type: string | null; paid_at: string | null; refunded_at: string | null; created_at: string;
-    users: { name: string }; passes: { remaining: number; total_count: number; expires_at: string | null } | null;
-    applications: { id: string; match_status: string; attendance_status: string | null; application_status: string; rounds: { title: string } }[];
-  }[];
-  const back = `/admin/payments?${new URLSearchParams(Object.entries({ q: name, r: r ?? "", s: s ?? "" }).filter(([, v]) => v)).toString()}`.replace(/\?$/, "");
-  const { data: all } = await db().from("payments").select("amount,status,provider");
-  const paidSum = (all ?? []).filter((p) => ["PAID"].includes(p.status)).reduce((n, p) => n + p.amount, 0);
-  const refunded = (all ?? []).filter((p) => p.status === "REFUNDED");
-  const failedRefund = (all ?? []).filter((p) => p.status === "REFUND_FAILED").length;
-  const passUses = (all ?? []).filter((p) => p.provider === "pass").length;
+  const f = parsePaymentFilter(await searchParams);
+  const [{ data: rounds }, { rows, total }, sum] = await Promise.all([
+    db().from("rounds").select("id,title").order("match_at", { ascending: false }),
+    loadPayments(f),
+    loadPaymentTotals(f),
+  ]);
+  const filtered = paymentFiltered(f);
+  const pages = Math.max(1, Math.ceil(total / PAYMENT_PAGE_SIZE));
+  const back = `/admin/payments${paymentSearch(f)}`;
 
   return (
     <div>
-      <PageHeader title="결제·환불" desc={`결제, 자동 환불, 환불 실패, 이용권 사용 내역이에요. 결제는 토스페이먼츠${tossLive() ? "" : " 테스트 모드"}로 승인·취소돼요.`} />
-      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="결제 완료 금액" value={won(paidSum)} />
-        <Stat label="자동 환불" value={`${refunded.length}건`} sub={won(refunded.reduce((n, p) => n + p.amount, 0))} />
-        <Stat label="환불 실패" value={`${failedRefund}건`} tone={failedRefund ? "danger" : undefined} sub="실패만 예외 처리함으로 가요" />
-        <Stat label="보유 이용권 사용" value={`${passUses}건`} sub="결제 없이 신청한 건" />
+      <PageHeader
+        title="결제·환불"
+        desc={`결제, 자동 환불, 환불 실패, 이용권 사용 내역이에요. 결제는 토스페이먼츠${tossLive() ? "" : " 테스트 모드"}로 승인·취소돼요.`}
+        actions={
+          <a href={`/api/admin/payments${paymentSearch(f, 1)}`} className={btnLight} download>
+            <Download size={16} />CSV 내려받기
+          </a>
+        }
+      />
+      <p className="mt-6 text-[13px] text-muted">{filtered ? `아래 숫자는 거른 조건에 맞는 ${sum.count.toLocaleString("ko-KR")}건 기준이에요.` : "아래 숫자는 전체 결제 기준이에요."}</p>
+      <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label="결제 완료 금액" value={won(sum.paidSum)} />
+        <Stat label="자동 환불" value={`${sum.refundedN}건`} sub={won(sum.refundedSum)} />
+        <Stat label="환불 실패" value={`${sum.failedRefund}건`} tone={sum.failedRefund ? "danger" : undefined} sub="실패만 예외 처리함으로 가요" />
+        <Stat label="보유 이용권 사용" value={`${sum.passUses}건`} sub="결제 없이 신청한 건" />
       </div>
-      <form className="mt-6 flex flex-wrap gap-2">
-        <input name="q" defaultValue={name} placeholder="참가자 이름" aria-label="참가자 이름" className={`${ctl} w-44`} />
-        <select name="r" defaultValue={r ?? ""} aria-label="회차" className={ctl}>
-          <option value="">모든 회차</option>
-          {rounds?.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
-        </select>
-        <select name="s" defaultValue={s ?? ""} aria-label="결제 상태" className={ctl}>
-          <option value="">모든 상태</option>
-          {Object.entries(PAYMENT).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}
-        </select>
-        <button className={btnLight}>보기</button>
+      <form className="shadow-card mt-6 grid gap-3 rounded-[20px] bg-card p-5 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))]">
+        <label className="block">
+          <span className="text-[13px] font-semibold text-ink">참가자 이름</span>
+          <input type="search" name="q" defaultValue={f.q} placeholder="이름 일부" className={`${ctl} mt-1.5 w-full`} />
+        </label>
+        <label className="block">
+          <span className="text-[13px] font-semibold text-ink">회차</span>
+          <select name="r" defaultValue={f.r ?? ""} className={`${ctl} mt-1.5 w-full`}>
+            <option value="">모든 회차</option>
+            {rounds?.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[13px] font-semibold text-ink">상태</span>
+          <select name="s" defaultValue={f.s ?? ""} className={`${ctl} mt-1.5 w-full`}>
+            <option value="">모든 상태</option>
+            {Object.entries(PAYMENT).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[13px] font-semibold text-ink">종류</span>
+          <select name="kind" defaultValue={f.kind ?? ""} className={`${ctl} mt-1.5 w-full`}>
+            <option value="">모든 종류</option>
+            {PAY_KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[13px] font-semibold text-ink">결제 수단</span>
+          <select name="method" defaultValue={f.method ?? ""} className={`${ctl} mt-1.5 w-full`}>
+            <option value="">모든 수단</option>
+            {PAY_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+        </label>
+        <div className="block">
+          <span className="text-[13px] font-semibold text-ink">결제일</span>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <input type="date" name="from" defaultValue={f.from} aria-label="결제일 시작" className={`${ctl} min-w-0 flex-1 px-2`} />
+            <span className="text-muted">~</span>
+            <input type="date" name="to" defaultValue={f.to} aria-label="결제일 끝" className={`${ctl} min-w-0 flex-1 px-2`} />
+          </div>
+        </div>
+        <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
+          <button className={`${btn} bg-accent text-white`}>거르기</button>
+          {filtered && <Link href="/admin/payments" className={btnLight}>처음으로</Link>}
+          <span className="ml-auto text-[12px] text-muted">결제일은 서울 날짜예요. 아직 결제 전인 건은 만든 날로 봐요.</span>
+        </div>
       </form>
-      <div className="mt-3 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
+      <p className="mt-5 text-[14px] text-muted">
+        {total === 0 ? "" : `${filtered ? "거른 결과" : "모두"} ${total.toLocaleString("ko-KR")}건 · 최신순${pages > 1 ? ` · ${PAYMENT_PAGE_SIZE}건씩` : ""}`}
+      </p>
+      <div className="mt-2 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
         <table className="w-full min-w-[1040px] text-[14px]">
           <thead className="border-b border-line"><tr>{["시각", "참가자", "회차", "이용권", "결제 수단", "금액", "상태", "이용권 남은 횟수", "환불 시각", "환불"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">
@@ -84,8 +107,8 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                 <td className={td}>{p.provider === "pass" ? "보유 이용권 사용" : (PASSES[p.pass_type as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[p.pass_type ?? ""]) ?? "-"}</td>
                 <td className={td}>
                   {p.provider === "toss" ? (
-                    <span>토스 · {p.method ?? "카드"}{p.receipt_url ? <> · <a href={p.receipt_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">영수증</a></> : null}</span>
-                  ) : p.provider === "pass" ? "-" : <span className="text-muted">모의 결제</span>}
+                    <span>{methodText(p)}{p.receipt_url ? <> · <a href={p.receipt_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">영수증</a></> : null}</span>
+                  ) : p.provider === "pass" ? "-" : <span className="text-muted">{methodText(p)}</span>}
                   {p.refund_error && <p className="mt-0.5 text-[12px] text-danger">{p.refund_error}</p>}
                 </td>
                 <td className={`${td} tabular-nums`}>{won(p.amount)}</td>
@@ -124,8 +147,15 @@ export default async function Payments({ searchParams }: { searchParams: Promise
             ))}
           </tbody>
         </table>
-        {!rows.length && <p className="p-10 text-center text-muted">{name || r || s ? "조건에 맞는 결제가 없어요. 거르기를 풀어 보세요." : "결제 내역이 없어요."}</p>}
+        {!rows.length && <p className="p-10 text-center text-muted">{filtered ? "조건에 맞는 결제가 없어요. 거르기를 풀어 보세요." : f.page > 1 ? "이 쪽에는 결제가 없어요. 앞 쪽으로 가 보세요." : "결제 내역이 없어요."}</p>}
       </div>
+      {pages > 1 && (
+        <nav aria-label="쪽 넘기기" className="mt-4 flex items-center justify-center gap-2">
+          {f.page > 1 ? <Link href={`/admin/payments${paymentSearch(f, f.page - 1)}`} className={btnLight}>이전</Link> : <span className={`${btnLight} pointer-events-none opacity-40`}>이전</span>}
+          <span className="px-3 text-[14px] tabular-nums text-muted">{f.page} / {pages}쪽</span>
+          {f.page < pages ? <Link href={`/admin/payments${paymentSearch(f, f.page + 1)}`} className={btnLight}>다음</Link> : <span className={`${btnLight} pointer-events-none opacity-40`}>다음</span>}
+        </nav>
+      )}
     </div>
   );
 }

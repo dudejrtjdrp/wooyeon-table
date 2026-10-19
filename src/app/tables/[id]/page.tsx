@@ -37,7 +37,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
     venues: { name: string; address: string; map_url: string | null; price_range: string | null; rating: number | null; review_count: number | null; photo_url: string | null; category: string | null } | null;
     rounds: { title: string };
   } | null;
-  if (!t) redirect("/");
+  if (!t) redirect(`/?m=${encodeURIComponent("이 모임을 찾지 못했어요. 내 모임은 단체방 탭에서 볼 수 있어요")}`);
 
   const { data: resv } = await db().from("reservations").select("channel,status,external_ref").eq("table_id", id).maybeSingle();
   const { data: memRaw } = await db()
@@ -48,7 +48,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   type P = { job: string | null; gender: string; birth_year: number; interests: string[] | null; food_restrictions: string | null };
   const mems = (memRaw ?? []) as unknown as { id: string; user_id: string; attendance_status: string; users: { name: string; profiles: P | null } }[];
   const mine = mems.find((m) => m.user_id === me.id);
-  if (!mine && me.role !== "admin") redirect("/");
+  if (!mine && me.role !== "admin") redirect(`/?m=${encodeURIComponent("함께하는 모임만 열 수 있어요")}`);
 
   const n = await now();
   const start = new Date(t.slots.starts_at);
