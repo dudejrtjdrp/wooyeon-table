@@ -28,7 +28,8 @@ export default async function Venues({ searchParams }: { searchParams: Promise<R
   const ro = me.level === "viewer";
   const { data } = await db().from("venues").select("id,name,region,category,address,price_range,rating,review_count,booking_channel,photo_url,active").order("region").order("name");
   const venues = (data ?? []) as V[];
-  const noPhoto = venues.filter((v) => !v.photo_url).length;
+  // 배정 중인 식당만 센다(쉬는 식당은 참가자에게 안 보인다)
+  const noPhoto = venues.filter((v) => v.active && !v.photo_url).length;
   const regions = [...new Set(venues.map((v) => v.region))];
   const shown = filterVenues(venues, f);
   const filtered = venueFiltered(f);
@@ -38,7 +39,7 @@ export default async function Venues({ searchParams }: { searchParams: Promise<R
       <PageHeader
         title="식당 관리"
         desc="제휴 식당 목록이에요. 테이블이 확정되면 이 목록에서 동네·시간·인원·평점·예약 채널을 보고 자동으로 배정해요."
-        how={["'식당 추가'로 한 곳씩, '엑셀로 가져오기'로 여러 곳 넣기", "아래 칸으로 찾고 거르기 (사진 없는 곳도)", "식당 이름을 눌러 고치기·배정 끄기·지우기", <>일정별 <Term tip={TIP.식당재고}>식당 재고</Term>는 회차·식당 재고에서</>]}
+        how={["'식당 추가'로 한 곳씩, '엑셀로 가져오기'로 여러 곳 넣기", "아래 칸에서 조건으로 찾기 (사진 없는 곳도)", "식당 이름을 눌러 고치기·배정 끄기·지우기", <>일정별 <Term tip={TIP.식당재고}>식당 재고</Term>는 회차·식당 재고에서</>]}
         actions={ro ? (
           <a href="/admin/venues/template?filled=1" download className={linkBtn}><Download size={16} aria-hidden="true" />지금 식당 내려받기</a>
         ) : (
@@ -84,7 +85,7 @@ export default async function Venues({ searchParams }: { searchParams: Promise<R
               <select name="ch" defaultValue={f.ch ?? ""} className={`${ctl} mt-1 block`}><option value="">전체</option>{(Object.keys(CHANNEL_LABEL) as Channel[]).map((c) => <option key={c} value={c}>{CHANNEL_LABEL[c]}</option>)}<option value={CHANNEL_NONE}>비어 있음</option></select>
             </label>
             <button className={btnLight}>찾기</button>
-            {filtered && <Link href="/admin/venues" className="inline-flex h-11 items-center px-2 text-[13px] font-semibold text-muted hover:text-ink">거르기 풀기</Link>}
+            {filtered && <Link href="/admin/venues" className="inline-flex h-11 items-center px-2 text-[13px] font-semibold text-muted hover:text-ink">조건 풀기</Link>}
           </form>
           {filtered && <p className="mb-2 text-[13px] text-muted" aria-live="polite">{venues.length}곳 중 {shown.length}곳</p>}
           <TableScroll className="" label="식당 표">
@@ -110,7 +111,7 @@ export default async function Venues({ searchParams }: { searchParams: Promise<R
                       <p className="text-[12px] text-muted">{[v.category, v.address].filter(Boolean).join(" · ")}</p>
                     </td>
                     <td className={`${td} whitespace-nowrap text-muted`}>{v.price_range ?? "-"}</td>
-                    <td className={`${td} whitespace-nowrap text-muted`}>{v.rating ? `${v.rating}${v.review_count ? ` (후기 ${v.review_count}개)` : ""}` : "-"}</td>
+                    <td className={`${td} whitespace-nowrap text-muted`}>{v.rating ? `${Number(v.rating).toFixed(1)}${v.review_count ? ` (후기 ${v.review_count}개)` : ""}` : "-"}</td>
                     <td className={`${td} whitespace-nowrap text-muted`}>{v.booking_channel ? CHANNEL_LABEL[v.booking_channel as Channel] : "-"}</td>
                     <td className={td}><Badge v={v.active ? ["배정함", "leaf"] : ["쉬는 중", "muted"]} /></td>
                     <td className={td}>{!ro && <VenuePhotoButton venueId={v.id} has={Boolean(v.photo_url)} action={uploadVenuePhoto} />}</td>
@@ -118,7 +119,7 @@ export default async function Venues({ searchParams }: { searchParams: Promise<R
                 ))}
               </tbody>
             </table>
-            {!!venues.length && !shown.length && <p className="p-8 text-center text-muted">찾는 조건에 맞는 식당이 없어요. <Link href="/admin/venues" className="font-semibold text-accent underline underline-offset-4">거르기 풀기</Link></p>}
+            {!!venues.length && !shown.length && <p className="p-8 text-center text-muted">찾는 조건에 맞는 식당이 없어요. <Link href="/admin/venues" className="font-semibold text-accent underline underline-offset-4">조건 풀기</Link></p>}
             {!venues.length && <p className="p-8 text-center text-muted">아직 식당이 없어요. 위 &lsquo;식당 추가&rsquo;로 한 곳씩, 또는 &lsquo;엑셀로 가져오기&rsquo;로 한 번에 넣어 보세요.</p>}
           </TableScroll>
         </Panel>

@@ -113,7 +113,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
         <span className="inline-flex h-7 items-center rounded-full bg-leaf-soft px-3 text-[13px] font-semibold text-leaf">{status}{!done && ` · ${ddayLabel(dday(t.slots.starts_at, n))}`}</span>
         <h1 className="mt-3 text-[24px] font-bold leading-snug">{t.venues ? t.venues.name : "식당을 정하고 있어요"}</h1>
         <p className="mt-1 text-[14px] text-muted">
-          {[t.venues?.category, t.venues?.rating ? `평점 ${t.venues.rating}${t.venues.review_count ? ` · 리뷰 ${t.venues.review_count}` : ""}` : null].filter(Boolean).join(" · ") || t.rounds.title}
+          {[t.venues?.category, t.venues?.rating ? `평점 ${Number(t.venues.rating).toFixed(1)}${t.venues.review_count ? ` · 리뷰 ${t.venues.review_count}` : ""}` : null].filter(Boolean).join(" · ") || t.rounds.title}
         </p>
 
         <section className="mt-5 grid grid-cols-3 rounded-[18px] bg-card" aria-label="핵심 정보">
