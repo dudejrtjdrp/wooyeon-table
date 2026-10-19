@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Badge, Panel, btnLight } from "@/components/admin-ui";
 import { Required } from "@/components/ui";
-import { fmtDate, fmtDateTime } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtSlot } from "@/lib/format";
+import { type PrefItem, type PrefRow, prefListIds, prefLists } from "@/lib/pref-list";
 import { type Block, type Pref, type Relation, personRelations, relationIds, reportStatusText } from "@/lib/safety-rules";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "../confirm-button";
@@ -46,23 +47,57 @@ function People({ title, rows, names, empty }: { title: string; rows: Relation[]
   );
 }
 
+type TableInfo = { id: string; slots: { starts_at: string; region: string } | null; venues: { name: string } | null };
+
+/** 고른/받은 '또 만나고 싶어요'·'다시는 싫어요' 목록: 누구 · 어느 모임 · 언제 */
+function PrefTable({ title, rows, names, tables, empty }: { title: string; rows: PrefItem[]; names: Map<string, string>; tables: Map<string, TableInfo>; empty: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[13px] font-semibold text-ink">{title} <span className="font-normal text-muted">{rows.length}건</span></p>
+      {!rows.length ? <p className="mt-1 text-[13px] text-muted">{empty}</p> : (
+        <ul className="mt-1.5 divide-y divide-line rounded-xl bg-paper px-3 text-[14px]">
+          {rows.map((x) => {
+            const t = tables.get(x.tableId);
+            return (
+              <li key={`${x.userId}|${x.tableId}`} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 py-2">
+                <Badge v={x.pref === "avoid" ? ["다시는 싫어요", "danger"] : ["또 만나고 싶어요", "leaf"]} />
+                <Link href={`/admin/members/${x.userId}`} className="inline-flex min-h-9 items-center font-semibold text-ink hover:text-accent">{names.get(x.userId) ?? "알 수 없음"}</Link>
+                <Link href={`/admin/tables/${x.tableId}`} className="min-w-0 text-[13px] text-ink2 underline-offset-4 hover:text-accent hover:underline">
+                  {t?.slots ? `${fmtSlot(t.slots.starts_at)} ${t.slots.region}` : "테이블"}{t?.venues ? ` · ${t.venues.name}` : ""}
+                </Link>
+                <span className="ml-auto text-[12px] tabular-nums text-muted">{fmtDate(x.at)} 고름</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /**
  * 한 사람의 비선호·차단·신고 (PRD 11장 '개인별 비선호·차단·신고 검토').
- * 회원 상세와 피드백·안전(사람별 보기)이 함께 쓴다. 비선호·차단은 비공개라 운영자 화면에서만 보인다
+ * 회원 상세와 피드백·안전(사람별 보기)이 함께 쓴다. 선호·차단은 상대 참가자에게는 안 보이고(FDB-04) 운영자 화면에서만 보인다
  */
 export async function PersonSafety({ userId, back, canWrite }: { userId: string; back: string; canWrite: boolean }) {
   // or() 조건에 그대로 들어가니 id 모양만 받는다
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) return null;
   const [{ data: prefs }, { data: blocks }, { data: reps }] = await Promise.all([
-    db().from("person_prefs").select("from_user,to_user,pref,created_at").or(`from_user.eq.${userId},to_user.eq.${userId}`).limit(500),
+    db().from("person_prefs").select("from_user,to_user,pref,table_id,created_at").or(`from_user.eq.${userId},to_user.eq.${userId}`).limit(500),
     db().from("blocks").select("blocker_id,blocked_id,created_at").or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`).limit(500),
     db().from("safety_reports").select("id,reporter_id,reported_id,reason,detail,status,action,admin_note,created_at,reviewed_at").or(`reporter_id.eq.${userId},reported_id.eq.${userId}`).order("created_at", { ascending: false }).limit(100),
   ]);
   const rel = personRelations(userId, (prefs ?? []) as Pref[], (blocks ?? []) as Block[]);
+  const pl = prefLists(userId, (prefs ?? []) as PrefRow[]);
+  const pIds = prefListIds(pl);
   const reports = (reps ?? []) as Report[];
-  const ids = [...new Set([...relationIds(rel), ...reports.flatMap((r) => [r.reporter_id, r.reported_id])])].filter((x) => x !== userId);
-  const { data: users } = ids.length ? await db().from("users").select("id,name").in("id", ids) : { data: [] };
+  const ids = [...new Set([...relationIds(rel), ...pIds.users, ...reports.flatMap((r) => [r.reporter_id, r.reported_id])])].filter((x) => x !== userId);
+  const [{ data: users }, { data: tbs }] = await Promise.all([
+    ids.length ? db().from("users").select("id,name").in("id", ids) : Promise.resolve({ data: [] }),
+    pIds.tables.length ? db().from("dining_tables").select("id,slots(starts_at,region),venues(name)").in("id", pIds.tables) : Promise.resolve({ data: [] }),
+  ]);
   const names = new Map((users ?? []).map((u) => [u.id, u.name]));
+  const tables = new Map(((tbs ?? []) as unknown as TableInfo[]).map((t) => [t.id, t]));
   const got = reports.filter((r) => r.reported_id === userId);
   const gave = reports.filter((r) => r.reporter_id === userId);
 
@@ -88,16 +123,19 @@ export async function PersonSafety({ userId, back, canWrite }: { userId: string;
 
   return (
     <div id="safety" className="space-y-4">
-      <Panel title="비선호·차단 (비공개)">
+      <Panel title="또 만나고 싶어요·다시는 싫어요" action={<Badge v={["참가자끼리는 안 보여요", "muted"]} />}>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <PrefTable title="이 회원이 고른 사람" rows={pl.gave} names={names} tables={tables} empty="모임 뒤에 고른 사람이 없어요." />
+          <PrefTable title="이 회원을 고른 사람" rows={pl.got} names={names} tables={tables} empty="이 회원을 고른 사람이 없어요." />
+        </div>
+        <p className="mt-4 rounded-xl bg-accent-soft/50 px-3 py-2 text-[13px] text-ink2">참가자가 모임 뒤에 직접 고른 것이라 운영자가 바꿀 수 없어요. 고른 그대로 다음 매칭에 들어가요.</p>
+      </Panel>
+      <Panel title="차단" action={<Badge v={["참가자끼리는 안 보여요", "muted"]} />}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <People title="이 회원이 '다시는 싫어요'" rows={rel.gaveAvoid} names={names} empty="남긴 적 없어요." />
-          <People title="이 회원에게 '다시는 싫어요'" rows={rel.gotAvoid} names={names} empty="받은 적 없어요." />
           <People title="이 회원이 차단" rows={rel.gaveBlock} names={names} empty="차단한 사람이 없어요." />
           <People title="이 회원을 차단" rows={rel.gotBlock} names={names} empty="차단한 사람이 없어요." />
         </div>
-        <p className="mt-4 text-[13px] text-muted">
-          &lsquo;또 만나고 싶어요&rsquo; 남김 {rel.gaveAgain}건 · 받음 {rel.gotAgain}건. 비선호·차단·신고 관계인 사람과는 다음 매칭에서 같은 테이블에 앉지 않아요.
-        </p>
+        <p className="mt-4 text-[13px] text-muted">&lsquo;다시는 싫어요&rsquo;·차단·신고 관계인 사람과는 다음 매칭에서 같은 테이블에 앉지 않아요.</p>
       </Panel>
       <Panel title="신고">
         <p className="text-[13px] font-semibold text-ink">받은 신고 <span className="font-normal text-muted">{got.length}건</span></p>

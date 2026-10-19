@@ -1,3 +1,4 @@
+import { TableScroll } from "@/components/table-scroll";
 import Link from "next/link";
 import { Badge, PageHeader, btnLight, ctl, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
@@ -60,7 +61,7 @@ export default async function Members({ searchParams }: { searchParams: Promise<
           {raw?.trim() ? "두 글자 이상 적어 주세요. 연락처는 뒤 4자리만 적어도 돼요." : "찾을 회원의 이름이나 연락처 뒤 4자리를 적어 주세요."}
         </p>
       ) : (
-        <div className="mt-3 shadow-card overflow-x-auto rounded-[20px] bg-card px-2 pb-2">
+        <TableScroll className="mt-3 shadow-card rounded-[20px] bg-card px-2 pb-2" label="회원 표">
           <table className="w-full min-w-[820px] text-[14px]">
             <thead className="border-b border-line">
               <tr>{["이름", "로그인 ID", "연락처", "프로필", "계정", "신청", "참석", "가입"].map((h) => <th key={h} className={th}>{h}</th>)}</tr>
@@ -88,7 +89,7 @@ export default async function Members({ searchParams }: { searchParams: Promise<
           </table>
           {!rows.length && <p className="p-10 text-center text-muted">맞는 회원이 없어요. 이름 일부나 연락처 뒤 4자리로 다시 찾아보세요.</p>}
           {rows.length > 0 && <p className="border-t border-line px-4 py-3 text-[14px] text-muted">{rows.length}명{rows.length >= 50 ? " (50명까지 보여요. 더 좁혀 찾아 주세요)" : ""}</p>}
-        </div>
+        </TableScroll>
       )}
     </div>
   );

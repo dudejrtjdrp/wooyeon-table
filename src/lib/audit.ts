@@ -283,7 +283,7 @@ export function auditTarget(e: Pick<AuditEvent, "entity_type" | "entity_id" | "f
     case "setting": {
       if (e.field.startsWith("template:")) {
         const k = e.field.slice(9);
-        return { kind: "자동 메시지", name: c.templateLabel?.(k) ?? k, href: "/admin/messages" };
+        return { kind: "자동 메시지", name: c.templateLabel?.(k) ?? k, href: `/admin/messages/templates#tpl-${k}` };
       }
       if (e.field.startsWith("matching.")) return { kind: "설정", name: "매칭 기준", href: "/admin/settings" };
       if (e.field.startsWith("content.")) return { kind: "설정", name: "대화 콘텐츠 규칙", href: "/admin/contents" };

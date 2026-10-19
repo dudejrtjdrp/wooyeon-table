@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // 자주 여는 순서로 묶는다: 매일 보는 것 → 모임 주간에 보는 것 → 사람 찾기 → 다음 회차 준비 → 가끔 보는 기록.
-// hint는 마우스를 올리면 뜨는 한 줄 설명(처음 온 운영자용)
-const GROUPS = [
+// hint는 마우스를 올리면 뜨는 한 줄 설명(처음 온 운영자용). subs: 화면 안의 탭(그 메뉴에 있을 때 아래에 펼쳐 보인다)
+type Item = { href: string; label: string; icon: typeof LayoutDashboard; hint: string; subs?: { href: string; label: string }[] };
+const GROUPS: { name: string; items: Item[] }[] = [
   { name: "매일", items: [
     { href: "/admin", label: "오늘 처리할 일", icon: LayoutDashboard, hint: "지금 처리할 일과 이번 회차 진행 상황을 한눈에 봐요" },
     { href: "/admin/exceptions", label: "예외 처리함", icon: AlertTriangle, hint: "자동으로 풀지 못한 일만 모았어요. 건마다 버튼 하나로 처리해요" },
@@ -20,12 +21,20 @@ const GROUPS = [
     { href: "/admin/applicants", label: "신청자", icon: Users, hint: "회차별 신청자를 결제·매칭·참석 상태로 거르고 CSV로 내려받아요" },
     { href: "/admin/members", label: "회원 찾기", icon: UserSearch, hint: "회차와 상관없이 이름이나 연락처 뒤 4자리로 회원을 찾아요" },
     { href: "/admin/payments", label: "결제·환불", icon: CreditCard, hint: "결제·자동 환불·환불 실패·이용권 사용 내역을 보고 직접 환불해요" },
-    { href: "/admin/feedback", label: "피드백·안전", icon: ShieldCheck, hint: "후기 만족도와 신고, 사람별 비선호·차단을 봐요" },
+    { href: "/admin/feedback", label: "피드백·안전", icon: ShieldCheck, hint: "만족도·후기, 안전 신고, 사람별 선호·차단을 탭으로 나눠 봐요", subs: [
+      { href: "/admin/feedback", label: "만족도·후기" },
+      { href: "/admin/feedback/reports", label: "안전 신고" },
+      { href: "/admin/feedback/person", label: "사람별 보기" },
+    ] },
   ] },
   { name: "다음 회차 준비", items: [
     { href: "/admin/rounds", label: "회차·식당 재고", icon: CalendarRange, hint: "회차를 만들고 일정별 식당이 받을 수 있는 테이블 수를 정해요" },
     { href: "/admin/venues", label: "식당 관리", icon: ChefHat, hint: "제휴 식당을 넣고 고치고, 사진과 엑셀로 한 번에 올려요" },
-    { href: "/admin/messages", label: "자동 메시지", icon: MessageSquareText, hint: "자동으로 나가는 알림 문구를 고치고, 발송 이력과 실패를 봐요. 공지도 여기서 보내요" },
+    { href: "/admin/messages", label: "자동 메시지", icon: MessageSquareText, hint: "발송 이력과 실패를 보고, 공지를 보내고, 알림 문구를 고쳐요(탭 세 개)", subs: [
+      { href: "/admin/messages", label: "발송 이력" },
+      { href: "/admin/messages/notice", label: "공지 보내기" },
+      { href: "/admin/messages/templates", label: "문구 템플릿" },
+    ] },
     { href: "/admin/contents", label: "대화 콘텐츠", icon: MessagesSquare, hint: "모임 시작 때 단체방에 올라갈 대화 주제와 아이스브레이킹을 관리해요" },
     { href: "/admin/demand", label: "새 동네 요청", icon: MapPin, hint: "아직 안 연 동네에 '열리면 알려 주세요'를 남긴 사람 수예요. 다음에 열 곳을 고를 때 봐요" },
   ] },
@@ -56,20 +65,33 @@ export function AdminNav({ exCount, mobile }: { exCount: number; mobile?: boolea
         <div key={g.name}>
           <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted/80">{g.name}</p>
           <div className="flex flex-col gap-0.5">
-            {g.items.map(({ href, label, icon: Icon, hint }) => (
-              <Link
-                key={href}
-                href={href}
-                title={hint}
-                aria-current={on(href) ? "page" : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] transition ${on(href) ? "bg-accent-soft font-semibold text-accent" : "text-ink/80 hover:bg-accent-soft/40"}`}
-              >
-                <Icon size={19} strokeWidth={on(href) ? 2.2 : 1.8} />
-                <span className="flex-1">{label}</span>
-                {href === "/admin/exceptions" && exCount > 0 && (
-                  <span className="min-w-[22px] rounded-full bg-danger px-1.5 text-center text-[12px] font-bold leading-[22px] text-white">{exCount}</span>
+            {g.items.map(({ href, label, icon: Icon, hint, subs }) => (
+              <div key={href}>
+                <Link
+                  href={href}
+                  title={hint}
+                  aria-current={on(href) && !subs ? "page" : undefined}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] transition ${on(href) ? "bg-accent-soft font-semibold text-accent" : "text-ink/80 hover:bg-accent-soft/40"}`}
+                >
+                  <Icon size={19} strokeWidth={on(href) ? 2.2 : 1.8} />
+                  <span className="flex-1">{label}</span>
+                  {href === "/admin/exceptions" && exCount > 0 && (
+                    <span className="min-w-[22px] rounded-full bg-danger px-1.5 text-center text-[12px] font-bold leading-[22px] text-white">{exCount}</span>
+                  )}
+                </Link>
+                {subs && on(href) && (
+                  <div className="ml-[22px] mt-0.5 flex flex-col border-l border-line pl-3">
+                    {subs.map((x) => {
+                      const cur = path === x.href || (x.href !== href && path.startsWith(`${x.href}/`));
+                      return (
+                        <Link key={x.href} href={x.href} aria-current={cur ? "page" : undefined} className={`rounded-lg px-2.5 py-1.5 text-[14px] ${cur ? "font-semibold text-accent" : "text-muted hover:text-ink"}`}>
+                          {x.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
                 )}
-              </Link>
+              </div>
             ))}
           </div>
         </div>
