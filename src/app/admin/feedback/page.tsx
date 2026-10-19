@@ -31,7 +31,11 @@ export default async function Feedback({ searchParams }: { searchParams: Promise
   const [{ data: fbs }, { data: prefs }, { count: attended }] = await Promise.all([
     ids.length ? db().from("feedbacks").select("mood_score,talk_score,venue_score,rejoin_intent,recommend_intent,comment,created_at,users(name,login_id,is_demo)").in("table_id", ids).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
     ids.length ? db().from("person_prefs").select("pref,users!person_prefs_from_user_fkey(is_demo)").in("table_id", ids) : Promise.resolve({ data: [] }),
-    round ? db().from("applications").select("id", { count: "exact", head: true }).eq("round_id", round.id).eq("attendance_status", "ATTENDED") : Promise.resolve({ count: 0 }),
+    round
+      ? (excludeDemo
+          ? db().from("applications").select("id,users!inner(is_demo)", { count: "exact", head: true }).eq("round_id", round.id).eq("attendance_status", "ATTENDED").eq("users.is_demo", false)
+          : db().from("applications").select("id", { count: "exact", head: true }).eq("round_id", round.id).eq("attendance_status", "ATTENDED"))
+      : Promise.resolve({ count: 0 }),
   ]);
   const f0 = (fbs ?? []) as unknown as { mood_score: number | null; talk_score: number | null; venue_score: number | null; rejoin_intent: number | null; recommend_intent: number | null; comment: string | null; created_at: string; users: { name: string; login_id?: string; is_demo?: boolean } }[];
   // '시연 데이터 빼기'면 시연 계정(테스트 참가자·봇)이 남긴 후기·선호를 빼고 센다
