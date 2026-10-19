@@ -46,7 +46,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const matchRate = paid.length && ranMatching ? Math.round((confirmed.length / paid.length) * 100) : null;
 
   const { data: run } = round ? await db().from("match_runs").select("summary,status,finished_at").eq("round_id", round.id).maybeSingle() : { data: null };
-  const { count: tableCount } = round ? await db().from("dining_tables").select("id", { count: "exact", head: true }).eq("round_id", round.id) : { count: 0 };
+  // 해제된 테이블은 빼고 센다(매칭 모니터의 '지금 테이블'과 같은 기준)
+  const { count: tableCount } = round ? await db().from("dining_tables").select("id", { count: "exact", head: true }).eq("round_id", round.id).neq("status", "DISSOLVED") : { count: 0 };
 
   // 자동 처리 상태: 마지막 실행 시각과 다시 보내는 중인 알림 (INF-08)
   const { data: ran } = await db().from("settings").select("value").eq("key", "tick.ran").maybeSingle();

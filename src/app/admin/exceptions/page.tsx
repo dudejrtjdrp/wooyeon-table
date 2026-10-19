@@ -73,7 +73,8 @@ const dangerLight = `${B} border border-danger/50 bg-danger/5 text-danger`;
 
 type Ctx = { who?: string; href?: string; where?: string; ops?: string; amount?: string; inventory?: string };
 
-function since(iso: string, t: Date) {
+/** 올라온 뒤 지난 시간. created_at은 실제 시각으로 찍히므로 시연 시계가 아니라 실제 지금과 비교한다 */
+function since(iso: string, t: Date = new Date()) {
   const min = Math.max(0, Math.round((t.getTime() - Date.parse(iso)) / 60_000));
   if (min < 60) return `${min}분째`;
   if (min < 60 * 24) return `${Math.floor(min / 60)}시간째`;
@@ -234,7 +235,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                 <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${PILL[e.kind] ?? "bg-danger/10 text-danger"}`}>{KIND_TIP[e.kind] ? <Term tip={KIND_TIP[e.kind]}>{LABEL[e.kind]}</Term> : LABEL[e.kind] ?? "기타 예외"}</span>
                 {e.status === "open" && reopened.has(e.id) && <span className="rounded-full bg-danger/10 px-3 py-1 text-[14px] font-semibold text-danger">다시 엶</span>}
                 {e.kind === "no_show" && isClaimed(e.reason) && <span className="rounded-full bg-accent-soft px-3 py-1 text-[14px] font-semibold text-accent">본인 참석 알림</span>}
-                <span className="text-[14px] text-muted">{fmtDateTime(e.created_at)} 올라옴{e.status === "open" ? ` · ${since(e.created_at, t)}` : ""}</span>
+                <span className="text-[14px] text-muted">{fmtDateTime(e.created_at)} 올라옴{e.status === "open" ? ` · ${since(e.created_at)}` : ""}</span>
               </div>
               <dl className="mt-3 grid gap-x-4 gap-y-1.5 text-[15px] sm:grid-cols-[72px_1fr]">
                 <dt className="text-[13px] font-semibold leading-6 text-muted">누구</dt>
