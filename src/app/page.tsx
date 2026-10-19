@@ -123,21 +123,32 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
             </div>
           </section>
         </>
-      ) : (
+      ) : upcoming[0] ? (
         <>
-          <Greeting>{firstName}님,<br />{upcoming[0] ? "이번 주 저녁 같이 먹을래요?" : "다음 테이블을 준비하고 있어요"}</Greeting>
+          <Greeting>{firstName}님,<br />이번 주 저녁 같이 먹을래요?</Greeting>
           <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card">
             <Hero>
-              {upcoming[0] ? (
-                <>
-                  <span className="text-[13px] font-semibold text-muted">가장 가까운 모임</span>
-                  <span className="mt-1 block text-[20px] font-bold leading-snug text-ink">{fmtSlot(upcoming[0].startsAt)}</span>
-                </>
-              ) : <span className="text-[15px] text-muted">새 일정이 열리면 알림으로 알려드릴게요.</span>}
+              <span className="text-[13px] font-semibold text-muted">가장 가까운 모임</span>
+              <span className="mt-1 block text-[20px] font-bold leading-snug text-ink">{fmtSlot(upcoming[0].startsAt)}</span>
             </Hero>
             <div className="p-5 pt-4">
               <p className="text-[14px] text-muted">1회 {won(PASSES.single.amount)} · 식사비는 현장에서 각자 계산해요</p>
-              <LinkButton href={upcoming[0] ? `/apply/${upcoming[0].roundId}` : "/my-tables"} tone="ink" className="mt-4">{upcoming[0] ? "신청하기" : "지난 테이블 보기"}</LinkButton>
+              <LinkButton href={`/apply/${upcoming[0].roundId}`} tone="ink" className="mt-4">신청하기</LinkButton>
+            </div>
+          </section>
+        </>
+      ) : (
+        // 열린 일정이 없을 때: 기다리는 동안 할 수 있는 것(알림 켜기, 원하는 동네 남기기)만 보여 준다
+        <>
+          <Greeting>{firstName}님,<br />지금은 열린 일정이 없어요</Greeting>
+          <section className="animate-rise mt-4 rounded-[20px] bg-card px-5 pb-5 pt-7 text-center" aria-label="다음 일정 기다리기">
+            <div className="flex justify-center"><RoundTable size={132} filled={1} label="빈 자리가 있는 원형 테이블" /></div>
+            <h2 className="mt-5 text-[19px] font-bold text-ink">다음 식탁을 차리고 있어요</h2>
+            <p className="mt-1.5 text-[15px] leading-relaxed text-muted">새 일정이 열리면 바로 알려드릴게요.<br />알림을 켜 두면 놓치지 않아요.</p>
+            <div className="mt-5 text-left"><PushToggle variant="card" /></div>
+            <div className="mt-4 flex flex-col items-center gap-1">
+              <Link href="/wish" className="flex h-11 items-center text-[15px] font-semibold text-accent">가 보고 싶은 동네 남기기</Link>
+              {past && <Link href="/my-tables" className="flex h-11 items-center text-[14px] text-muted underline underline-offset-4">지난 식탁 보기</Link>}
             </div>
           </section>
         </>
@@ -159,7 +170,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
         </>
       )}
 
-      {me.hasProfile && !owned && (
+      {me.hasProfile && !owned && !!upcoming.length && (
         <Link href="/rounds" className="mt-6 flex items-center justify-between gap-3 rounded-[18px] bg-accent-soft px-5 py-4 text-accent-text active:opacity-90">
           <span>
             <span className="block text-[13px] text-accent-text">한 달에 네 번 오면 1회권 {won(PASSES.single.amount * 4)}</span>

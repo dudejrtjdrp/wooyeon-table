@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireAdminWrite } from "@/lib/auth";
 import { logStatus } from "@/lib/events";
 import { db } from "@/lib/supabase";
-import { matchPhotoName, parseVenueRow, type VenueRow } from "@/lib/venue-sheet";
+import { COLUMNS, matchPhotoName, parseVenueRow, type VenueRow } from "@/lib/venue-sheet";
 import { saveVenuePhoto } from "@/lib/venue-photo";
 import { readVenueWorkbook } from "@/lib/venue-xlsx";
 
@@ -160,4 +161,59 @@ export async function uploadPhotoByName(form: FormData): Promise<{ ok: boolean; 
   await logStatus({ entityType: "venue", entityId: v.id, field: "photo", to: "uploaded", actor: `admin:${me.id}`, reason: `식당 사진 올림(여러 장): ${name}` });
   revalidatePath("/admin/venues");
   return { ok: true, message: `${v.name}` };
+}
+
+/** 칸 이름(엑셀 제목)으로 폼 값을 모아 엑셀 한 줄과 같은 검사를 쓴다 */
+function formToRow(form: FormData) {
+  return Object.fromEntries(COLUMNS.map((c) => [c.label, String(form.get(c.key) ?? "")]));
+}
+
+/** 식당 한 곳 추가·고치기 (식당 관리 화면의 폼). 엑셀과 같은 기준으로 검사하고, 사용 중이면 모집 중 일정 재고를 맞춘다 */
+export async function saveVenue(form: FormData) {
+  const me = await requireAdminWrite("/admin/venues");
+  const id = String(form.get("id") ?? "");
+  const back = id ? `/admin/venues/${id}` : "/admin/venues/new";
+  const r = parseVenueRow(formToRow(form));
+  if (!r.ok) redirect(`${back}?e=${encodeURIComponent(r.errors.join(" · "))}`);
+  const v = r.value;
+  const { data: same } = await db().from("venues").select("id").eq("region", v.region).eq("name", v.name).neq("id", id || "00000000-0000-0000-0000-000000000000").maybeSingle();
+  if (same) redirect(`${back}?e=${encodeURIComponent(`${v.region}에 '${v.name}'이(가) 이미 있어요`)}`);
+  const actor = `admin:${me.id}`;
+  let venueId = id;
+  if (id) {
+    const { data: cur } = await db().from("venues").select("id,name,region,category,address,price_range,rating,review_count,booking_channel,booking_url,phone,map_url,seats_per_table,active").eq("id", id).maybeSingle();
+    if (!cur) redirect(`/admin/venues?e=${encodeURIComponent("식당을 찾지 못했어요")}`);
+    const keys = ["name", "region", ...Object.keys(FIELD_LABEL)] as const;
+    const label = (k: string) => (k === "name" ? "이름" : k === "region" ? "동네" : FIELD_LABEL[k]);
+    const diff = keys.filter((k) => String((cur as Record<string, unknown>)[k] ?? "") !== String((v as Record<string, unknown>)[k] ?? ""));
+    if (!diff.length) redirect(`${back}?m=${encodeURIComponent("바뀐 칸이 없어요")}`);
+    const { error } = await db().from("venues").update(v).eq("id", id);
+    if (error) redirect(`${back}?e=${encodeURIComponent("저장하지 못했어요. 다시 눌러 주세요")}`);
+    await logStatus({ entityType: "venue", entityId: id, field: "edit", from: diff.map((k) => `${label(k)}=${(cur as Record<string, unknown>)[k] ?? ""}`).join("; "), to: diff.map((k) => `${label(k)}=${(v as Record<string, unknown>)[k] ?? ""}`).join("; "), actor, reason: `식당 고침: ${v.name}` });
+  } else {
+    const { data: ins, error } = await db().from("venues").insert(v).select("id").single();
+    if (error || !ins) redirect(`${back}?e=${encodeURIComponent("저장하지 못했어요. 다시 눌러 주세요")}`);
+    venueId = ins.id;
+    await logStatus({ entityType: "venue", entityId: venueId, field: "status", to: "created", actor, reason: `식당 추가: ${v.region} ${v.name}` });
+  }
+  const n = v.active ? await ensureInventory([{ id: venueId, region: v.region }]) : 0;
+  revalidatePath("/admin/venues");
+  revalidatePath("/admin/rounds");
+  redirect(`/admin/venues/${venueId}?m=${encodeURIComponent(`${id ? "고쳤어요" : `${v.name}을(를) 추가했어요`}${n > 0 ? `. 모집 중인 일정 ${n}곳에 2테이블씩 잡았어요` : ""}${n < 0 ? ". 일정별 재고는 회차·식당 재고에서 확인해 주세요" : ""}`)}`);
+}
+
+/** 배정 켜기·끄기. 끈 식당은 새 테이블에 배정하지 않는다(이미 배정된 테이블은 그대로) */
+export async function toggleVenue(form: FormData) {
+  const me = await requireAdminWrite("/admin/venues");
+  const id = String(form.get("id") ?? "");
+  const { data: cur } = await db().from("venues").select("id,name,region,active").eq("id", id).maybeSingle();
+  if (!cur) redirect(`/admin/venues?e=${encodeURIComponent("식당을 찾지 못했어요")}`);
+  const next = !cur.active;
+  await db().from("venues").update({ active: next }).eq("id", id);
+  await logStatus({ entityType: "venue", entityId: id, field: "active", from: String(cur.active), to: String(next), actor: `admin:${me.id}`, reason: `식당 ${next ? "배정 다시 켬" : "배정 끔"}: ${cur.name}` });
+  const n = next ? await ensureInventory([{ id, region: cur.region }]) : 0;
+  revalidatePath("/admin/venues");
+  revalidatePath("/admin/rounds");
+  const to = String(form.get("back") ?? "") === "list" ? "/admin/venues" : `/admin/venues/${id}`;
+  redirect(`${to}?m=${encodeURIComponent(`${cur.name}: ${next ? `다시 배정해요${n > 0 ? ` (모집 중인 일정 ${n}곳에 재고 잡음)` : ""}` : "이제 새 테이블에 배정하지 않아요. 이미 배정된 모임은 그대로예요"}`)}`);
 }

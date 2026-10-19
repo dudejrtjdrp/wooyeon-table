@@ -1,6 +1,6 @@
-import { Download, ImageOff } from "lucide-react";
+import { Download, ImageOff, Plus } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, Panel, btn, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, btn, btnPrimary, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
@@ -28,7 +28,8 @@ export default async function Venues() {
     <div>
       <PageHeader
         title="식당 관리"
-        desc="제휴 식당 목록이에요. 테이블이 확정되면 이 목록에서 동네·시간·인원·평점·예약 채널을 보고 자동으로 배정해요. 일정별 받을 수 있는 테이블 수는 '회차·식당 재고'에서 바꿔요."
+        desc="제휴 식당 목록이에요. 테이블이 확정되면 이 목록에서 동네·시간·인원·평점·예약 채널을 보고 자동으로 배정해요. 식당 이름을 누르면 정보를 고치거나 배정을 끌 수 있어요."
+        actions={!ro && <Link href="/admin/venues/new" className={btnPrimary}><Plus size={16} aria-hidden="true" />식당 추가</Link>}
       />
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -49,7 +50,7 @@ export default async function Venues() {
                     </td>
                     <td className={`${td} whitespace-nowrap text-muted`}>{v.region}</td>
                     <td className={td}>
-                      <p className="min-w-[160px] font-semibold text-ink">{v.name}</p>
+                      <Link href={`/admin/venues/${v.id}`} className="block min-w-[160px] font-semibold text-ink underline-offset-4 hover:text-accent hover:underline">{v.name}</Link>
                       <p className="text-[12px] text-muted">{[v.category, v.address].filter(Boolean).join(" · ")}</p>
                     </td>
                     <td className={`${td} whitespace-nowrap text-muted`}>{v.price_range ?? "-"}</td>
@@ -61,20 +62,21 @@ export default async function Venues() {
                 ))}
               </tbody>
             </table>
-            {!venues.length && <p className="p-8 text-center text-muted">아직 식당이 없어요. 오른쪽에서 엑셀로 한 번에 넣어 보세요.</p>}
+            {!venues.length && <p className="p-8 text-center text-muted">아직 식당이 없어요. 위 &lsquo;식당 추가&rsquo;로 한 곳씩, 또는 오른쪽 엑셀로 한 번에 넣어 보세요.</p>}
           </div>
         </Panel>
 
         <div className="flex flex-col gap-4">
-          <Panel title="엑셀로 한 번에 넣기">
+          <Panel title="엑셀로 여러 곳 한 번에">
             <ol className="space-y-1.5 text-[14px] text-ink2">
               <li>1. 양식을 내려받아요. 동네·가격대·예약 채널은 목록에서 골라요.</li>
               <li>2. 한 줄에 식당 하나씩 채워요. 빨간 칸이 필수예요.</li>
               <li>3. 올리면 같은 동네·같은 이름은 고치고, 없으면 새로 만들어요.</li>
             </ol>
             <div className="mt-3 flex flex-wrap gap-2">
-              <a href="/admin/venues/template" className={linkBtn}><Download size={16} aria-hidden="true" />빈 양식</a>
-              <a href="/admin/venues/template?filled=1" className={linkBtn}><Download size={16} aria-hidden="true" />지금 식당 내려받기</a>
+              {/* 파일 내려받기라 페이지 이동(Link)이 아니라 일반 링크를 쓴다 */}
+              <a href="/admin/venues/template" download className={linkBtn}><Download size={16} aria-hidden="true" />빈 양식</a>
+              <a href="/admin/venues/template?filled=1" download className={linkBtn}><Download size={16} aria-hidden="true" />지금 식당 내려받기</a>
             </div>
             {!ro && <div className="mt-4"><ExcelImport action={importVenues} /></div>}
           </Panel>
@@ -86,7 +88,7 @@ export default async function Venues() {
             </Panel>
           )}
 
-          <p className="px-1 text-[13px] text-muted">한 곳씩 추가하거나 일정별 테이블 수를 바꾸려면 <Link href="/admin/rounds" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>로 가요.</p>
+          <p className="px-1 text-[13px] text-muted">일정별 받을 수 있는 테이블 수는 <Link href="/admin/rounds" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>에서 바꿔요.</p>
         </div>
       </div>
     </div>
