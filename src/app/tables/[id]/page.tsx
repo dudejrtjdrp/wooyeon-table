@@ -243,7 +243,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
               {done && mine && mine.attendance_status !== "ATTENDED" && (
                 <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
                   체크인 기록이 없어 후기를 남길 수 없어요. 참석했다면{" "}
-                  <Link href="/help" className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">문의하기</Link>로 알려 주세요.
+                  <Link href="/help" className="-my-3 inline-block py-3 font-bold text-accent underline underline-offset-4">문의하기</Link>로 알려 주세요.
                 </p>
               )}
               <LinkButton href={`/tables/${id}/chat`}>{done ? "단체방 다시 보기" : "단체방 들어가기"}</LinkButton>

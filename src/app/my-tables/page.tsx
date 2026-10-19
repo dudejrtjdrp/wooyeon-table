@@ -103,7 +103,7 @@ export default async function MyTables() {
 
       {past.length > 0 && (
         <>
-          <SectionTitle>지난 테이블</SectionTitle>
+          <SectionTitle>지난 식탁</SectionTitle>
           <List>
             {past.map((a) => {
               const s = a.dining_tables!.slots!;
