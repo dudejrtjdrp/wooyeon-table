@@ -30,6 +30,8 @@ export const TEMPLATES = {
   feedback: { label: "후기 요청", when: "모임 종료 직후 (참석자만)", channel: "푸시·알림함", title: "오늘 저녁 어땠어요?", body: "1분이면 후기를 남길 수 있어요", vars: [] },
   transferred: { label: "일정 이동 완료", when: "매칭 실패 뒤 다른 일정으로 옮긴 직후", channel: "알림함(푸시 없음)", title: "일정을 옮겼어요", body: "{round} · {match_at}에 결과를 알려 드려요", vars: ["round", "match_at"] },
   next_round: { label: "다음 모집 시작", when: "새 회차 모집이 열렸을 때 (새 일정 소식 받기에 동의한 지난 참가자)", channel: "푸시·알림함", title: "다음 식탁이 열렸어요", body: "{recommendation}", vars: ["recommendation", "deadline"] },
+  round_changed: { label: "결과 안내 시각 변경", when: "운영자가 모집 중인 회차의 자동 매칭 시각을 바꿨을 때 (결제를 마친 신청자)", channel: "알림함(푸시 없음)", title: "결과 안내 시각이 바뀌었어요", body: "{round} · {match_at}에 결과를 알려 드려요", vars: ["round", "match_at"] },
+  round_canceled: { label: "회차 취소", when: "운영자가 매칭 전 회차를 취소했을 때 (신청자 전원)", channel: "푸시·알림함", title: "이번 모임이 취소됐어요", body: "{round} · 환불 결과는 내 신청에서 볼 수 있어요", vars: ["round"] },
   feedback_remind: { label: "후기 리마인드", when: "종료 24시간 뒤까지 후기가 없을 때 1회", channel: "푸시·알림함", title: "어제 식탁, 한 줄만 남겨 주세요", body: "남겨 주신 후기는 다음 테이블에 반영돼요", vars: [] },
 } as const;
 export type TemplateKey = keyof typeof TEMPLATES;
@@ -41,7 +43,7 @@ export type TemplateKey = keyof typeof TEMPLATES;
 export const QUIET_TEMPLATES = new Set<string>([
   "applied", "paid", "paid_membership", "paid_pass", "transferred", "joined", "reallocating",
   "refund_requested", "refund_retry", "canceled", "attendance_canceled", "kept", "waiting",
-  "membership_extended", "seat_offer_expired",
+  "membership_extended", "seat_offer_expired", "round_changed",
 ]);
 
 /** 어드민 미리보기용 예시 값. 날짜·시각은 발송 때 fmtDay·fmtClock(fmtSlot과 같은 표기)으로 들어간다 */
