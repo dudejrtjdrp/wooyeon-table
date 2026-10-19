@@ -373,7 +373,7 @@ async function botsJoinOnce(appId: string): Promise<{ joined: number; locked: bo
   await db().from("application_slots").insert((apps ?? []).map((a) => ({ application_id: a.id, slot_id: slot.id })));
   for (const a of apps ?? []) {
     await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: "DRAFT", to: "SUBMITTED", actor: ACTOR, reason: `시연 봇이 같은 일정에 함께 신청 (${slot.region})` });
-    await logStatus({ entityType: "application", entityId: a.id, field: "payment_status", from: "PENDING", to: "PAID", actor: ACTOR, reason: "시연 봇 모의 결제(1회권 9,900원)" });
+    await logStatus({ entityType: "application", entityId: a.id, field: "payment_status", from: "PENDING", to: "PAID", actor: ACTOR, reason: "시연 봇 모의 결제(1회권 9,900원). 신청을 만들 때 바로 결제 완료로 넣음" });
   }
   return { joined: apps?.length ?? 0, locked: true };
 }

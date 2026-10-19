@@ -130,6 +130,7 @@ export function WeightsForm({ initial, min, defaults, defaultMin, readOnly, acti
                     <span className="flex flex-wrap items-center gap-1.5 pr-10">
                       <span className="text-[16px] font-bold text-ink">{p.name}</span>
                       {saved?.id === p.id && <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-white">지금 쓰는 중</span>}
+                      {priorityError(p.weights) && <span title={priorityError(p.weights) ?? ""} className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-semibold text-danger">우선순위 어김 · 고쳐야 저장돼요</span>}
                     </span>
                     {p.desc && <span className="text-[13px] leading-relaxed text-muted">{p.desc}</span>}
                     <span className="mt-auto pt-2"><ShareBar w={p.weights as unknown as Record<string, number>} size="sm" /></span>
