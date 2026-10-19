@@ -25,6 +25,11 @@ describe("다시 열기", () => {
     expect(canReopen({ status: "resolved", note: "  " }).ok).toBe(false);
     expect(canReopen({ status: "resolved", note: "잘못" }).ok).toBe(false);
     expect(canReopen({ status: "resolved", note: "  환불이  실제로 안 됨 " })).toEqual({ ok: true, note: "환불이 실제로 안 됨" });
+    // 노쇼 후보는 참석 관리에서 되돌린다(다시 열어도 정정으로 이어지지 않음)
+    const ns = canReopen({ status: "resolved", note: "노쇼가 아니었어요", kind: "no_show" });
+    expect(ns.ok).toBe(false);
+    if (!ns.ok) expect(ns.reason).toContain("참석 예정으로 되돌리기");
+    expect(canReopen({ status: "resolved", note: "다시 검토할게요", kind: "safety" }).ok).toBe(true);
   });
   it("확인 문구에 바뀐 데이터는 되돌리지 않는다고 적는다", () => {
     expect(reopenConfirm("노쇼 확정")).toContain("(노쇼 확정)은 되돌리지 않아요");

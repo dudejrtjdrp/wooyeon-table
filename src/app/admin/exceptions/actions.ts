@@ -30,14 +30,20 @@ export async function reopenException(form: FormData) {
     revalidatePath("/admin");
     redirect(`${to}${to.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(msg)}`);
   };
-  const { data: ex } = await db().from("exceptions").select("id,kind,status,resolution").eq("id", id).maybeSingle();
+  const { data: ex } = await db().from("exceptions").select("id,kind,status,resolution,ref_type,ref_id").eq("id", id).maybeSingle();
   if (!ex) return go("e", "이 예외를 찾지 못했어요. 이미 지워졌을 수 있어요");
-  const check = canReopen({ status: ex.status, note: form.get("note") });
+  const check = canReopen({ status: ex.status, note: form.get("note"), kind: ex.kind });
   if (!check.ok) return go("e", check.reason);
   // 처리 결과 칸은 비워 열린 상태로 돌린다. 이전 처리(누가·무엇)는 처리 이력에 그대로 남는다
   const { data: changed } = await db().from("exceptions").update({ status: "open", resolution: null, resolved_by: null, resolved_at: null }).eq("id", id).eq("status", "resolved").select("id");
   if (!changed?.length) return go("m", "이미 다시 열린 예외예요");
   await logStatus({ entityType: "exception", entityId: id, field: "status", from: "resolved", to: "open", actor: `admin:${me.id}`, reason: `${check.note} (이전 처리: ${ex.resolution ?? "처리 완료"})` });
+  // 안전 신고는 신고 자체도 다시 검토 전으로 (피드백·안전 화면의 '신고 다시 열기'와 같은 결과). 이미 건 계정 조치는 그대로
+  if (ex.kind === "safety" && ex.ref_type === "safety_report") {
+    const { data: rep } = await db().from("safety_reports").select("id,status,action").eq("id", ex.ref_id).maybeSingle();
+    const { data: opened } = rep ? await db().from("safety_reports").update({ status: "open", action: null, reviewed_at: null }).eq("id", rep.id).eq("status", "reviewed").select("id") : { data: null };
+    if (opened?.length) await logStatus({ entityType: "safety_report", entityId: rep!.id, field: "status", from: "reviewed", to: "open", actor: `admin:${me.id}`, reason: `예외 처리함에서 다시 열기: ${check.note} (이전 조치: ${rep!.action ?? "없음"})` });
+  }
   go("m", "다시 열었어요. '처리할 것' 맨 위에 있어요. 처리하면서 바뀐 데이터는 그대로예요", exceptionsHref({ k: ex.kind }));
 }
 

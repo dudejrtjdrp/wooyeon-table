@@ -39,7 +39,13 @@ export const viewStatus = (v: ExceptionView): "open" | "resolved" | null => (v =
  * 다시 열 수 있나. 처리한 건만, 사유(4자 이상)를 적어야 연다.
  * 다시 열어도 처리하면서 바뀐 데이터(환불·제재·배정 등)는 그대로 둔다. 확인 문구에 그 점을 적는다
  */
-export function canReopen(o: { status: string; note: unknown }): { ok: true; note: string } | { ok: false; reason: string } {
+/** 다시 열 수 없는 종류와 대신 갈 곳. 노쇼 후보는 다시 열어도 참석 상태가 정해져 있어 정정으로 이어지지 않는다 */
+export const REOPEN_ELSEWHERE: Record<string, string> = {
+  no_show: "노쇼 후보는 다시 열지 않아요. 참석을 바로잡으려면 참석 관리에서 '참석 예정으로 되돌리기'를 해 주세요",
+};
+
+export function canReopen(o: { status: string; note: unknown; kind?: string }): { ok: true; note: string } | { ok: false; reason: string } {
+  if (o.kind && REOPEN_ELSEWHERE[o.kind]) return { ok: false, reason: REOPEN_ELSEWHERE[o.kind] };
   if (o.status !== "resolved") return { ok: false, reason: "이미 열려 있는 예외예요" };
   const note = cleanNote(o.note);
   if (!note) return { ok: false, reason: "다시 여는 이유를 4자 이상 적어 주세요" };

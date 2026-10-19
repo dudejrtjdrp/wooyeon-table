@@ -9,7 +9,7 @@ import { db } from "@/lib/supabase";
 import { PageHeader, Term } from "@/components/admin-ui";
 import { TIP, reasonText } from "@/lib/admin-glossary";
 import { ConfirmButton } from "../confirm-button";
-import { EXCEPTION_VIEWS, exceptionsHref, openRank, parseExceptionView, reopenConfirm, sortOpenFirst, viewStatus } from "@/lib/exception-view";
+import { EXCEPTION_VIEWS, REOPEN_ELSEWHERE, exceptionsHref, openRank, parseExceptionView, reopenConfirm, sortOpenFirst, viewStatus } from "@/lib/exception-view";
 import { ADMIN_NOTE_MIN } from "@/lib/cancel-rules";
 import { reopenException, resolveException } from "./actions";
 
@@ -220,7 +220,12 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                   처리됨 · {e.resolution ?? "처리 완료"} · {e.resolved_by ? `운영자 ${resolverName.get(e.resolved_by) ?? ""}` : "자동"}{e.resolved_at ? ` · ${fmtDateTime(e.resolved_at)}` : ""}
                 </p>
               )}
-              {e.status === "resolved" && canAct && (
+              {e.status === "resolved" && canAct && REOPEN_ELSEWHERE[e.kind] && (
+                <p className="mt-3 text-[13px] text-muted">
+                  {REOPEN_ELSEWHERE[e.kind]}. <Link href="/admin/attendance" className="font-semibold text-accent-text underline underline-offset-4">참석 관리로</Link>
+                </p>
+              )}
+              {e.status === "resolved" && canAct && !REOPEN_ELSEWHERE[e.kind] && (
                 <form action={reopenException} className="mt-3 flex flex-wrap items-center gap-2">
                   <input type="hidden" name="id" value={e.id} />
                   <input type="hidden" name="back" value={back} />
