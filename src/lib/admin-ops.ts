@@ -45,7 +45,7 @@ export async function closeLinked(o: { adminId: string; resolution: string; exce
     const refs = [...o.tableIds];
     const { data: rooms } = await db().from("chat_rooms").select("id").in("table_id", o.tableIds);
     refs.push(...(rooms ?? []).map((r) => r.id));
-    const { data } = await db().from("exceptions").select("id").eq("status", "open").in("ref_type", ["dining_table", "chat_room"]).in("ref_id", refs).in("kind", o.tableKinds ?? ["condition_conflict"]);
+    const { data } = await db().from("exceptions").select("id").eq("status", "open").in("ref_type", ["dining_table", "chat_room", "venue_phone"]).in("ref_id", refs).in("kind", o.tableKinds ?? ["condition_conflict"]);
     for (const x of data ?? []) ids.add(x.id);
   }
   if (!ids.size) return 0;

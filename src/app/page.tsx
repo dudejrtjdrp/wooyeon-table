@@ -172,7 +172,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
         <Link href="/rounds" className="mt-6 flex items-center justify-between gap-3 rounded-[18px] bg-accent-soft px-5 py-4 text-accent-text active:opacity-90">
           <span>
             <span className="block text-[13px] text-accent-text">한 달에 네 번 오면 1회권 {won(PASSES.single.amount * 4)}</span>
-            <span className="mt-0.5 block text-[16px] font-bold">멤버십은 {won(PASSES.m1.amount)}로 무제한</span>
+            <span className="mt-0.5 block text-[16px] font-bold">멤버십은 {won(PASSES.m1.amount)}으로 무제한</span>
           </span>
           <ChevronRight size={20} aria-hidden="true" />
         </Link>

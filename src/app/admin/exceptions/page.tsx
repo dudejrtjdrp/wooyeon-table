@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const LABEL: Record<string, string> = {
   payment: "결제 오류", refund: "자동 환불 실패", data_missing: "데이터 누락", condition_conflict: "조건 충돌",
-  venue_shortage: "식당 부족", notification: "알림 발송 실패", no_show: "노쇼 후보", safety: "안전 신고", reservation: "식당 예약 실패",
+  venue_shortage: "식당 부족", notification: "알림 발송 실패", no_show: "노쇼 후보", safety: "안전 신고", reservation: "식당 예약 확인",
 };
 
 // 처음 온 운영자도 바로 고를 수 있게, 건마다 누구·어디를 넣어 먼저 해 볼 일을 적는다

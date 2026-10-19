@@ -81,7 +81,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   ];
   const TILES: [string, string, LucideIcon][] = [
     ["safety", "안전 신고", TriangleAlert], ["payment", "결제 오류", CreditCard], ["refund", "환불 실패", RotateCcw], ["data_missing", "데이터 누락", FileText],
-    ["condition_conflict", "조건 충돌", Shuffle], ["venue_shortage", "식당 부족", Store], ["notification", "알림 실패", BellRing], ["no_show", "노쇼 후보", UserX], ["reservation", "식당 예약 실패", Store],
+    ["condition_conflict", "조건 충돌", Shuffle], ["venue_shortage", "식당 부족", Store], ["notification", "알림 실패", BellRing], ["no_show", "노쇼 후보", UserX], ["reservation", "식당 예약 확인", Store],
   ];
   const lateCancel = list.filter((a) => a.attendance_status === "CANCELED_LATE").length;
   const appIds = new Set(list.map((a) => a.id));

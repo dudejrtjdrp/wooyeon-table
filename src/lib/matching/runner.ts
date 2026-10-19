@@ -1,4 +1,5 @@
 import { logStatus } from "../events";
+import { now } from "../clock";
 import { fmtDay, fmtSlot } from "../format";
 import { afterConfirm, notifyConfirmed } from "../pipeline";
 import { pushNotifications } from "../push";
@@ -21,7 +22,7 @@ type AppRow = {
   id: string;
   user_id: string;
   payment_status: string;
-  users: { account_status: string; profiles: ProfileRow | ProfileRow[] | null };
+  users: { account_status: string; restricted_until: string | null; profiles: ProfileRow | ProfileRow[] | null };
   application_slots: { slot_id: string }[];
   areas: string[] | null;
   dates: string[] | null;
@@ -151,7 +152,7 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
 
     const { data: apps, error: appErr } = await db()
       .from("applications")
-      .select("id,user_id,payment_status,areas,dates,near_ok,users(account_status,profiles(*)),application_slots(slot_id)")
+      .select("id,user_id,payment_status,areas,dates,near_ok,users(account_status,restricted_until,profiles(*)),application_slots(slot_id)")
       .eq("round_id", roundId)
       .eq("application_status", "SUBMITTED")
       .eq("match_status", "WAITING");
@@ -159,10 +160,18 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
     const rows = (apps ?? []) as unknown as AppRow[];
 
     const candidates: Candidate[] = [];
-    const exceptions: { appId: string; reason: string }[] = [];
+    const exceptions: { appId: string; reason: string; kind?: string }[] = [];
+    const runAt = await now();
     for (const a of rows) {
       if (a.payment_status !== "PAID") continue; // 결제 안 된 신청은 후보에서 뺀다
-      if (["restricted", "banned"].includes(a.users?.account_status)) continue;
+      // 제한 기한이 지났으면 제한이 풀린 것으로 본다 (기한 지난 제한 때문에 정상 참가자가 빠지지 않게)
+      const st = a.users?.account_status;
+      const expired = st === "restricted" && !!a.users.restricted_until && new Date(a.users.restricted_until) <= runAt;
+      if (st === "banned" || (st === "restricted" && !expired)) {
+        // 결제까지 한 뒤 제한된 사람은 조용히 빼면 매칭 대기로 영영 남는다: 이유를 남기고 운영자가 환불·안내하도록 예외 처리함으로
+        exceptions.push({ appId: a.id, kind: "account_blocked", reason: st === "banned" ? "영구 제한된 계정이라 매칭에서 뺐어요. 결제를 돌려주고 안내해 주세요" : `신청 제한 중(${a.users.restricted_until ? fmtDay(a.users.restricted_until) : "기한 없음"}까지)이라 매칭에서 뺐어요. 환불하거나 제한을 풀고 다른 일정으로 안내해 주세요` });
+        continue;
+      }
       const p = Array.isArray(a.users?.profiles) ? a.users.profiles[0] : a.users?.profiles;
       if (!p) {
         exceptions.push({ appId: a.id, reason: "프로필 정보가 없어 매칭할 수 없어요" });
@@ -183,12 +192,12 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
       });
     }
 
-    // 데이터 누락은 예외 큐로 (MAT-13)
+    // 데이터 누락·계정 제한은 예외 큐로 (MAT-13). 신청은 EXCEPTION으로 두어 대기에 묶이지 않게 한다
     for (const ex of exceptions) {
       await db().from("applications").update({ match_status: "EXCEPTION", match_reason: ex.reason }).eq("id", ex.appId);
       await logStatus({ entityType: "application", entityId: ex.appId, field: "match_status", from: "WAITING", to: "EXCEPTION", actor, reason: ex.reason, matchRunId: run.id });
       await db().from("exceptions").upsert(
-        { kind: "data_missing", ref_type: "application", ref_id: ex.appId, reason: ex.reason, dedupe_key: `data_missing:${ex.appId}` },
+        { kind: "data_missing", ref_type: "application", ref_id: ex.appId, reason: ex.reason, dedupe_key: `${ex.kind ?? "data_missing"}:${ex.appId}` },
         { onConflict: "dedupe_key", ignoreDuplicates: true },
       );
     }

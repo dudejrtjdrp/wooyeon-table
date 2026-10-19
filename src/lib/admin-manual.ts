@@ -43,6 +43,9 @@ export async function venueSwapOptions(tableId: string): Promise<SwapCandidate[]
 
 /** 처리할 일을 예외 처리함에 연다. 같은 키로 닫혀 있던 건이면 다시 연다(dedupe 키는 한 건뿐이라) */
 async function openTodo(key: string, row: { kind: string; ref_type: string; ref_id: string; reason: string }, actor: string) {
+  // 이미 열려 있으면(예: 예약 실패 예외) 내용과 종류를 이번 일로 고쳐 쓴다. 안 그러면 옛 버튼('예약 다시 시도')이 남아 운영자가 고른 식당이 자동으로 바뀔 수 있다
+  const { data: open } = await db().from("exceptions").update({ ...row }).eq("dedupe_key", key).eq("status", "open").select("id");
+  if (open?.length) return;
   const { data: re } = await db().from("exceptions").update({ ...row, status: "open", resolution: null, resolved_by: null, resolved_at: null }).eq("dedupe_key", key).neq("status", "open").select("id");
   for (const x of re ?? []) await logStatus({ entityType: "exception", entityId: x.id, field: "status", from: "resolved", to: "open", actor, reason: row.reason });
   if (!re?.length) await db().from("exceptions").upsert({ ...row, dedupe_key: key }, { onConflict: "dedupe_key", ignoreDuplicates: true });

@@ -107,20 +107,15 @@ export async function resolveException(form: FormData) {
       const { resendSystem } = await import("@/lib/delivery");
       ok = await resendSystem(ex.dedupe_key ?? "");
     } else if (ex.ref_type === "notification") {
-      // 알림함 저장이 실패했던 알림(failed)은 알림함에 넣고, 푸시도 다시 보낸다. 등록 기기가 없으면 알림함만으로 성공
-      const { pushNotifications } = await import("@/lib/push");
-      const { data: before } = await db().from("notifications").select("status,sent_at").eq("id", ex.ref_id).maybeSingle();
-      if (before) {
-        const { error } = await db()
-          .from("notifications")
-          .update({ status: "sent", sent_at: before.status === "sent" ? before.sent_at : new Date().toISOString(), last_error: null })
-          .eq("id", ex.ref_id);
-        if (!error) {
-          await pushNotifications([ex.ref_id]);
-          const { data: n } = await db().from("notifications").select("status,last_error").eq("id", ex.ref_id).maybeSingle();
-          ok = n?.status === "sent" && !n.last_error;
-        }
+      // 자동 메시지 화면과 같은 다시 보내기: 하루 전 안내는 지금 식당으로 다시 쓰고, 이유가 사라진 알림은 보내지 않는다 (lib/delivery.ts)
+      const { resendNotification } = await import("@/lib/delivery");
+      const r = await resendNotification(ex.ref_id, me.id);
+      if (r.skipped) {
+        await logStatus({ entityType: "exception", entityId: id, field: "resend", to: "보내지 않음", actor, reason: r.skipped });
+        done = await close(id, me.id, `다시 보낼 필요 없음: ${r.skipped}`);
+        return go("m", r.skipped);
       }
+      ok = r.ok;
     }
     await logStatus({ entityType: "exception", entityId: id, field: "resend", to: ok ? "SENT" : "FAILED", actor, reason: note || "운영자가 다시 보내기" });
     if (ok) done = await close(id, me.id, "다시 보내기 성공");

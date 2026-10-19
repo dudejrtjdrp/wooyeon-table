@@ -115,6 +115,13 @@ export async function resendSystem(exceptionKey: string): Promise<boolean> {
     .maybeSingle();
   if (!data) return false;
   const p = JSON.parse(data.reason ?? "{}") as Payload;
+  // 하루 전 안내는 실패 당시 문구가 아니라 지금 식당·예약명으로 다시 쓴다. 테이블이 해제됐거나 이미 시작했으면 올리지 않는다
+  if (key.startsWith("remind:")) {
+    const { freshRoomReminder } = await import("./pipeline");
+    const body = await freshRoomReminder(key.slice("remind:".length));
+    if (!body) return false;
+    return postSystem(data.entity_id, body, { dedupeKey: key, meta: p.meta, retry: true });
+  }
   return postSystem(data.entity_id, p.body, { dedupeKey: key, meta: p.meta, retry: true });
 }
 
@@ -156,7 +163,7 @@ export async function retryPushes(nowMs = Date.now()): Promise<number> {
 }
 
 /**
- * 운영자가 알림 한 건을 다시 보낸다 (자동 메시지 화면에서. 예외 처리함의 '다시 보내기'와 같은 방식).
+ * 운영자가 알림 한 건을 다시 보낸다 (자동 메시지 화면에서. 예외 처리함의 '다시 보내기'도 이 함수를 쓴다).
  * 알림함 저장이 실패했던 알림(failed)은 알림함에 넣고, 푸시도 다시 보낸다. 등록 기기가 없거나 알림함 전용 알림이면 알림함만으로 성공.
  * 성공하면 이 알림 때문에 열려 있던 발송 실패 예외도 닫는다
  */
