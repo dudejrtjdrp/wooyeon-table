@@ -8,7 +8,7 @@ import { refundPayment } from "@/lib/payments";
 import { assignVenue, afterConfirm, triedVenues } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { canReopen, exceptionsHref } from "@/lib/exception-view";
-import { type NoShowAction, bulkNoShowMessage, bulkNoShowTargets, closePlan, noShowPlan, parseNoShowAction } from "@/lib/exception-resolve";
+import { type NoShowAction, bulkNoShowMessage, bulkNoShowTargets, closePlan, noShowPlan, parseNoShowAction, parseSafetyLevel, safetyPlan } from "@/lib/exception-resolve";
 
 // 처리하면 예외를 닫고(누가·언제·무엇) 상태 이력에도 한 줄 남긴다. 결과는 ?m=/?e= 로 화면에 알린다.
 // 처리 문구는 요청마다 따로 돌려받는다(모듈 전역에 두면 동시에 누른 두 요청의 문구가 섞인다)
@@ -130,14 +130,14 @@ export async function resolveException(form: FormData) {
     done = (await settleNoShow(ex, action === "attended" ? "attended" : "noshow", me.id, note)).resolution;
   } else if (ex.kind === "safety") {
     const { data: rep } = await db().from("safety_reports").select("reported_id").eq("id", ex.ref_id).single();
-    const level = ["warning", "restricted", "banned"].includes(action) ? action : "none";
-    await db().from("safety_reports").update({ status: "reviewed", action: level, admin_note: note || null, reviewed_at: new Date().toISOString() }).eq("id", ex.ref_id);
-    if (rep && level !== "none") {
-      const status = level === "warning" ? "warned" : level;
-      await db().from("users").update({ account_status: status }).eq("id", rep.reported_id);
-      await logStatus({ entityType: "user", entityId: rep.reported_id, field: "account_status", to: status, actor, reason: note || "안전 신고 검토" });
+    const { data: who } = rep ? await db().from("users").select("account_status").eq("id", rep.reported_id).maybeSingle() : { data: null };
+    const plan = safetyPlan({ exceptionId: id, reportId: ex.ref_id, reportedId: rep?.reported_id ?? null, currentStatus: who?.account_status ?? null, level: parseSafetyLevel(action), adminId: me.id, note, at: new Date() });
+    await db().from("safety_reports").update(plan.report).eq("id", ex.ref_id);
+    if (plan.user && plan.userEvent) {
+      await db().from("users").update(plan.user).eq("id", plan.userEvent.entityId);
+      await logStatus(plan.userEvent);
     }
-    done = await close(id, me.id, `신고 검토: ${({ none: "조치 없음", warning: "경고", restricted: "참가 제한", banned: "영구 제한" } as Record<string, string>)[level]}`);
+    done = await close(id, me.id, plan.close.update.resolution);
   } else if (ex.kind === "venue_shortage" && action === "retry") {
     const ok = await assignVenue(ex.ref_id);
     if (ok) {

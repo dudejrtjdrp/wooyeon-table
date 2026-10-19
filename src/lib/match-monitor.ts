@@ -10,18 +10,26 @@ export interface MonitorCount {
 
 export function monitorCounts(o: {
   summary: Record<string, unknown>;
-  apps: { match_status: string }[];
+  apps: { match_status: string; table_id?: string | null; attendance_status?: string | null }[];
   tables: { status: string }[];
   /** 대시보드 '자동 재배치 성공률'의 분자 (운영자 손 없이 재배치로 확정된 사람) */
   reallocOk: number;
-}): { confirmed: MonitorCount; reallocated: MonitorCount; dissolved: MonitorCount } {
+}): { confirmed: MonitorCount; seated: number; canceledAfter: number; liveTables: number; reallocated: MonitorCount; dissolved: MonitorCount } {
   const st = (k: string) => Number(o.summary[k] ?? 0) || 0;
   const confirmed = o.apps.filter((a) => a.match_status === "CONFIRMED").length;
+  // 확정됐지만 그 뒤 취소(사전·당일)해 테이블에서 빠진 사람. 아래 목록(테이블별 참가자)과 숫자가 맞게 따로 센다
+  const isSeated = (a: (typeof o.apps)[number]) => a.match_status === "CONFIRMED" && Boolean(a.table_id) && !(a.attendance_status ?? "").startsWith("CANCELED");
+  const seated = o.apps.filter(isSeated).length;
+  const canceledAfter = confirmed - seated;
+  const liveTables = o.tables.filter((t) => t.status !== "DISSOLVED").length;
   const dissolved = o.tables.filter((t) => t.status === "DISSOLVED").length;
   const runC = st("confirmed");
   const runR = st("reallocated");
   const runD = st("dissolved");
   return {
+    seated,
+    canceledAfter,
+    liveTables,
     confirmed: { n: confirmed, diff: runC !== confirmed ? `매칭을 돌린 때는 ${runC}명이 확정됐어요. 그 뒤 취소·이동·긴급 수정으로 지금은 ${confirmed}명이에요. 대시보드도 지금 기준으로 세요.` : undefined },
     reallocated: { n: o.reallocOk, diff: runR !== o.reallocOk ? `실행 기록에는 재배치 ${runR}명이에요. 대시보드와 같이, 처음 조합에서 떨어졌다가 운영자 손 없이 다른 테이블에 확정된 사람만 셌어요.` : undefined },
     dissolved: { n: dissolved, diff: runD !== dissolved ? `매칭 중 해제 ${runD}번, 그 뒤 운영자 긴급 수정으로 해제 ${Math.max(0, dissolved - runD)}번이에요.` : undefined },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bulkNoShowMessage, bulkNoShowTargets, closePlan, noShowPlan, parseNoShowAction } from "./exception-resolve";
+import { bulkNoShowMessage, bulkNoShowTargets, closePlan, noShowPlan, parseNoShowAction, parseSafetyLevel, safetyPlan } from "./exception-resolve";
 
 const AT = new Date("2026-10-20T12:00:00Z");
 const ADMIN = "11111111-1111-4111-8111-111111111111";
@@ -63,5 +63,29 @@ describe("한꺼번에 처리", () => {
     expect(bulkNoShowMessage("noshow", 3, 0, 0)).toBe("3건 노쇼로 확정했어요");
     expect(bulkNoShowMessage("attended", 2, 1, 1)).toBe("2건 참석으로 정정했어요. 1건은 이미 출석이 처리된 신청이라 상태는 그대로 두고 닫았어요. 1건은 이미 처리됐거나 노쇼 후보가 아니라 건너뛰었어요");
     expect(bulkNoShowMessage("noshow", 0, 0, 2)).toBe("2건은 이미 처리됐거나 노쇼 후보가 아니라 건너뛰었어요");
+  });
+});
+
+describe("안전 신고 검토 (A10)", () => {
+  const at = new Date("2026-10-20T03:00:00Z");
+  const base = { exceptionId: "ex1", reportId: "r1", reportedId: "u2", adminId: "a1", at };
+  it("참가 제한: 신고는 검토함, 계정 상태와 이력, 예외 닫힘", () => {
+    const p = safetyPlan({ ...base, currentStatus: "active", level: "restricted", note: "폭언 확인" });
+    expect(p.report).toMatchObject({ status: "reviewed", action: "restricted", admin_note: "폭언 확인" });
+    expect(p.user).toEqual({ account_status: "restricted" });
+    expect(p.userEvent).toMatchObject({ entityType: "user", entityId: "u2", field: "account_status", from: "active", to: "restricted", actor: "admin:a1", reason: "폭언 확인" });
+    expect(p.close.update).toMatchObject({ status: "resolved", resolved_by: "a1", resolution: "신고 검토: 참가 제한" });
+  });
+  it("경고는 warned로, 조치 없음은 계정을 건드리지 않는다", () => {
+    expect(safetyPlan({ ...base, currentStatus: "active", level: "warning" }).user).toEqual({ account_status: "warned" });
+    const none = safetyPlan({ ...base, currentStatus: "active", level: parseSafetyLevel("x") });
+    expect(none.user).toBeNull();
+    expect(none.close.update.resolution).toBe("신고 검토: 조치 없음");
+  });
+  it("이미 영구 제한인 사람을 경고로 내리지 않는다", () => {
+    const p = safetyPlan({ ...base, currentStatus: "banned", level: "warning" });
+    expect(p.user).toBeNull();
+    expect(p.userEvent).toBeNull();
+    expect(p.close.update.resolution).toContain("이미 영구 제한 상태라 그대로 둠");
   });
 });

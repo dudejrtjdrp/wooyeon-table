@@ -66,3 +66,29 @@ export function bulkNoShowMessage(action: NoShowAction, done: number, unchanged:
   if (skipped) parts.push(`${skipped}건은 이미 처리됐거나 노쇼 후보가 아니라 건너뛰었어요`);
   return parts.join(". ");
 }
+
+export type SafetyLevel = "none" | "warning" | "restricted" | "banned";
+export const parseSafetyLevel = (v: unknown): SafetyLevel => (v === "warning" || v === "restricted" || v === "banned" ? v : "none");
+const SAFETY_LABEL: Record<SafetyLevel, string> = { none: "조치 없음", warning: "경고", restricted: "참가 제한", banned: "영구 제한" };
+const STATUS_RANK: Record<string, number> = { active: 0, warned: 1, restricted: 2, banned: 3 };
+
+/**
+ * 안전 신고 검토 계획. 신고는 '검토함'으로 바꾸고, 조치가 있으면 신고당한 사람의 계정 상태와 이력을 남긴다.
+ * 이미 더 무거운 상태(예: 영구 제한)면 가벼운 조치로 내리지 않는다(신고 한 건 검토로 다른 제재가 풀리지 않게)
+ */
+export function safetyPlan(o: { exceptionId: string; reportId: string; reportedId: string | null; currentStatus: string | null; level: SafetyLevel; adminId: string; note?: string; at: Date }) {
+  const note = o.note?.trim() || null;
+  const want = o.level === "none" ? null : o.level === "warning" ? "warned" : o.level;
+  const cur = o.currentStatus ?? "active";
+  const lower = want !== null && (STATUS_RANK[want] ?? 0) <= (STATUS_RANK[cur] ?? 0);
+  const apply = want !== null && o.reportedId !== null && !lower;
+  const resolution = `신고 검토: ${SAFETY_LABEL[o.level]}${want && lower ? ` (이미 ${cur === "banned" ? "영구 제한" : cur === "restricted" ? "참가 제한" : "경고"} 상태라 그대로 둠)` : ""}`;
+  return {
+    report: { status: "reviewed" as const, action: o.level, admin_note: note, reviewed_at: o.at.toISOString() },
+    user: apply ? { account_status: want! } : null,
+    userEvent: apply
+      ? ({ entityType: "user", entityId: o.reportedId!, field: "account_status", from: cur, to: want!, actor: `admin:${o.adminId}`, reason: note || "안전 신고 검토" } satisfies StatusEventPlan)
+      : null,
+    close: closePlan(o.exceptionId, o.adminId, resolution, o.at),
+  };
+}

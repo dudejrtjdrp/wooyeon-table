@@ -43,3 +43,23 @@ describe("못 든 사람 사유·시각은 빈칸이 없다", () => {
     expect(failNote({ match_status: "EXCEPTION", match_reason: null }, [], null)).toEqual({ reason: "신청 정보가 빠져 매칭에서 뺐어요. 예외 처리함에서 확인해 주세요", label: "예외", at: null });
   });
 });
+
+describe("지금 테이블에 앉은 사람 (목록과 같은 숫자)", () => {
+  it("확정 뒤 취소한 사람과 해제 테이블은 따로 센다", () => {
+    const c = monitorCounts({
+      summary: { confirmed: 3 },
+      apps: [
+        { match_status: "CONFIRMED", table_id: "t1", attendance_status: "SCHEDULED" },
+        { match_status: "CONFIRMED", table_id: "t1", attendance_status: "ATTENDED" },
+        { match_status: "CONFIRMED", table_id: null, attendance_status: "CANCELED_LATE" },
+      ],
+      tables: [{ status: "DONE" }, { status: "DISSOLVED" }],
+      reallocOk: 0,
+    });
+    expect(c.confirmed.n).toBe(3);
+    expect(c.seated).toBe(2);
+    expect(c.canceledAfter).toBe(1);
+    expect(c.liveTables).toBe(1);
+    expect(c.dissolved.n).toBe(1);
+  });
+});

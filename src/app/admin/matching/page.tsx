@@ -60,10 +60,10 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
   }[];
   const { data: appsRaw } = await db()
     .from("applications")
-    .select("id,user_id,table_id,match_status,application_status,payment_status,resolution,realloc_count,match_reason,areas,near_ok,application_slots(slot_id),users(name,profiles(birth_year,gender,mbti,my_traits,wanted_traits))")
+    .select("id,user_id,table_id,match_status,attendance_status,application_status,payment_status,resolution,realloc_count,match_reason,areas,near_ok,application_slots(slot_id),users(name,profiles(birth_year,gender,mbti,my_traits,wanted_traits))")
     .eq("round_id", round.id);
   const apps = (appsRaw ?? []) as unknown as {
-    id: string; user_id: string; table_id: string | null; match_status: string; application_status: string; payment_status: string; resolution: string | null; realloc_count: number; match_reason: string | null; areas: string[] | null; near_ok: boolean | null;
+    id: string; user_id: string; table_id: string | null; match_status: string; attendance_status: string | null; application_status: string; payment_status: string; resolution: string | null; realloc_count: number; match_reason: string | null; areas: string[] | null; near_ok: boolean | null;
     application_slots: { slot_id: string }[];
     users: { name: string; profiles: { birth_year: number; gender: string; mbti: string | null; my_traits: string[] | null; wanted_traits: string[] | null } | null };
   }[];
@@ -151,7 +151,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
               <span className="flex items-center gap-2 text-[15px] font-semibold text-accent">실행 요약 <Badge v={run.status === "done" ? ["완료", "leaf"] : run.status === "running" ? ["실행 중", "candle"] : ["실패", "danger"]} /></span>
               <span className="mt-0.5 block text-[14px] text-[#4c5368]">
                 {fmtDateTime(run.started_at)} 시작{run.finished_at ? ` · ${fmtDateTime(run.finished_at)} 끝` : ""} · <Term tip={TIP.매칭규칙버전}>매칭 규칙 버전</Term> {run.algorithm_version}
-                <span className="mt-0.5 block">대상 {run.candidate_count}명 → 지금 확정 <N c={cnt.confirmed} unit="명" />(테이블 {tables.length}개) · 재배치로 확정 <N c={cnt.reallocated} unit="명" /> · 가까운 동네로 {st("widened")}명 · 테이블 병합 {st("merged")}번 · 해제 <N c={cnt.dissolved} unit="번" /> · 테이블에 못 든 사람 {failed.length}명{st("exceptions") ? ` · 정보 누락 ${st("exceptions")}건` : ""}</span>
+                <span className="mt-0.5 block">대상 {run.candidate_count}명 → 지금 테이블에 앉은 사람 {cnt.seated}명(테이블 {cnt.liveTables}개{cnt.dissolved.n ? `, 해제 ${cnt.dissolved.n}개 따로` : ""}){cnt.canceledAfter ? ` · 확정 뒤 취소 ${cnt.canceledAfter}명` : ""} · 확정 신청 <N c={cnt.confirmed} unit="명" /> · 재배치로 확정 <N c={cnt.reallocated} unit="명" /> · 가까운 동네로 {st("widened")}명 · 테이블 병합 {st("merged")}번 · 해제 <N c={cnt.dissolved} unit="번" /> · 테이블에 못 든 사람 {failed.length}명{st("exceptions") ? ` · 정보 누락 ${st("exceptions")}건` : ""}</span>
               </span>
             </span>
             <span className="flex items-center gap-1 border-l border-line pl-4 text-[14px] font-semibold text-accent">처리 기록 보기 <ChevronDown size={18} className="transition group-open:rotate-180" /></span>
