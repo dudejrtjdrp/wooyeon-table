@@ -1,3 +1,4 @@
+import { meetingEnded } from "@/lib/meeting-time";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { RoundTable } from "@/components/brand";
@@ -16,7 +17,7 @@ type A = {
   id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; resolution: string | null;
   table_id: string | null; created_at: string;
   rounds: { title: string; match_at: string };
-  dining_tables: { id: string; slots: { starts_at: string; region: string } | null; venues: { name: string; address: string; price_range: string | null } | null } | null;
+  dining_tables: { id: string; status?: string; slots: { starts_at: string; ends_at?: string; region: string } | null; venues: { name: string; address: string; price_range: string | null } | null } | null;
 };
 
 export default async function MyTables() {
@@ -26,7 +27,7 @@ export default async function MyTables() {
   const t = await now();
   const { data } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at),dining_tables(id,slots(starts_at,region),venues(name,address,price_range))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at),dining_tables(id,status,slots(starts_at,ends_at,region),venues(name,address,price_range))")
     .eq("user_id", me.id)
     .order("created_at", { ascending: false });
   const apps = (data ?? []) as unknown as A[];
@@ -34,7 +35,8 @@ export default async function MyTables() {
   const reviewed = new Set((fb ?? []).map((f) => f.application_id));
 
   const tables = apps.filter((a) => a.match_status === "CONFIRMED" && a.dining_tables?.slots);
-  const upcoming = tables.filter((a) => new Date(a.dining_tables!.slots!.starts_at).getTime() + 3 * 3600_000 > t.getTime() && !a.attendance_status?.match(/ATTENDED|NO_SHOW|CANCELED/));
+  // 홈·모임 정보와 같은 기준(lib/meeting-time.ts): '모임 끝'이거나 끝나는 시각이 지났으면 지난 모임
+  const upcoming = tables.filter((a) => !meetingEnded(a.dining_tables, t) && !a.attendance_status?.match(/ATTENDED|NO_SHOW|CANCELED/));
   const past = tables.filter((a) => !upcoming.includes(a));
   const pending = apps.filter((a) => !tables.includes(a) && a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED"));
 

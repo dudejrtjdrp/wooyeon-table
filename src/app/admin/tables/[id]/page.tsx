@@ -1,3 +1,4 @@
+import { isBot } from "@/lib/sim/persona-id";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, PageHeader, Panel, Term, btnInk, ctl } from "@/components/admin-ui";
@@ -15,7 +16,7 @@ import { db } from "@/lib/supabase";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { canSwapVenue } from "@/lib/admin-manual-rules";
 import { venueSwapOptions } from "@/lib/admin-manual";
-import { ConfirmButton } from "../../confirm-button";
+import { ConfirmButton, SubmitButton } from "../../confirm-button";
 import { reservationAction, venueAction } from "./actions";
 import { OpsPanel } from "./ops-panel";
 
@@ -45,7 +46,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
   if (!t) notFound();
   const { data: resv } = await db().from("reservations").select("id,channel,status,party_size,reservation_name,external_ref,deep_link,attempts,last_error,mode,updated_at").eq("table_id", id).maybeSingle();
   const [{ data: apps }, { data: room }, { data: events }] = await Promise.all([
-    db().from("applications").select("id,user_id,attendance_status,realloc_count,users(name,profiles(birth_year,gender,mbti,job))").eq("table_id", id),
+    db().from("applications").select("id,user_id,attendance_status,realloc_count,users(name,login_id,is_demo,profiles(birth_year,gender,mbti,job))").eq("table_id", id),
     db().from("chat_rooms").select("id,created_at").eq("table_id", id).maybeSingle(),
     db().from("status_events").select("id,entity_type,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "dining_table").eq("entity_id", id).order("created_at"),
   ]);
@@ -53,7 +54,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
   const { data: admins } = adminIds.length ? await db().from("users").select("id,name").in("id", adminIds) : { data: [] };
   const adminName = new Map((admins ?? []).map((a) => [a.id, a.name]));
   const { data: linkedEx } = ex ? await db().from("exceptions").select("id,kind,reason,status").eq("id", ex).maybeSingle() : { data: null };
-  const members = (apps ?? []) as unknown as { id: string; user_id: string; attendance_status: string | null; realloc_count: number; users: { name: string; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null } }[];
+  const members = (apps ?? []) as unknown as { id: string; user_id: string; attendance_status: string | null; realloc_count: number; users: { name: string; login_id?: string; is_demo?: boolean; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null } }[];
   const { data: msgs } = room ? await db().from("chat_messages").select("id,kind,body,created_at,meta").eq("room_id", room.id).order("created_at") : { data: [] };
   const { data: notes } = members.length
     ? await db().from("notifications").select("id,title,status,scheduled_at,sent_at,read_at,attempts,user_id").in("user_id", members.map((m) => m.user_id)).eq("link", `/tables/${id}`).order("scheduled_at")
@@ -98,6 +99,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
               {members.map((m) => (
                 <li key={m.id} className="flex items-center justify-between py-2.5 text-[14px]">
                   <Link href={`/admin/applicants/${m.id}`} className="font-semibold hover:underline">{m.users.name}</Link>
+                  {isBot(m.users) && <span title="시연용 봇 계정이에요" className="ml-1.5 rounded-full bg-field px-2 py-0.5 text-[11px] font-semibold text-muted">시연 봇</span>}
                   <span className="text-muted">{m.users.profiles ? `${ageBand(m.users.profiles.birth_year, year)} ${m.users.profiles.gender === "M" ? "남" : "여"} ${m.users.profiles.mbti ?? ""} ${m.users.profiles.job ?? ""}` : ""}{m.realloc_count ? `, 재배치 ${m.realloc_count}번` : ""}</span>
                   <Badge v={label(ATTEND, m.attendance_status)} />
                 </li>
@@ -113,6 +115,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
             </ol>
             <Link href="/admin/contents" className="mt-3 inline-block text-[13px] font-semibold text-accent hover:underline">콘텐츠와 노출 규칙 관리 →</Link>
           </Panel>
+          <div id="chat" className="scroll-mt-6" />
           <Panel title="단체방">
             {!room ? <p className="text-[14px] text-danger">단체방이 없어요.</p> : (
               <ul className="space-y-2 text-[13px]">
@@ -208,8 +211,8 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
                   <form action={reservationAction} className="flex flex-wrap items-center gap-2 pt-1">
                     <input type="hidden" name="table_id" value={t.id} />
                     <input name="ref" placeholder="직접 예약했다면 예약번호" className="h-10 min-w-40 flex-1 rounded-xl border border-line bg-field px-3 text-[13px]" />
-                    <button name="op" value="manual" className="h-10 rounded-xl border border-accent/40 px-3 text-[13px] font-semibold text-accent">예약 완료로 표시</button>
-                    <button name="op" value="retry" className="h-10 rounded-xl bg-accent px-3 text-[13px] font-semibold text-white">다시 시도</button>
+                    <SubmitButton name="op" value="manual" className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-accent/40 px-3 text-[13px] font-semibold text-accent">예약 완료로 표시</SubmitButton>
+                    <SubmitButton name="op" value="retry" className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-accent px-3 text-[13px] font-semibold text-white">다시 시도</SubmitButton>
                   </form>
                 )}
               </div>

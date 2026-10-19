@@ -14,8 +14,10 @@ import { computeMetrics, metricValue } from "@/lib/metrics";
 import { maybeTick } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "./confirm-button";
-import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants } from "./demo-actions";
+import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants, toggleBots } from "./demo-actions";
+import { botsOn } from "@/lib/sim/bots";
 import { loadMetricsInput } from "./metrics/load";
+import { roundLabel } from "@/lib/round-label";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -28,7 +30,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const t = await now();
   const { data: clock } = await db().from("app_clock").select("offset_seconds").eq("id", 1).single();
 
-  const { data: rounds } = await db().from("rounds").select("id,title,status,match_at,apply_deadline").order("match_at");
+  const { data: rounds } = await db().from("rounds").select("id,title,status,match_at,apply_deadline,slots(starts_at)").order("match_at");
   const round = rounds?.find((x) => x.id === r) ?? rounds?.find((x) => x.status !== "closed") ?? rounds?.[0];
   const nextRound = rounds?.find((x) => round && x.match_at > round.match_at);
 
@@ -44,10 +46,12 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const matchRate = paid.length && ranMatching ? Math.round((confirmed.length / paid.length) * 100) : null;
 
   const { data: run } = round ? await db().from("match_runs").select("summary,status,finished_at").eq("round_id", round.id).maybeSingle() : { data: null };
-  const { count: tableCount } = round ? await db().from("dining_tables").select("id", { count: "exact", head: true }).eq("round_id", round.id) : { count: 0 };
+  // 해제된 테이블은 빼고 센다(매칭 모니터의 '지금 테이블'과 같은 기준)
+  const { count: tableCount } = round ? await db().from("dining_tables").select("id", { count: "exact", head: true }).eq("round_id", round.id).neq("status", "DISSOLVED") : { count: 0 };
 
   // 자동 처리 상태: 마지막 실행 시각과 다시 보내는 중인 알림 (INF-08)
   const { data: ran } = await db().from("settings").select("value").eq("key", "tick.ran").maybeSingle();
+  const bots = await botsOn();
   const { count: retrying } = await db().from("notifications").select("id", { count: "exact", head: true }).eq("status", "sent").like("last_error", "푸시 실패%").lt("attempts", 3).gte("sent_at", new Date(Date.now() - 24 * 3600_000).toISOString());
 
   // 처리할 예외는 회차와 상관없이 지금 열린 것 전부(예외 처리함과 같은 기준). 아래 '주요 현황'만 고른 회차 기준이다
@@ -94,6 +98,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const metrics = round ? computeMetrics(await loadMetricsInput(), round.id) : [];
   const mt = (k: string) => metrics.find((x) => x.key === k);
   const realloc = mt("realloc_success");
+  const matchSuccess = mt("match_success");
+  const autoConfirm = mt("auto_confirm");
   const rq = round ? `?r=${round.id}` : "";
 
   return (
@@ -113,10 +119,10 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             {retrying ? <span className="ml-2 font-semibold text-warn">알림 {retrying}건 다시 보내는 중</span> : null}
           </p>
         </div>
-        <form className="flex items-center gap-2 lg:mr-[400px]" aria-label="회차 고르기">
-          <select name="r" defaultValue={round?.id} className={ctl}>
+        <form className="flex min-w-0 max-w-full items-center gap-2 lg:mr-[400px]" aria-label="회차 고르기">
+          <select name="r" defaultValue={round?.id} className={`${ctl} min-w-0 max-w-full`}>
             {rounds?.map((x) => (
-              <option key={x.id} value={x.id}>{x.title}</option>
+              <option key={x.id} value={x.id}>{roundLabel(x.title, x.slots.map((s) => s.starts_at))}</option>
             ))}
           </select>
           <button className={btnLight}>보기</button>
@@ -182,7 +188,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               );
             })}
           </ol>
-          <p className="mt-3 border-t border-line pt-3 text-[13px] text-muted">{round.title} · 매칭 {fmtDateTime(round.match_at)}{run?.finished_at ? ` · 매칭 실행 ${fmtDateTime(run.finished_at)}` : ""}</p>
+          <p className="mt-3 border-t border-line pt-3 text-[13px] text-muted">{roundLabel(round.title, round.slots.map((s) => s.starts_at))} · 매칭 {fmtDateTime(round.match_at)}{run?.finished_at ? ` · 매칭 실행 ${fmtDateTime(run.finished_at)}` : ""}</p>
         </section>
       )}
 
@@ -191,7 +197,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <h2 className="mt-8 text-[20px] font-bold tracking-[-0.02em] text-ink">주요 현황 <span className="text-[14px] font-medium text-muted">{round.title} 기준</span></h2>
           <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             <Kpi href={`/admin/applicants${rq}`} I={Users} label="신청" value={`${list.length}명`} sub={`결제 완료 ${paid.length}명`} />
-            <Kpi href={`/admin/matching${rq}`} I={ChartColumn} label="자동 매칭 성공률" value={matchRate === null ? "매칭 전" : `${matchRate}%`} sub={`확정 ${confirmed.length}명 · 테이블 ${tableCount ?? 0}개`} />
+            {/* 운영 지표 화면과 같은 정의(computeMetrics match_success·auto_confirm)로 보여 준다: 한 번이라도 확정된 결제자 ÷ 매칭이 끝난 결제자 */}
+            <Kpi href={`/admin/matching${rq}`} I={ChartColumn} label="자동 매칭 성공률" value={!ranMatching ? "매칭 전" : matchSuccess ? metricValue(matchSuccess) ?? "-" : matchRate === null ? "-" : `${matchRate}%`} sub={matchSuccess && ranMatching ? `확정 ${matchSuccess.numerator}명 ÷ 결제 ${matchSuccess.denominator}명 · 테이블 ${autoConfirm?.denominator ?? tableCount ?? 0}개` : `확정 ${confirmed.length}명 · 테이블 ${tableCount ?? 0}개`} />
             <Kpi href={`/admin/matching${rq}`} I={Shuffle} label={<>자동 <Term inLink tip={TIP.재배치}>재배치</Term> 성공률</>} value={realloc ? metricValue(realloc) ?? "대상 없음" : "-"} sub={realloc ? `대상 ${realloc.denominator}명 중 ${realloc.numerator}명이 재배치로 확정` : undefined} />
             <Kpi href={`/admin/applicants${rq}${rq ? "&" : "?"}s=CHOOSING`} I={UserRound} label={<><Term inLink tip={TIP.대체일정}>대체 일정</Term>·환불 선택 대기</>} value={`${waitingChoice.length}명`} sub="다른 일정·보관·환불을 아직 안 고름 (자리 기다리기를 고른 사람 제외)" danger={waitingChoice.length > 0} />
             <Kpi href={`/admin/attendance${rq}`} I={ChartPie} label="참석률" value={attendRate === null ? "모임 전" : `${attendRate}%`} sub={<>참석 {attended.length} · 늦은 취소 {lateCancel} · <Term inLink tip={TIP.노쇼후보}>노쇼 후보</Term> {roundNoShow}</>} />
@@ -282,6 +289,13 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               <p className="text-[14px] font-semibold">③ 테스트 참가자 체크인·후기 채우기 (모임 시작 뒤)</p>
               <p className="mt-1 text-[12px] text-muted">일부는 서로 &lsquo;다시는 싫어요&rsquo;를 골라요. 다음 매칭에서 같은 테이블에 앉지 않는지 볼 수 있어요.</p>
               <button className="mt-3 h-10 w-full rounded-xl bg-accent text-[14px] font-semibold text-white">채우기</button>
+            </form>
+
+            <form action={toggleBots} className="shadow-card rounded-[20px] bg-card p-4">
+              <input type="hidden" name="on" value={bots ? "0" : "1"} />
+              <p className="flex items-center gap-2 text-[14px] font-semibold">시연 봇 <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${bots ? "bg-leaf-soft text-leaf" : "bg-field text-muted"}`}>{bots ? "켜짐" : "꺼짐"}</span></p>
+              <p className="mt-1 text-[12px] text-muted">참가자가 결제하면 그 일정이 4명이 되도록 테스트 참가자가 같이 신청해요. 확정되면 단체방에서 성격대로 인사·대화하고, 사람이 쓴 말에 한두 명이 답해요. 모임 날엔 체크인(가끔 한 명은 안 와요)과 후기까지 남겨요.</p>
+              <button className="mt-3 h-10 w-full rounded-xl border border-line bg-card text-[14px] font-semibold hover:border-accent">{bots ? "끄기" : "켜기"}</button>
             </form>
 
             {nextRound && (

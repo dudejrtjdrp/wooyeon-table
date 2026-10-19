@@ -143,3 +143,28 @@ html[data-splash="off"] #splash { display: none; }
 .admin-main section { min-width: 0; }
 /* 가로 스크롤 상자를 기준 상자로: 안의 sr-only(absolute) 글자가 상자를 벗어나 문서 폭을 늘리지 않게 */
 .admin-main .overflow-x-auto { position: relative; }
+
+/* 어드민 표 공통 규칙 (docs/05-admin-tables.md)
+   - 표는 가로 스크롤 상자(TableScroll 또는 .overflow-x-auto) 안에 둔다. 칸을 찌그러뜨리지 말고 옆으로 넘긴다
+   - 머리 칸·배지·버튼·시각·숫자는 줄을 바꾸지 않는다
+   - 이름·주소·사유 같은 긴 글은 낱말 단위로만 줄을 바꾼다(낱말 중간에서 끊지 않음). 띄어쓰기 없는 긴 주소·메일만 칸 끝에서 넘긴다 */
+.admin-main th { white-space: nowrap; }
+.admin-main td { word-break: keep-all; overflow-wrap: break-word; }
+.admin-main td.tabular-nums,
+.admin-main td > .tabular-nums,
+.admin-main td button,
+.admin-main td .rounded-full { white-space: nowrap; }
+/* 표 안 입력칸·버튼이 칸 폭에 눌려 줄어들지 않게 */
+.admin-main td input, .admin-main td select, .admin-main td button { flex-shrink: 0; }
+/* 가로 스크롤 상자 가장자리 그림자(카드 바탕색으로 흐려짐) */
+.table-fade-r { background: linear-gradient(to left, var(--card) 15%, transparent); box-shadow: inset -10px 0 10px -10px rgb(0 0 0 / .2); }
+.table-fade-l { background: linear-gradient(to right, var(--card) 15%, transparent); box-shadow: inset 10px 0 10px -10px rgb(0 0 0 / .2); }
+@media (prefers-reduced-motion: reduce) { .table-fade-r, .table-fade-l { transition: none; } }
+
+/* 풀이 말풍선(Term): body 바로 아래 포털로 뜬다. 어드민에서는 어드민 글자·색을 따른다 */
+.term-tip { background: var(--ink); font-family: var(--font-sans); }
+body:has(.admin-theme) .term-tip { background: #17201b; font-family: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; }
+
+/* 화면 이동 진행 막대(NavProgress): 맨 위 얇은 띠 */
+.nav-progress { background: var(--accent); }
+body:has(.admin-theme) .nav-progress { background: #1e5e45; }

@@ -16,7 +16,7 @@ export function headline(a: AppRow, t?: Date): { label: string; tone: "muted" | 
   if (a.payment_status === "PENDING") return { label: "결제 대기", tone: "candle", desc: "결제를 마쳐야 매칭 대상이 돼요." };
   if (a.payment_status === "FAILED") return { label: "결제 실패", tone: "danger", desc: "결제가 되지 않았어요. 다시 시도해 주세요." };
   if (a.payment_status === "REFUND_REQUESTED" || a.payment_status === "REFUND_PROCESSING")
-    return { label: "환불 중", tone: "muted", desc: "원래 결제수단으로 환불하고 있어요." };
+    return { label: "환불 처리 중", tone: "muted", desc: "원래 결제수단으로 환불하고 있어요." };
   if (a.payment_status === "REFUNDED") return { label: "환불 완료", tone: "muted", desc: "환불이 끝났어요." };
   if (a.payment_status === "REFUND_FAILED") return { label: "환불 다시 처리 중", tone: "candle", desc: "결제사에서 환불이 한 번에 되지 않아 10분 간격으로 자동으로 다시 시도하고 있어요. 세 번 안 되면 운영팀이 직접 처리해요. 따로 하실 일은 없어요." };
   switch (a.match_status) {

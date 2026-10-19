@@ -349,7 +349,7 @@ export function Pill({ children, tone = "muted" }: { children: ReactNode; tone?:
     candle: "bg-warn-soft text-warn",
     danger: "bg-danger/10 text-danger",
   };
-  return <span className={`inline-flex h-7 shrink-0 items-center rounded-[14px] px-2.5 text-[13px] font-bold ${map[tone]}`}>{children}</span>;
+  return <span className={`inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-[14px] px-2.5 text-[13px] font-bold ${map[tone]}`}>{children}</span>;
 }
 
 export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; title: string; body?: string; action?: ReactNode }) {

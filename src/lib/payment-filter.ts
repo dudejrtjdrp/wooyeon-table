@@ -159,5 +159,5 @@ export function describePaymentFilter(f: PaymentFilter, roundTitle?: string): st
   if (f.method) parts.push(`수단 ${PAY_METHODS.find((m) => m.key === f.method)!.label}`);
   if (f.kind) parts.push(`종류 ${PAY_KINDS.find((k) => k.key === f.kind)!.label}`);
   if (f.from || f.to) parts.push(`기간 ${f.from ?? "처음"}~${f.to ?? "오늘"}`);
-  return parts.length ? parts.join(" · ") : "거르기 없음";
+  return parts.length ? parts.join(" · ") : "조건 없음(전체)";
 }

@@ -1,3 +1,4 @@
+import { meetingEnded } from "@/lib/meeting-time";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { TableMark } from "@/components/brand";
@@ -45,7 +46,8 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
   const n = await now();
   const sameDay = fmtDay(n.toISOString()) === fmtDay(t.slots.starts_at);
   const timeOf = fmtClock;
-  const chatOpen = Boolean(mine) && t.status !== "DONE";
+  const ended = meetingEnded(t, n);
+  const chatOpen = Boolean(mine) && !ended;
   const dayOf = (iso: string) => fmtDay(iso).replace(/\((.)\)$/, " $1요일");
   let lastDay = "";
   // 첫 안내(확정 공지: 장소·함께할 분·모인 이유·취소 규정)는 접지 않는다. 그 뒤 안내만 세 줄로 접는다
@@ -59,7 +61,7 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
         <span className="min-w-0 flex-1 text-[13px] leading-[1.45] text-ink2">
           <b className="text-ink">{fmtClock(t.slots.starts_at)}{t.venues ? ` · ${t.venues.name}` : ""}</b>
           <br />
-          {t.status === "DONE" ? (mine?.attendance_status === "ATTENDED" ? "모임이 끝났어요. 모임 정보에서 후기를 남길 수 있어요." : "모임이 끝났어요. 참석 확인과 후기는 모임 정보에서 볼 수 있어요.") : sameDay ? "오늘은 취소와 단체방 나가기가 안 돼요." : n >= refundCutoff(t.slots.starts_at) ? "환불 마감이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 전액 환불돼요."}
+          {ended ? (mine?.attendance_status === "ATTENDED" ? "모임이 끝났어요. 모임 정보에서 후기를 남길 수 있어요." : "모임이 끝났어요. 참석 확인과 후기는 모임 정보에서 볼 수 있어요.") : sameDay ? "오늘은 취소와 단체방 나가기가 안 돼요." : n >= refundCutoff(t.slots.starts_at) ? "환불 마감이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 전액 환불돼요."}
         </span>
         <span className="flex h-11 shrink-0 items-center text-[13px] font-bold text-accent">모임 정보</span>
       </Link>

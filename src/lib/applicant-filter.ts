@@ -128,5 +128,5 @@ export function describeApplicantFilter(f: ApplicantFilter, roundTitle?: string)
   if (f.region) parts.push(`동네 ${f.region}`);
   if (f.hist) parts.push(HISTORY.find((h) => h.key === f.hist)!.label);
   if (f.q) parts.push(`검색 '${f.q}'`);
-  return parts.length ? parts.join(" · ") : "거르기 없음";
+  return parts.length ? parts.join(" · ") : "조건 없음(전체)";
 }

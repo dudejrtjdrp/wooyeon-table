@@ -1,5 +1,6 @@
 "use server";
 
+import { euro } from "@/lib/korean";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
@@ -74,7 +75,7 @@ export async function transfer(form: FormData) {
     .select("id")
     .single();
   await db().from("application_slots").insert(slotIds.map((slot_id) => ({ application_id: next!.id, slot_id })));
-  await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "TRANSFERRED", actor: `user:${me.id}`, reason: `${r.title}로 이동` });
+  await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "TRANSFERRED", actor: `user:${me.id}`, reason: `${euro(r.title)} 이동` });
   await logStatus({ entityType: "application", entityId: next!.id, field: "match_status", to: "WAITING", actor: `user:${me.id}`, reason: "이전 신청에서 일정 이동, 결제 유지" });
   const tm = render("transferred", { round: r.title, match_at: fmtSlot(r.match_at) }, await loadTemplates());
   await notify({ userId: me.id, template: "transferred", title: tm.title, body: tm.body, link: `/applications/${next!.id}`, dedupeKey: `transferred:${appId}` });

@@ -69,6 +69,31 @@ export function genderBalance(male: number, female: number): number {
 /** 성비를 맞추지 못한 테이블인지 (한 성별만, 또는 한 명만 다른 성별) */
 export const genderSkewed = (male: number, female: number) => male + female >= 4 && Math.min(male, female) <= 1;
 
+/**
+ * 항목별 맞는 정도(0~1)와 가중치로 총점·확정 판정 점수를 낸다. 매칭 엔진과 설정 화면 미리보기(lib/weights-preview.ts)가 같이 쓴다.
+ * 총점 = 가중 평균 × 100 + 다시 만나고 싶은 쌍 가점 + 재참가자 가점 − 만족도 낮은 조합 감점
+ * 확정 판정(gate) = 성비 감점을 뺀 가중 평균 × 100 + 다시 만나고 싶은 쌍 가점
+ */
+export function weightedScore(
+  parts: Record<keyof Weights, number>,
+  w: Weights,
+  extra: { bonus: number; guideBonus: number; penalty: number },
+): { total: number; gate: number } {
+  const base =
+    parts.age * w.age +
+    parts.gender * w.gender +
+    parts.mbti * w.mbti +
+    parts.interests * w.interests +
+    parts.wanted * w.wanted +
+    parts.fresh * w.fresh;
+  const weightSum = w.age + w.gender + w.mbti + w.interests + w.wanted + w.fresh;
+  if (!(weightSum > 0)) return { total: 0, gate: 0 };
+  const total = Math.round(((base / weightSum) * 100 + extra.bonus + extra.guideBonus - extra.penalty) * 10) / 10;
+  const gateBase = base + (Math.max(parts.gender, 1) - parts.gender) * w.gender;
+  const gate = Math.round(((gateBase / weightSum) * 100 + extra.bonus) * 10) / 10;
+  return { total, gate };
+}
+
 export function scoreGroup(
   members: Candidate[],
   rel: Relations,
@@ -129,15 +154,6 @@ export function scoreGroup(
     fresh: pairs ? 1 - metPairs / pairs : 1,
   };
 
-  const w = settings.weights;
-  const base =
-    parts.age * w.age +
-    parts.gender * w.gender +
-    parts.mbti * w.mbti +
-    parts.interests * w.interests +
-    parts.wanted * w.wanted +
-    parts.fresh * w.fresh;
-  const weightSum = w.age + w.gender + w.mbti + w.interests + w.wanted + w.fresh;
   const bonus = Math.min(AGAIN_MAX, againPairs * AGAIN_PER_PAIR);
   // 피드백 루프: 지난번 만족도가 낮았던 조합은 쌍마다 최대 3점(전체 최대 9점) 깎고,
   // 지난 모임을 즐겁게 보낸 재참가자가 첫 참가자와 함께면 최대 2점 더한다. 둘 다 후기를 남긴 사람의 신뢰도(참석 횟수)만큼만 반영하고,
@@ -152,9 +168,7 @@ export function scoreGroup(
       }))
     : 0;
   const guideBonus = Math.round(GUIDE_BONUS * guideTrust * 10) / 10;
-  const total = Math.round(((base / weightSum) * 100 + bonus + guideBonus - penalty) * 10) / 10;
-  const gateBase = base + (Math.max(parts.gender, 1) - parts.gender) * w.gender;
-  const gate = Math.round(((gateBase / weightSum) * 100 + bonus) * 10) / 10;
+  const { total, gate } = weightedScore(parts, settings.weights, { bonus, guideBonus, penalty });
 
   return {
     parts,

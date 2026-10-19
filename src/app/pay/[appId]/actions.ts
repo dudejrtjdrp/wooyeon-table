@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect, RedirectType } from "next/navigation";
+import { after } from "next/server";
 import { requireProfile } from "@/lib/auth";
 import { type PassType } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
@@ -28,7 +29,9 @@ export async function pay(form: FormData) {
   const me = await requireProfile();
   const appId = String(form.get("app_id"));
   await load(appId, me.id);
-  await markPaid(appId, me.id, { provider: "mock", method: String(form.get("method") ?? "card"), reason: "모의 결제 승인" });
+  const paid = await markPaid(appId, me.id, { provider: "mock", method: String(form.get("method") ?? "card"), reason: "모의 결제 승인" });
+  // 시연: 같은 일정에 봇이 같이 신청한다 (lib/sim/bots.ts, 운영자 시연 패널에서 끔)
+  if (paid) after(() => import("@/lib/sim/bots").then((b) => b.botsJoin(appId)).catch((e) => console.error("[bots] 같이 신청 실패", e)));
   // 결제 화면 기록을 내 신청으로 바꾼다: 뒤로 가기가 이미 끝난 결제 화면(곧장 다시 넘어감)에 걸리지 않게
   redirect(`/applications/${appId}`, RedirectType.replace);
 }

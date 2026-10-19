@@ -1,3 +1,5 @@
+import { meetingEnded } from "@/lib/meeting-time";
+import { AI_PHOTO_NOTE, isAiPhoto } from "@/lib/venue-photo-kind";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { RoundTable } from "@/components/brand";
@@ -39,7 +41,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   } | null;
   if (!t) redirect(`/?m=${encodeURIComponent("이 모임을 찾지 못했어요. 내 모임은 단체방 탭에서 볼 수 있어요")}`);
 
-  const { data: resv } = await db().from("reservations").select("channel,status,external_ref").eq("table_id", id).maybeSingle();
+  const { data: resv } = await db().from("reservations").select("channel,status,external_ref,mode").eq("table_id", id).maybeSingle();
   const { data: memRaw } = await db()
     .from("applications")
     .select("id,user_id,attendance_status,users(name,profiles(job,gender,birth_year,interests,food_restrictions))")
@@ -56,7 +58,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const canCheckIn = mine?.attendance_status === "SCHEDULED" && n >= new Date(start.getTime() - 3600_000) && n <= end;
   // 주소를 누르면 지도 앱이 바로 열리게: 네이버 지도·카카오맵 (앱 없으면 웹 지도)
   const maps = t.venues ? mapLinks(t.venues.name, t.venues.address, t.venues.map_url) : null;
-  const done = t.status === "DONE";
+  const done = meetingEnded(t, n);
   // 갔는데 체크인을 못 한 사람이 끝난 뒤 48시간 안에 알릴 수 있게
   const missedCheckIn = canClaimAttended(mine?.attendance_status, end, n);
   // 이미 후기를 남겼으면 버튼을 '남긴 후기 고치기'로 (후기 화면은 이전 값을 채워 연다)
@@ -99,19 +101,20 @@ export default async function TablePage({ params, searchParams }: { params: Prom
         <div className="relative z-10 flex h-14 items-center px-3"><span className="flex size-11 items-center justify-center rounded-full bg-card"><BackButton href="/my-tables" /></span></div>
         {t.venues?.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={t.venues.photo_url} alt={`${t.venues.name} 사진`} className="absolute inset-0 size-full object-cover" />
+          <img src={t.venues.photo_url} alt={`${t.venues.name} 분위기 사진`} className="absolute inset-0 size-full object-cover" />
         ) : (
           <div className="pointer-events-none absolute -bottom-12 -right-6" aria-hidden="true">
             <RoundTable size={230} filled={Math.min(6, mems.length)} seats={Math.max(mems.length, 4)} />
           </div>
         )}
+        {isAiPhoto(t.venues?.photo_url) && <span className="absolute bottom-9 right-3 z-10 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white">{AI_PHOTO_NOTE}</span>}
       </header>
 
       <main className="relative -mt-6 flex-1 rounded-t-[24px] bg-paper px-5 pb-40 pt-6">
         <span className="inline-flex h-7 items-center rounded-full bg-leaf-soft px-3 text-[13px] font-semibold text-leaf">{status}{!done && ` · ${ddayLabel(dday(t.slots.starts_at, n))}`}</span>
         <h1 className="mt-3 text-[24px] font-bold leading-snug">{t.venues ? t.venues.name : "식당을 정하고 있어요"}</h1>
         <p className="mt-1 text-[14px] text-muted">
-          {[t.venues?.category, t.venues?.rating ? `평점 ${t.venues.rating}${t.venues.review_count ? ` · 리뷰 ${t.venues.review_count}` : ""}` : null].filter(Boolean).join(" · ") || t.rounds.title}
+          {[t.venues?.category, t.venues?.rating ? `평점 ${Number(t.venues.rating).toFixed(1)}${t.venues.review_count ? ` · 리뷰 ${t.venues.review_count}` : ""}` : null].filter(Boolean).join(" · ") || t.rounds.title}
         </p>
 
         <section className="mt-5 grid grid-cols-3 rounded-[18px] bg-card" aria-label="핵심 정보">
@@ -172,7 +175,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
           <h2 className="text-[18px] font-bold">찾아가는 길</h2>
           <div className="mt-3 rounded-[18px] bg-card p-4">
             <p className="text-[15px] font-semibold">{t.venues?.address ?? "식당이 정해지면 주소를 알려드릴게요"}</p>
-            {resv && <p className="mt-1 text-[13px] text-muted">{resv.status === "CONFIRMED" ? `${CHANNEL_LABEL[resv.channel as Channel]} 예약 확정${resv.external_ref ? ` · ${resv.external_ref}` : ""}` : "운영팀이 예약하고 있어요"}</p>}
+            {resv && <p className="mt-1 text-[13px] text-muted">{resv.status === "CONFIRMED" ? `${CHANNEL_LABEL[resv.channel as Channel].replace(/ 예약$/, "")} 예약 확정${resv.external_ref ? ` · ${resv.external_ref}` : ""}${resv.mode === "mock" ? " (시연용 모의 예약)" : ""}` : "운영팀이 예약하고 있어요"}</p>}
             {maps && <MapButtons links={maps} />}
             {(t.reservation_name || t.venues?.price_range) && (
               <dl className="mt-3 space-y-1.5 border-t border-line2 pt-3 text-[14px]">

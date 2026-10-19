@@ -1,5 +1,6 @@
 // 전체 변경 이력(/admin/audit)의 거르기·라벨. DB를 읽지 않는 순수 함수만 둔다 (audit.test.ts)
 import { actorLabel, eventText, fieldLabel } from "./labels";
+import { presetChange } from "./weights-presets";
 
 // ── 대상 종류 ─────────────────────────────────────────
 // status_events.entity_type 여러 개를 운영자가 아는 묶음으로. 템플릿은 setting 중 field가 template:으로 시작하는 줄이다
@@ -120,7 +121,7 @@ export function describeFilter(f: AuditFilter, adminNames?: Map<string, string>)
   if (f.actor) parts.push(`누가 ${f.actor === "admin" ? "운영자 전체" : f.actor === "system" ? "자동" : f.actor === "user" ? "참가자" : actorLabel(f.actor, adminNames)}`);
   if (f.from || f.to) parts.push(`기간 ${f.from ?? "처음"}~${f.to ?? "오늘"}`);
   if (f.q) parts.push(`검색 '${f.q}'`);
-  return parts.length ? parts.join(" · ") : "거르기 없음";
+  return parts.length ? parts.join(" · ") : "조건 없음(전체)";
 }
 
 // ── 바뀐 내용 ────────────────────────────────────────
@@ -216,6 +217,7 @@ function pairsChange(from: string, to: string): string | null {
 /** "바뀐 칸 이전 값 → 새 값" 한 줄. templateLabel은 템플릿 키를 이름으로 (labels가 templates를 모르게 밖에서 받는다) */
 export function auditChange(e: Pick<AuditEvent, "entity_type" | "field" | "from_value" | "to_value">, templateLabel?: (key: string) => string | undefined): string {
   if (e.field === "matching.weights") return weightsChange(e.from_value, e.to_value);
+  if (e.field === "matching.presets") return presetChange(e.from_value, e.to_value || null);
   if (e.field.startsWith("template:")) {
     const k = e.field.slice(9);
     return templateChange(e.from_value, e.to_value, `자동 메시지 '${templateLabel?.(k) ?? k}'`);
@@ -226,8 +228,13 @@ export function auditChange(e: Pick<AuditEvent, "entity_type" | "field" | "from_
     if (p) return `${e.field === "import" ? "엑셀로 고침" : "고침"} ${p}`;
   }
   if (e.field === "csv_export") return `CSV 내려받기 ${e.to_value}건`;
-  return eventText(e);
+  const t = eventText(e);
+  // 회차·일정 칸은 공통 라벨에 없어 '기타 변경'으로 나오던 것을 이름으로 바꾼다
+  const own = (e.entity_type === "round" || e.entity_type === "slot") && ROUND_FIELD[e.field];
+  return own && t.startsWith("기타 변경") ? `${own}${t.slice("기타 변경".length)}` : t;
 }
+
+const ROUND_FIELD: Record<string, string> = { apply_deadline: "신청 마감", match_at: "자동 매칭 실행 시각", title: "회차 이름", canceled: "회차 취소", max_tables: "최대 테이블 수", slot: "일정" };
 
 // ── 개인정보 ─────────────────────────────────────────
 /** 이력 문구 속 휴대폰 번호·이메일은 가려서 보여 준다: 010-****-5678, ab***@kakao.com */
@@ -246,6 +253,12 @@ export interface AuditContext {
   venues?: Map<string, string>;
   rooms?: Map<string, string>; // chat_room → table
   reservations?: Map<string, { tableId: string; venue?: string }>;
+  /** 회차 id → 회차 이름 */
+  rounds?: Map<string, string>;
+  /** 매칭 실행 id → 회차 */
+  runs?: Map<string, { roundId: string; round?: string }>;
+  /** 일정 id → 회차·일정 이름 */
+  slots?: Map<string, { roundId: string; name: string }>;
   templateLabel?: (key: string) => string | undefined;
 }
 
@@ -283,7 +296,7 @@ export function auditTarget(e: Pick<AuditEvent, "entity_type" | "entity_id" | "f
     case "setting": {
       if (e.field.startsWith("template:")) {
         const k = e.field.slice(9);
-        return { kind: "자동 메시지", name: c.templateLabel?.(k) ?? k, href: "/admin/messages" };
+        return { kind: "자동 메시지", name: c.templateLabel?.(k) ?? k, href: `/admin/messages/templates#tpl-${k}` };
       }
       if (e.field.startsWith("matching.")) return { kind: "설정", name: "매칭 기준", href: "/admin/settings" };
       if (e.field.startsWith("content.")) return { kind: "설정", name: "대화 콘텐츠 규칙", href: "/admin/contents" };
@@ -295,8 +308,22 @@ export function auditTarget(e: Pick<AuditEvent, "entity_type" | "entity_id" | "f
       return { kind: "새 동네 요청", name: short, href: "/admin/demand" };
     case "exception":
       return { kind: "예외", name: short, href: "/admin/exceptions" };
-    case "match_run":
-      return { kind: "자동 매칭", name: short, href: "/admin/matching" };
+    case "match_run": {
+      const r = c.runs?.get(id);
+      return { kind: "자동 매칭", name: `매칭 실행 · ${r?.round ?? short}`, href: r ? `/admin/matching?r=${r.roundId}` : "/admin/matching" };
+    }
+    case "round": {
+      const name = c.rounds?.get(id) ?? short;
+      // 회차에 남긴 '지금 매칭 돌리기' 기록은 매칭 실행으로 보인다
+      if (e.field === "match_run") return { kind: "자동 매칭", name: `매칭 실행 · ${name}`, href: `/admin/matching?r=${id}` };
+      return { kind: "회차", name, href: `/admin/rounds?r=${id}` };
+    }
+    case "slot": {
+      const sl = c.slots?.get(id);
+      return { kind: "회차 일정", name: sl?.name ?? short, href: sl ? `/admin/rounds?r=${sl.roundId}` : "/admin/rounds" };
+    }
+    case "safety_report":
+      return { kind: "안전 신고", name: short, href: "/admin/feedback" };
     case "notification":
       return { kind: "알림", name: short, href: "/admin/messages" };
     case "admin_export":

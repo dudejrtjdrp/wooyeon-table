@@ -1,3 +1,4 @@
+import { euro } from "../korean";
 import { canJoin, validateTable } from "./constraints";
 import { reasonsFor, scoreGroup } from "./score";
 import { reallocTier } from "./tiers";
@@ -356,7 +357,7 @@ export function runMatching(
         message:
           n === 0
             ? `${label(slots.get(t.slotId)!)} 테이블이 확정됐어요`
-            : `처음 테이블이 조건에 맞지 않아 ${note ?? "다른 테이블"}로 옮겨 확정됐어요`,
+            : `처음 테이블이 조건에 맞지 않아 ${euro(note ?? "다른 테이블")} 옮겨 확정됐어요`,
       };
     }
   }

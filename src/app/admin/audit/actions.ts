@@ -1,5 +1,6 @@
 "use server";
 
+import { priorityError } from "@/lib/weights-presets";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseTemplateValue, parseWeightsValue, templateValue, weightsValue } from "@/lib/audit";
@@ -22,6 +23,9 @@ export async function restoreWeights(form: FormData) {
   if (!ev || ev.field !== "matching.weights") go("e", "매칭 기준 이력만 되돌릴 수 있어요");
   const v = parseWeightsValue(which === "from" ? ev!.from_value : ev!.to_value);
   if (!v) go("e", "이 이력에는 되돌릴 값이 남아 있지 않아요");
+  // 예전 값이라도 PRD 우선순위(연령대 ≥ 성비 ≥ MBTI ≥ 관심사 ≥ 희망 성향)를 어기면 되돌리지 않는다
+  const order = priorityError(v!.weights);
+  if (order) go("e", `이 값으로는 되돌릴 수 없어요. ${order}`);
   const cur = await currentWeightsValue();
   const next = weightsValue(v!.weights, v!.min);
   if (cur === next) go("m", "지금 기준과 같아서 바꾸지 않았어요");

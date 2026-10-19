@@ -1,5 +1,6 @@
 // 휴대폰 인증번호 발급과 확인.
 // 규칙: 6자리, 3분 유효, 번호당 5회 틀리면 무효, 30초 안에 다시 보내기 불가, 한 번호로 1시간에 5번까지.
+import { iyeyo } from "./korean";
 import { createHash, randomInt } from "crypto";
 import { sendSms, smsEnabled } from "./sms";
 import { db } from "./supabase";
@@ -54,7 +55,7 @@ export async function issueCode(userId: string, rawPhone: string): Promise<SendR
   const resendAt = new Date(Date.now() + RESEND_MS).toISOString();
   if (!smsEnabled()) return { ok: true, expiresAt, resendAt, demoCode: code };
   try {
-    await sendSms(phone, `[우연한 식탁] 인증번호 ${code}를 입력해 주세요. 3분 안에 입력해야 해요.`);
+    await sendSms(phone, `[우연한 식탁] 인증번호는 ${iyeyo(code)}. 이 번호를 입력해 주세요. 3분 안에 입력해야 해요.`);
   } catch (e) {
     console.error("[sms]", e);
     return { ok: false, error: "문자를 보내지 못했어요. 잠시 뒤 다시 시도해 주세요" };

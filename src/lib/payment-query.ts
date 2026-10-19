@@ -64,16 +64,17 @@ export async function loadPaymentsAll(f: PaymentFilter, max = 5000): Promise<Pay
 /** 숫자 카드. 거른 조건이 있으면 그 조건 안에서, 없으면 전체에서 센다 (쪽 번호는 보지 않는다) */
 export async function loadPaymentTotals(f: PaymentFilter) {
   const ids = await idsFor(f);
-  const all: { amount: number; status: string; provider: string }[] = [];
+  const all: { amount: number; status: string; provider: string; users: { is_demo: boolean } | null }[] = [];
   if (!ids.none) {
     for (let page = 1; page <= 50; page++) {
-      const { q, pq } = build("amount,status,provider", { ...f, page }, ids, false, 1000);
+      const { q, pq } = build("amount,status,provider,users(is_demo)", { ...f, page }, ids, false, 1000);
       if (pq.none) break;
       const { data } = await q.order("id").range(pq.offset, pq.offset + pq.limit - 1);
-      const rows = (data ?? []) as unknown as { amount: number; status: string; provider: string }[];
+      const rows = (data ?? []) as unknown as (typeof all)[number][];
       all.push(...rows);
       if (rows.length < 1000) break;
     }
   }
-  return paymentTotals(all);
+  // 시연 계정(테스트 참가자·봇)의 모의 결제는 매출과 섞이지 않게 따로 알려 준다
+  return { ...paymentTotals(all), demoPaidSum: paymentTotals(all.filter((x) => x.users?.is_demo)).paidSum };
 }

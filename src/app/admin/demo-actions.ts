@@ -270,6 +270,17 @@ export async function resetRound(form: FormData) {
   back("이 회차를 처음 상태로 되돌렸어요");
 }
 
+/** 시연 봇 켜기·끄기 (settings demo.bots). 끄면 봇이 같이 신청·대화·체크인·후기를 하지 않는다 */
+export async function toggleBots(form: FormData) {
+  const me = await requireAdminWrite();
+  const on = form.get("on") === "1";
+  const { BOTS_KEY, botsOn } = await import("@/lib/sim/bots");
+  const was = await botsOn();
+  await db().from("settings").upsert({ key: BOTS_KEY, value: { on } }, { onConflict: "key" });
+  if (was !== on) await logStatus({ entityType: "setting", entityId: me.id, field: BOTS_KEY, from: was ? "on" : "off", to: on ? "on" : "off", actor: `admin:${me.id}`, reason: on ? "시연 봇 켜기" : "시연 봇 끄기" });
+  back(on ? "시연 봇을 켰어요" : "시연 봇을 껐어요");
+}
+
 /** 지금 시각 기준으로 밀린 작업(마감 매칭, 알림, 단체방 게시)을 바로 처리한다 */
 export async function runTick() {
   await requireAdminWrite();

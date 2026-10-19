@@ -1,3 +1,4 @@
+import { isBot } from "../sim/persona-id";
 import { logStatus } from "../events";
 import { now } from "../clock";
 import { fmtDay, fmtSlot } from "../format";
@@ -51,18 +52,21 @@ export async function loadSettings(): Promise<MatchSettings> {
 export async function loadRelations(userIds: string[]): Promise<Relations> {
   const rel: Relations = { excluded: new Set(), met: new Set(), again: new Set() };
   if (!userIds.length) return rel;
-  const [blocks, reports, prefs, enc] = await Promise.all([
+  const [blocks, reports, prefs, enc, who] = await Promise.all([
     db().from("blocks").select("blocker_id,blocked_id").in("blocker_id", userIds),
     db().from("safety_reports").select("reporter_id,reported_id").in("reporter_id", userIds),
     db().from("person_prefs").select("from_user,to_user,pref").in("from_user", userIds),
     db().from("encounters").select("user_id,met_user_id").in("user_id", userIds),
+    db().from("users").select("id,login_id,is_demo").in("id", userIds),
   ]);
+  // 시연 봇이 대본으로 남긴 '또 만나고 싶어요'와 후기는 다음 매칭 점수에 넣지 않는다(가짜 신호가 섞이지 않게). '다시는 싫어요'는 안전 쪽이라 그대로 지킨다
+  const bots = new Set((who.data ?? []).filter((u) => isBot(u)).map((u) => u.id as string));
   for (const b of blocks.data ?? []) rel.excluded.add(pairKey(b.blocker_id, b.blocked_id));
   // 신고가 접수되면 처리 결과와 상관없이 두 사람을 분리한다 (PRD 15장)
   for (const r of reports.data ?? []) rel.excluded.add(pairKey(r.reporter_id, r.reported_id));
   for (const p of prefs.data ?? []) {
     if (p.pref === "avoid") rel.excluded.add(pairKey(p.from_user, p.to_user));
-    else rel.again.add(pairKey(p.from_user, p.to_user));
+    else if (!bots.has(p.from_user)) rel.again.add(pairKey(p.from_user, p.to_user));
   }
   for (const e of enc.data ?? []) rel.met.add(pairKey(e.user_id, e.met_user_id));
 
@@ -72,7 +76,7 @@ export async function loadRelations(userIds: string[]): Promise<Relations> {
     db().from("feedbacks").select("user_id,table_id,mood_score,talk_score,rejoin_intent,created_at").in("user_id", userIds),
     db().from("applications").select("user_id").in("user_id", userIds).eq("attendance_status", "ATTENDED"),
   ]);
-  const feedbacks = (fb.data ?? []) as FeedbackRow[];
+  const feedbacks = ((fb.data ?? []) as FeedbackRow[]).filter((f) => !bots.has(f.user_id));
   const attended = new Map<string, number>();
   for (const a of att.data ?? []) attended.set(a.user_id, (attended.get(a.user_id) ?? 0) + 1);
   const fbTables = [...new Set(feedbacks.map((f) => f.table_id))];

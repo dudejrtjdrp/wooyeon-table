@@ -3,11 +3,11 @@ import { type ApplicantFilter, type ApplicantHistory, applicantDbFilter, applica
 import { db } from "./supabase";
 
 const COLS =
-  "id,user_id,payment_status,match_status,attendance_status,realloc_count,submitted_at,resolution,application_status,table_id,users(name,login_id,account_status,profiles(birth_year,gender,mbti,job)),payments(amount,status),application_slots(slots(region)),dining_tables(score,slots(region,starts_at),venues(name))";
+  "id,user_id,payment_status,match_status,attendance_status,realloc_count,submitted_at,resolution,application_status,table_id,users(name,login_id,is_demo,account_status,profiles(birth_year,gender,mbti,job)),payments(amount,status),application_slots(slots(region)),dining_tables(score,slots(region,starts_at),venues(name))";
 
 export interface ApplicantRow {
   id: string; user_id: string; payment_status: string; match_status: string; attendance_status: string | null; realloc_count: number; submitted_at: string; resolution: string | null; application_status: string; table_id: string | null;
-  users: { name: string; login_id: string; account_status: string; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null };
+  users: { name: string; login_id: string; is_demo?: boolean; account_status: string; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null };
   payments: { amount: number; status: string } | null;
   application_slots: { slots: { region: string } }[];
   dining_tables: { score: number; slots: { region: string; starts_at: string }; venues: { name: string } | null } | null;

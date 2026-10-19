@@ -36,6 +36,9 @@ export async function sendMessage(form: FormData) {
   after(async () => {
     const { data: others } = await db().from("applications").select("user_id").eq("table_id", tableId).eq("match_status", "CONFIRMED").neq("user_id", me.id);
     await pushToUsers((others ?? []).map((o) => o.user_id), { title: `${me.name}님의 새 메시지`, body: body.slice(0, 80), url: `/tables/${tableId}/chat`, tag: `chat-${tableId}` }).catch(() => null);
+    // 시연 봇이 몇 초 뒤 한두 명 답한다. 봇이 쓴 말에는 답하지 않는다 (lib/sim/bots.ts)
+    const { botReplies } = await import("@/lib/sim/bots");
+    await botReplies(tableId, { live: true }).catch((e) => console.error("[bots] 답장 실패", e));
   });
   revalidatePath(`/tables/${tableId}`);
   revalidatePath(`/tables/${tableId}/chat`);

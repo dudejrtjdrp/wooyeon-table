@@ -51,7 +51,7 @@ describe("변경 이력 거르기 (A5·D5)", () => {
   });
 
   it("CSV 이력에 남길 거르기 설명", () => {
-    expect(describeFilter({ page: 1 })).toBe("거르기 없음");
+    expect(describeFilter({ page: 1 })).toBe("조건 없음(전체)");
     expect(describeFilter({ kind: "setting", actor: `admin:${ADMIN}`, from: "2026-10-01", q: "기준", page: 1 }, new Map([[ADMIN, "이지은"]])))
       .toBe("대상 설정 · 누가 운영자 이지은 · 기간 2026-10-01~오늘 · 검색 '기준'");
   });
@@ -64,6 +64,12 @@ describe("바뀐 내용 한 줄", () => {
   it("매칭 기준은 바뀐 칸만 이전 → 새 값으로", () => {
     expect(auditChange({ entity_type: "setting", field: "matching.weights", from_value: before, to_value: after }))
       .toBe("매칭 기준 연령대 25 → 30 · 관심사 15 → 10 · 최소 점수 50 → 55");
+  });
+
+  it("매칭 템플릿 추가·삭제도 이름과 값으로 (삭제는 새 값이 빈 글자)", () => {
+    const v = JSON.stringify({ name: "주말", desc: "", age: 30, gender: 20, mbti: 20, interests: 10, wanted: 10, fresh: 10, min: 50 });
+    expect(auditChange({ entity_type: "setting", field: "matching.presets", from_value: null, to_value: v })).toMatch(/^매칭 템플릿 '주말' 추가/);
+    expect(auditChange({ entity_type: "setting", field: "matching.presets", from_value: v, to_value: "" })).toBe("매칭 템플릿 '주말' 삭제");
   });
 
   it("예전 줄(이전 값 없음)은 지금 값 전체를 보여 준다", () => {
@@ -118,6 +124,17 @@ describe("대상 이름과 링크", () => {
   it("설정은 어느 설정인지 보이게", () => {
     expect(auditTarget({ entity_type: "setting", entity_id: ADMIN, field: "matching.weights" })).toEqual({ kind: "설정", name: "매칭 기준", href: "/admin/settings" });
     expect(auditTarget({ entity_type: "setting", entity_id: ADMIN, field: "template:reminder" }, { templateLabel: () => "하루 전 안내" }).name).toBe("하루 전 안내");
+  });
+
+  it("매칭 실행은 '기타 #…' 대신 '매칭 실행 · 회차 이름'", () => {
+    const rounds = new Map([["a6d88d4d", "10월 4주차"]]);
+    expect(auditTarget({ entity_type: "round", entity_id: "a6d88d4d", field: "match_run" }, { rounds })).toEqual({ kind: "자동 매칭", name: "매칭 실행 · 10월 4주차", href: "/admin/matching?r=a6d88d4d" });
+    expect(auditTarget({ entity_type: "match_run", entity_id: "run1", field: "retry" }, { runs: new Map([["run1", { roundId: "a6d88d4d", round: "10월 4주차" }]]) })).toEqual({ kind: "자동 매칭", name: "매칭 실행 · 10월 4주차", href: "/admin/matching?r=a6d88d4d" });
+    expect(auditTarget({ entity_type: "round", entity_id: "a6d88d4d", field: "status" }, { rounds })).toEqual({ kind: "회차", name: "10월 4주차", href: "/admin/rounds?r=a6d88d4d" });
+    expect(auditTarget({ entity_type: "slot", entity_id: "s1", field: "max_tables" }, { slots: new Map([["s1", { roundId: "a6d88d4d", name: "10월 4주차 · 강남" }]]) }).name).toBe("10월 4주차 · 강남");
+    expect(auditTarget({ entity_type: "safety_report", entity_id: "rep12345", field: "status" }).kind).toBe("안전 신고");
+    expect(auditChange({ entity_type: "round", field: "match_at", from_value: "2026-11-16T15:00:00Z", to_value: "2026-11-10T01:04:00Z" })).toMatch(/^자동 매칭 실행 시각 /);
+    expect(auditChange({ entity_type: "round", field: "apply_deadline", from_value: "2026-11-16T15:00:00Z", to_value: "2026-11-10T01:04:00Z" })).not.toContain("기타");
   });
 });
 

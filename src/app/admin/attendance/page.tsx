@@ -10,7 +10,7 @@ import { db } from "@/lib/supabase";
 import { now } from "@/lib/clock";
 import { attendanceOps, type AttendOp } from "@/lib/admin-manual-rules";
 import { ctl } from "@/components/admin-ui";
-import { ConfirmButton } from "../confirm-button";
+import { ConfirmButton, SubmitButton } from "../confirm-button";
 import { attendanceAction } from "./actions";
 
 const OP_BTN: Record<AttendOp, { text: string; cls: string; confirm?: (name: string) => string }> = {
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 export default async function Attendance({ searchParams }: { searchParams: Promise<{ r?: string }> }) {
   const me = await requireAdmin();
   const { r } = await searchParams;
-  const { rounds, round } = await roundsAndCurrent(r);
+  const { round, options } = await roundsAndCurrent(r);
   const { data } = round
     ? await db().from("applications").select("id,user_id,attendance_status,table_id,users(name),dining_tables(id,status,slots(starts_at,ends_at,region))").eq("round_id", round.id).eq("match_status", "CONFIRMED")
     : { data: [] };
@@ -57,7 +57,7 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
         title="참석·취소·노쇼"
         desc={<>체크인하지 않은 사람은 모임이 끝나면 <Term tip={TIP.노쇼후보}>노쇼 후보</Term>로 올라와요. 현장에서 확인한 체크인·노쇼는 이름 아래 &lsquo;처리&rsquo;에서 바로 정해요.</>}
         how={["오른쪽에서 회차 고르기", "테이블별로 체크인 여부 보기", "'처리'를 열어 체크인·노쇼 확정·되돌리기", "노쇼 후보는 예외 처리함에서도 처리할 수 있어요"]}
-        actions={<RoundPicker rounds={rounds} current={round?.id} />}
+        actions={<RoundPicker rounds={options} current={round?.id} />}
       />
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="참석 예정" value={count("SCHEDULED")} />
@@ -94,9 +94,9 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
                             <input name="note" maxLength={100} placeholder="메모 (선택) 예: 현장에서 확인" className={`${ctl} h-10 min-w-0 flex-1 text-[13px]`} />
                             {ops.map((o) =>
                               OP_BTN[o].confirm ? (
-                                <ConfirmButton key={o} name="op" value={o} confirm={OP_BTN[o].confirm!(m.users.name)} className={`h-10 rounded-xl px-3 text-[13px] font-semibold ${OP_BTN[o].cls}`}>{OP_BTN[o].text}</ConfirmButton>
+                                <ConfirmButton key={o} name="op" value={o} confirm={OP_BTN[o].confirm!(m.users.name)} className={`inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold ${OP_BTN[o].cls}`}>{OP_BTN[o].text}</ConfirmButton>
                               ) : (
-                                <button key={o} name="op" value={o} className={`h-10 rounded-xl px-3 text-[13px] font-semibold ${OP_BTN[o].cls}`}>{OP_BTN[o].text}</button>
+                                <SubmitButton key={o} name="op" value={o} className={`inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold ${OP_BTN[o].cls}`}>{OP_BTN[o].text}</SubmitButton>
                               ),
                             )}
                           </form>

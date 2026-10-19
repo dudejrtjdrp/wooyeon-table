@@ -1,3 +1,5 @@
+import { meetingEnded } from "@/lib/meeting-time";
+import { AI_PHOTO_NOTE, isAiPhoto } from "@/lib/venue-photo-kind";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { after } from "next/server";
@@ -24,7 +26,7 @@ type ActiveRow = {
   id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; resolution: string | null;
   table_id: string | null; areas: string[] | null; dates: string[] | null;
   rounds: { title: string; match_at: string };
-  dining_tables: { slots: { starts_at: string; ends_at: string; region: string } | null; venues: { name: string; photo_url: string | null; category: string | null } | null } | null;
+  dining_tables: { status?: string; slots: { starts_at: string; ends_at: string; region: string } | null; venues: { name: string; photo_url: string | null; category: string | null } | null } | null;
 };
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
@@ -44,7 +46,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(slots(starts_at,ends_at,region),venues(name,photo_url,category))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
     .eq("user_id", me.id)
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .limit(10);
@@ -54,7 +56,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   const unpaidClosed = (a: ActiveRow) => ["PENDING", "FAILED"].includes(a.payment_status) && new Date(a.rounds.match_at) <= t;
   const live = list.filter((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED") && !unpaidClosed(a));
   // 모임이 끝난 테이블은 체크인을 안 했어도 진행 중으로 보지 않는다 (지난 모임 카드가 'D-day'로 계속 남던 문제)
-  const ended = (a: ActiveRow) => Boolean(a.dining_tables?.slots && new Date(a.dining_tables.slots.ends_at) <= t);
+  // 테이블 화면과 같은 기준: 끝난 시각이 지났거나 테이블이 '모임 끝'(DONE)이면 지난 모임
+  const ended = (a: ActiveRow) => meetingEnded(a.dining_tables, t);
   const ongoing = live.filter((a) => !["ATTENDED", "NO_SHOW"].includes(a.attendance_status ?? "") && !ended(a));
   const active = ongoing[0] ?? null;
   const next = me.hasProfile && !active ? await nextPick(me.id) : null;
@@ -231,6 +234,7 @@ function Hero({ children, right, photo }: { children: React.ReactNode; right?: R
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={photo.src} alt={photo.alt} className="absolute inset-0 size-full object-cover" />
         <div className="absolute left-4 top-4">{children}</div>
+        {isAiPhoto(photo.src) && <span className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white">{AI_PHOTO_NOTE}</span>}
       </div>
     );
   }
@@ -268,7 +272,7 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
   const others = members.filter((_, i) => memberIds[i] !== meId);
   return (
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
-      <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
+      <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 분위기 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
         <span className="inline-flex h-7 items-center rounded-full bg-ink px-3 text-[13px] font-semibold text-paper">
           {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
         </span>

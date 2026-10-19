@@ -1,5 +1,6 @@
 // 자동 메시지 템플릿. 운영자가 어드민(자동 메시지)에서 문구를 고칠 수 있고, 비워 두면 기본 문구를 쓴다.
 // {중괄호} 자리에는 발송할 때 실제 값이 들어간다.
+import { hasBatchim } from "./korean";
 import { fmtClock, fmtDay } from "./format";
 import { db } from "./supabase";
 
@@ -54,7 +55,7 @@ export const SAMPLE_VARS: Record<string, string> = {
   date: "10월 23일(금)", time: "저녁 7:30", region: "홍대·합정·연남", venue: "홍대 둥근식탁", reservation: "우연한식탁 2032", amount: "9,900원",
   reason: "고른 일정에 4명이 모이지 않았어요.",
   round: "10월 넷째 주 저녁", areas: "홍대·합정·연남", days: "10월 23일(금)·10월 24일(토)", cutoff: "10월 20일(화) 밤 12시", deadline: "10월 20일(화) 밤 12시",
-  match_at: "10월 21일(수) 오전 9시", remaining: "2", reservation_line: "예약명은 '우연한식탁 2032'이에요.",
+  match_at: "10월 21일(수) 오전 9시", remaining: "2", reservation_line: "예약명은 '우연한식탁 2032'예요.",
   venue_info: "",
   count: "1", until: "12월 18일(금)", extra_days: "7", headline: "이번 주 모임 장소 안내", message: "식당 입구가 공사 중이라 옆문으로 들어와 주세요",
   recommendation: "늘 오시던 금요일 홍대·합정·연남 · 10월 30일(금) 저녁 7:30", alternatives: "옮길 수 있는 일정: 10월 다섯째 주 저녁(10월 30일(금)·10월 31일(토), 홍대·합정·연남·강남·역삼·선릉). ",
@@ -62,11 +63,11 @@ export const SAMPLE_VARS: Record<string, string> = {
 
 /** 단체방 하루 전 공지의 {reservation_line}. 식당이 아직 없으면 예약명 대신 모임 정보 안내 */
 export const reservationLine = (reservation: string | null | undefined) =>
-  reservation ? `예약명은 '${reservation}'이에요.` : "식당과 예약명은 모임 정보에서 확인해 주세요.";
+  reservation ? `예약명은 '${reservation}'${hasBatchim(reservation) ? "이에요" : "예요"}.` : "식당과 예약명은 모임 정보에서 확인해 주세요.";
 
 /** 확정 알림의 {venue_info}. 식당이 정해졌으면 예약명, 아직이면 언제 알려 주는지 */
 export const venueInfo = (venue: string | null | undefined, reservation: string | null | undefined) =>
-  venue ? `예약명은 '${reservation ?? "우연한식탁"}'이에요. 주소와 지도는 모임 정보에서 볼 수 있어요. ` : "식당은 정해지는 대로 단체방과 알림으로 알려 드릴게요. ";
+  venue ? `예약명은 '${reservation ?? "우연한식탁"}'${hasBatchim(reservation ?? "우연한식탁") ? "이에요" : "예요"}. 주소와 지도는 모임 정보에서 볼 수 있어요. ` : "식당은 정해지는 대로 단체방과 알림으로 알려 드릴게요. ";
 
 export async function loadTemplates(): Promise<Record<string, { title?: string; body?: string }>> {
   const { data } = await db().from("settings").select("value").eq("key", "msg.templates").maybeSingle();

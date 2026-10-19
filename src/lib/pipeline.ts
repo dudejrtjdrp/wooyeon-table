@@ -1,3 +1,4 @@
+import { contentMessage } from "./content-preview";
 import { now } from "./clock";
 import { REFUND_POLICY } from "./constants";
 import { logStatus } from "./events";
@@ -389,6 +390,11 @@ export async function tick() {
   const rf = await retryRefunds().catch(() => ({ retried: 0, done: 0 }));
   if (rf.retried) done.push(`환불 다시 시도 ${rf.retried}건 (완료 ${rf.done}건)`);
 
+  // 시연 봇 체크인: 모임 종료 처리(노쇼 후보)보다 먼저 (lib/sim/bots.ts, settings demo.bots로 끔)
+  const { botArrivals, botTick } = await import("./sim/bots");
+  const arrived = await botArrivals(t).catch(() => 0);
+  if (arrived) done.push(`시연 봇 체크인 ${arrived}건`);
+
   // 3. 테이블 일정에 따른 단체방 게시와 상태 전환
   const { data: tables } = await db()
     .from("dining_tables")
@@ -413,11 +419,8 @@ export async function tick() {
       const c = await pickContents(tb.id);
       await systemMessage(
         roomId,
-        [
-          "모두 모이셨나요? 오늘의 대화 주제예요.",
-          ...c.topics.map((x, i) => `${i + 1}. ${x.body}`),
-          c.icebreakers.length ? `\n아이스브레이킹\n${c.icebreakers.map((x) => `· ${x.body}`).join("\n")}` : "",
-        ].join("\n"),
+        // 어드민 대화 콘텐츠 화면의 미리 보기와 같은 함수로 만든다(화면과 실제 게시가 어긋나지 않게)
+        contentMessage(c.topics, c.icebreakers),
         `content:${tb.id}`,
         { type: "content", common: c.common, types: c.types },
       );
@@ -456,6 +459,8 @@ export async function tick() {
   // 3-1. 후기 요청 안전망: 끝난 모임에서 참석했는데 후기 요청을 못 받은 사람 (늦게 체크인 처리된 경우 등)
   const fbs = await feedbackSafetyNet(t, tpl).catch(() => 0);
   if (fbs) done.push(`후기 요청 다시 보내기 ${fbs}건`);
+  // 3-2. 시연 봇 단체방 대화·답장·후기 (대화 주제·끝 인사가 올라간 뒤에)
+  done.push(...(await botTick(t).catch((e) => (console.error("[tick] 시연 봇 실패", e), []))));
 
   // 4. 모집 중인 회차를 지난 참가자에게 추천 (새 일정 소식 받기에 동의한 사람만)
   const recommended = await recommendOpenRounds(t, tpl);

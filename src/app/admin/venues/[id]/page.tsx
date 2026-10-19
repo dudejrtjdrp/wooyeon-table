@@ -1,3 +1,4 @@
+import { AI_PHOTO_NOTE, isAiPhoto } from "@/lib/venue-photo-kind";
 import Link from "next/link";
 import { reasonText } from "@/lib/admin-glossary";
 import { notFound } from "next/navigation";
@@ -56,6 +57,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
             ) : (
               <div className="flex aspect-[4/3] w-full items-center justify-center rounded-xl bg-field text-muted"><ImageOff size={22} aria-label="사진 없음" /></div>
             )}
+            {isAiPhoto(v.photo_url) && <p className="mt-2 text-[12px] text-muted">{AI_PHOTO_NOTE}. 참가자 화면에도 이 표시가 같이 나가요. 실제 매장 사진으로 바꾸려면 아래에서 올려 주세요.</p>}
             {!ro && <div className="mt-3"><VenuePhotoButton venueId={v.id} has={Boolean(v.photo_url)} action={uploadVenuePhoto} /></div>}
           </Panel>
           <Panel title="배정">

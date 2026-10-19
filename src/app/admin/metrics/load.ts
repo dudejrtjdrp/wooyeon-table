@@ -12,8 +12,28 @@ async function all<T>(make: (from: number, to: number) => PromiseLike<{ data: T[
   return out;
 }
 
-/** 지표 계산에 쓰는 데이터를 읽는다. 시연용 테스트 참가자도 함께 센다(데모에서 숫자가 움직이는 걸 보이려고) */
-export async function loadMetricsInput(): Promise<MetricsInput> {
+/**
+ * 지표 계산에 쓰는 데이터를 읽는다. 기본은 시연용 테스트 참가자·봇도 함께 센다(데모에서 숫자가 움직이는 걸 보이려고).
+ * excludeDemo면 시연 계정(users.is_demo)의 신청·후기, 그 신청·사람에 걸린 예외, 시연 계정만 앉은 테이블을 빼고 센다
+ */
+export async function loadMetricsInput(opts: { excludeDemo?: boolean } = {}): Promise<MetricsInput & { demoApps: number }> {
+  const input = await loadAll();
+  const demoUsers = new Set((await all<{ id: string }>((a, b) => db().from("users").select("id").eq("is_demo", true).order("id").range(a, b))).map((u) => u.id));
+  const demoApps = new Set(input.apps.filter((a) => demoUsers.has(a.user_id)).map((a) => a.id));
+  if (!opts.excludeDemo || !demoApps.size) return { ...input, demoApps: demoApps.size };
+  const appTable = await all<{ id: string; table_id: string | null; user_id: string }>((a, b) => db().from("applications").select("id,table_id,user_id").not("table_id", "is", null).order("id").range(a, b));
+  const realTables = new Set(appTable.filter((x) => !demoUsers.has(x.user_id)).map((x) => x.table_id));
+  return {
+    ...input,
+    apps: input.apps.filter((a) => !demoApps.has(a.id)),
+    tables: input.tables.filter((t) => realTables.has(t.id)),
+    exceptions: input.exceptions.filter((e) => { const x = e as typeof e & { ref_type: string; ref_id: string }; return !(x.ref_type === "application" && demoApps.has(x.ref_id)) && !(x.ref_type === "user" && demoUsers.has(x.ref_id)); }),
+    feedbackAppIds: input.feedbackAppIds.filter((id) => !demoApps.has(id)),
+    demoApps: demoApps.size,
+  };
+}
+
+async function loadAll(): Promise<MetricsInput> {
   const [apps, tables, exceptions, adminEvents, failEvents, feedbacks, rounds, rooms] = await Promise.all([
     all<MetricsInput["apps"][number]>((a, b) => db().from("applications").select("id,user_id,round_id,application_status,payment_status,match_status,attendance_status,realloc_count,resolution,submitted_at").order("id").range(a, b)),
     all<{ id: string; round_id: string; confirmed_at: string | null; explanation: { origin?: string } | null }>((a, b) => db().from("dining_tables").select("id,round_id,confirmed_at,explanation").order("id").range(a, b)),
@@ -39,7 +59,7 @@ export async function loadMetricsInput(): Promise<MetricsInput> {
   return {
     apps,
     tables: tables.map((t) => ({ id: t.id, round_id: t.round_id, confirmed_at: t.confirmed_at, origin: t.explanation?.origin ?? null })),
-    exceptions: exceptions.map((e) => ({ id: e.id, kind: e.kind, status: e.status, created_at: e.created_at, resolved_at: e.resolved_at, resolved_by: e.resolved_by, round_id: roundOf(e.ref_type, e.ref_id) })),
+    exceptions: exceptions.map((e) => ({ id: e.id, kind: e.kind, status: e.status, created_at: e.created_at, resolved_at: e.resolved_at, resolved_by: e.resolved_by, round_id: roundOf(e.ref_type, e.ref_id), ref_type: e.ref_type, ref_id: e.ref_id })),
     events: [...adminEvents, ...failEvents],
     feedbackAppIds: feedbacks.map((f) => f.application_id),
     rounds,
