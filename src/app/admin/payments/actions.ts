@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminWrite } from "@/lib/auth";
-import { cleanNote, manualRefundCheck } from "@/lib/cancel-rules";
+import { applicationLive, cleanNote, manualRefundCheck } from "@/lib/cancel-rules";
+import { now } from "@/lib/clock";
 import { isMembership } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
 import { adminBack } from "@/lib/members";
@@ -28,10 +29,18 @@ export async function manualRefund(form: FormData) {
   const note = cleanNote(form.get("note"));
   if (!note) return go("e", "환불 사유를 4자 이상 적어 주세요. 상태 이력에 그대로 남아요");
 
-  const { data } = await db().from("payments").select("id,status,provider,amount,pass_type,pass_id,users(name),applications(id)").eq("id", paymentId).maybeSingle();
-  const p = data as unknown as { id: string; status: string; provider: string; amount: number; pass_type: string | null; pass_id: string | null; users: { name: string } | null; applications: { id: string }[] } | null;
+  const { data } = await db().from("payments").select("id,status,provider,amount,pass_type,pass_id,users(name),applications(id,application_status,match_status,attendance_status)").eq("id", paymentId).maybeSingle();
+  type AppState = { id: string; application_status: string; match_status: string; attendance_status: string | null };
+  const p = data as unknown as { id: string; status: string; provider: string; amount: number; pass_type: string | null; pass_id: string | null; users: { name: string } | null; applications: AppState[] } | null;
   if (!p) return go("e", "결제를 찾지 못했어요");
-  const check = manualRefundCheck({ status: p.status, provider: p.provider, amount: p.amount, hasApplication: p.applications.length > 0 });
+  const asState = (a: AppState) => ({ applicationStatus: a.application_status, matchStatus: a.match_status, attendanceStatus: a.attendance_status });
+  // 멤버십이면 그 멤버십(이용권)으로 낸 다른 신청 중 진행 중인 것
+  let passLive = 0;
+  if (isMembership(p.pass_type) && p.pass_id) {
+    const { data: others } = await db().from("payments").select("id,applications(id,application_status,match_status,attendance_status)").eq("pass_id", p.pass_id).neq("id", p.id);
+    passLive = ((others ?? []) as unknown as { applications: AppState[] }[]).flatMap((x) => x.applications).filter((a) => applicationLive(asState(a))).length;
+  }
+  const check = manualRefundCheck({ status: p.status, provider: p.provider, amount: p.amount, hasApplication: p.applications.length > 0, application: p.applications[0] && asState(p.applications[0]), passLive });
   if (!check.ok) return go("e", check.message);
 
   const appId = p.applications[0].id;
@@ -50,7 +59,7 @@ export async function manualRefund(form: FormData) {
   }
   if (isMembership(p.pass_type) && p.pass_id) {
     const { data: pass } = await db().from("passes").select("expires_at").eq("id", p.pass_id).single();
-    const end = new Date().toISOString();
+    const end = (await now()).toISOString();
     await db().from("passes").update({ expires_at: end }).eq("id", p.pass_id);
     await logStatus({ entityType: "pass", entityId: p.pass_id, field: "expires_at", from: pass?.expires_at ?? null, to: end, actor, reason: `멤버십 환불로 기간 종료: ${note}` });
   }

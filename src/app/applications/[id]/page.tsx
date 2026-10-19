@@ -102,6 +102,15 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH") && (
             <Link href="/rounds" className="mt-4 flex h-12 w-fit items-center rounded-[14px] bg-accent px-5 text-[15px] font-bold text-white">다른 일정 보기</Link>
           )}
+          {/* 운영팀이 취소했거나 회차가 취소된 신청은 이유를 물을 곳을 바로 둔다 */}
+          {app.match_reason && (app.application_status === "CANCELED" || app.attendance_status?.startsWith("CANCELED")) && (
+            <a
+              href={`mailto:help@wooyeon-table.app?subject=${encodeURIComponent(`[우연한 식탁] ${app.rounds.title} 취소 문의`)}`}
+              className="mt-3 inline-block text-[14px] font-semibold text-accent underline underline-offset-4"
+            >
+              취소 이유 문의하기
+            </a>
+          )}
           {["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status) && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
             <>
               <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-muted">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>

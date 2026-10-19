@@ -7,6 +7,9 @@ import { logStatus } from "./events";
 import { notify } from "./notify";
 import { db } from "./supabase";
 
+/** 운영자가 대신 취소한 신청의 참가자 화면 문구. 본인이 취소한 것처럼 보이지 않게 한다 */
+export const ADMIN_CANCELED_REASON = "운영팀이 이 신청을 취소했어요. 궁금한 점은 문의해 주세요.";
+
 export type CancelResult = { ok: boolean; message: string; notFound?: boolean };
 
 /**
@@ -31,12 +34,13 @@ export async function cancelBeforeMatch(appId: string, opts: { actor: string; re
   // 조건부 업데이트: 매칭과 동시에 눌려도 한쪽만 이긴다
   const { data: up } = await db()
     .from("applications")
-    .update({ application_status: "CANCELED", match_status: "NO_MATCH" })
+    .update({ application_status: "CANCELED", match_status: "NO_MATCH", match_reason: opts.byAdmin ? ADMIN_CANCELED_REASON : null })
     .eq("id", appId)
     .eq("match_status", "WAITING")
     .select("id");
   if (!up?.length) return { ok: false, message: "이미 처리된 신청이에요" };
   await logStatus({ entityType: "application", entityId: appId, field: "application_status", from: "SUBMITTED", to: "CANCELED", actor: opts.actor, reason: opts.reason });
+  await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "WAITING", to: "NO_MATCH", actor: opts.actor, reason: opts.reason });
 
   await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
   const money = await releaseUse(appId, opts.actor, opts.reason);

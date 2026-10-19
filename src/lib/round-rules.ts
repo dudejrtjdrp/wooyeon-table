@@ -66,7 +66,9 @@ export function checkRoundEdit(o: { status: string; before: RoundFields; after: 
 }
 
 /** 회차 취소는 모집 중이고 매칭이 돌기 전일 때만 */
-export function canCancelRound(o: { status: string; hasMatchRun: boolean; matchAt: string; now: Date }): { ok: true } | { ok: false; reason: string } {
+export function canCancelRound(o: { status: string; hasMatchRun: boolean; matchAt: string; now: Date; canceled?: boolean }): { ok: true; resume?: boolean } | { ok: false; reason: string } {
+  // 이미 취소를 시작한 회차(closed + 이력 canceled)는 중간에 끊겨 남은 신청이 있으면 이어서 정리할 수 있다. 시각과 상관없이 된다(이미 닫혀 매칭이 돌지 않는다)
+  if (o.status === "closed" && o.canceled) return { ok: true, resume: true };
   if (o.status !== "open") return { ok: false, reason: "모집 중인 회차만 취소할 수 있어요" };
   if (o.hasMatchRun) return { ok: false, reason: "이미 매칭이 돌아 회차를 취소할 수 없어요. 테이블별로 처리해 주세요" };
   // 매칭 시각이 지났으면 스케줄러가 곧 매칭을 돌린다. 둘이 엇갈리지 않게 막는다

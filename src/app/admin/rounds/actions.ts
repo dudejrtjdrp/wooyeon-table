@@ -31,7 +31,7 @@ function failRound(form: FormData, msg: string): never {
 }
 
 export async function createRound(form: FormData) {
-  await requireAdminWrite("/admin/rounds");
+  const me = await requireAdminWrite("/admin/rounds");
   const title = String(form.get("title") ?? "").trim();
   const dates0 = form.getAll("dates").map(String).filter(Boolean);
   const time0 = String(form.get("time") ?? "19:30");
@@ -66,6 +66,11 @@ export async function createRound(form: FormData) {
   const { data: venues } = await db().from("venues").select("id,region").eq("active", true);
   const vs = (slots ?? []).flatMap((s) => (venues ?? []).filter((v) => v.region === s.region).map((v) => ({ venue_id: v.id, slot_id: s.id, tables_available: 2 })));
   if (vs.length) await db().from("venue_slots").insert(vs);
+  // 누가 언제 어떤 조건으로 만들었는지 남긴다 (처리 이력)
+  await logStatus({
+    entityType: "round", entityId: round!.id, field: "status", from: null, to: "open", actor: `admin:${me.id}`,
+    reason: `회차 만들기: ${title} · 신청 마감 ${deadline.replace("T", " ")} · 자동 매칭 ${matchAtRaw.replace("T", " ")} · 일정 ${rows.length}개(${regions.join("·")}) · 일정당 최대 ${maxTables}테이블`,
+  });
   // 이 동네가 열리길 기다리던 사람에게 알린다 (지역 수요 조사)
   const { data: waiting } = await db().from("region_demands").select("id,user_id,area").in("area", regions).is("notified_at", null);
   for (const w of waiting ?? []) {
@@ -158,6 +163,8 @@ export async function updateRound(form: FormData) {
   back(roundId, { m: `${what}을(를) 바꿨어요. 이전 값은 변경 이력에 남았어요${told ? `. 결제를 마친 ${told}명에게 바뀐 결과 안내 시각을 알렸어요` : ""}` });
 }
 
+const ROUND_CANCELED_REASON = "운영 사정으로 이번 회차가 취소됐어요. 결제하셨다면 그대로 돌려드려요.";
+
 /** 매칭 전 회차 취소: 신청을 모두 취소하고, 결제한 사람은 자동 환불(멤버십·보유 이용권은 쓴 횟수 반환), 신청자 전원에게 알린다 */
 export async function cancelRound(form: FormData) {
   const roundId = String(form.get("r") ?? "");
@@ -166,24 +173,31 @@ export async function cancelRound(form: FormData) {
   const note = String(form.get("reason") ?? "").trim().slice(0, 100);
   const round = await loadRound(roundId);
   const { data: run } = await db().from("match_runs").select("id").eq("round_id", roundId).maybeSingle();
-  const ok = canCancelRound({ status: round.status, hasMatchRun: !!run, matchAt: round.match_at, now: await now() });
-  if (!ok.ok) back(roundId, { e: ok.reason }, "cancel");
+  const { data: ev } = await db().from("status_events").select("reason").eq("entity_type", "round").eq("entity_id", roundId).eq("field", "canceled").eq("to_value", "true").limit(1);
+  const ok = canCancelRound({ status: round.status, hasMatchRun: !!run, matchAt: round.match_at, now: await now(), canceled: !!ev?.length });
+  if (!ok.ok) return back(roundId, { e: ok.reason }, "cancel");
+  // 이어서 정리할 때는 처음 취소한 사유를 그대로 쓴다
+  const why = ok.resume ? (ev?.[0]?.reason ?? "회차 취소") : `회차 취소${note ? `: ${note}` : ""}`;
 
-  // 먼저 회차를 닫아 새 신청과 자동 매칭을 막는다 (DB 상태값에 '취소'가 없어 'closed' + 변경 이력의 canceled로 구분한다)
-  const { data: up } = await db().from("rounds").update({ status: "closed" }).eq("id", roundId).eq("status", "open").select("id");
-  if (!up?.length) back(roundId, { e: "그 사이 매칭이 시작돼 취소하지 못했어요" }, "cancel");
-  const why = `회차 취소${note ? `: ${note}` : ""}`;
-  await logStatus({ entityType: "round", entityId: roundId, field: "status", from: "open", to: "closed", actor, reason: why });
-  await logStatus({ entityType: "round", entityId: roundId, field: "canceled", from: "false", to: "true", actor, reason: why });
+  if (!ok.resume) {
+    // 먼저 회차를 닫아 새 신청과 자동 매칭을 막는다 (DB 상태값에 '취소'가 없어 'closed' + 변경 이력의 canceled로 구분한다, docs/01-state-flow.md)
+    // 신청 정리 중에 끊기면 같은 버튼('남은 신청 정리')으로 이어서 한다. 신청마다 조건부 업데이트라 두 번 돌려도 한 번만 처리된다
+    const { data: up } = await db().from("rounds").update({ status: "closed" }).eq("id", roundId).eq("status", "open").select("id");
+    if (!up?.length) return back(roundId, { e: "그 사이 매칭이 시작돼 취소하지 못했어요" }, "cancel");
+    await logStatus({ entityType: "round", entityId: roundId, field: "status", from: "open", to: "closed", actor, reason: why });
+    await logStatus({ entityType: "round", entityId: roundId, field: "canceled", from: "false", to: "true", actor, reason: why });
+  }
 
-  const { data: apps } = await db().from("applications").select("id,user_id,application_status,payment_status").eq("round_id", roundId).neq("application_status", "CANCELED");
+  const { data: apps } = await db().from("applications").select("id,user_id,application_status,payment_status,match_status").eq("round_id", roundId).neq("application_status", "CANCELED");
   const tpl = await loadTemplates();
   const m = render("round_canceled", { round: round.title }, tpl);
   let told = 0;
   for (const a of apps ?? []) {
-    const { data: done } = await db().from("applications").update({ application_status: "CANCELED", match_status: "NO_MATCH" }).eq("id", a.id).neq("application_status", "CANCELED").select("id");
+    // 참가자 화면에 '본인이 취소한 것'처럼 보이지 않게 이유 한 줄을 남긴다 (match_reason은 신청 화면 본문)
+    const { data: done } = await db().from("applications").update({ application_status: "CANCELED", match_status: "NO_MATCH", match_reason: ROUND_CANCELED_REASON }).eq("id", a.id).neq("application_status", "CANCELED").select("id");
     if (!done?.length) continue;
     await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: a.application_status, to: "CANCELED", actor, reason: why });
+    if (a.match_status !== "NO_MATCH") await logStatus({ entityType: "application", entityId: a.id, field: "match_status", from: a.match_status, to: "NO_MATCH", actor, reason: why });
     await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${a.id}:%`);
     // 1회권은 refundPayment로 원결제수단 환불. 결제사에서 안 되면 10분 간격 재시도 → 세 번째 실패에 예외 처리함으로 (lib/payments.ts)
     await releaseUse(a.id, actor, why);
@@ -198,7 +212,7 @@ export async function cancelRound(form: FormData) {
   const failed = (after ?? []).filter((a) => a.payment_status === "REFUND_FAILED").length;
   revalidatePath("/admin/rounds");
   back(roundId, {
-    m: `'${round.title}' 회차를 취소했어요. 신청자 ${told}명에게 알렸고 ${refunded}건을 돌려드렸어요${failed ? `. 결제사에서 바로 안 된 ${failed}건은 10분 뒤 자동으로 다시 시도하고, 세 번 안 되면 예외 처리함에 올라가요` : ""}`,
+    m: `'${round.title}' 회차를 ${ok.resume ? "마저 정리했어요" : "취소했어요"}. 신청자 ${told}명에게 알렸고 ${refunded}건을 돌려드렸어요${failed ? `. 결제사에서 바로 안 된 ${failed}건은 10분 뒤 자동으로 다시 시도하고, 세 번 안 되면 예외 처리함에 올라가요` : ""}`,
   }, "cancel");
 }
 

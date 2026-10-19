@@ -82,13 +82,29 @@ export function planCancel(t: CancelTarget, at: Date): CancelPlan {
   return { ok: false, message: "지금 상태에서는 취소할 수 없어요" };
 }
 
-export type RefundTarget = { status: string; provider: string; amount: number; hasApplication: boolean };
+export type RefundTarget = {
+  status: string; provider: string; amount: number; hasApplication: boolean;
+  /** 연결된 신청의 상태. 매칭 대기·확정(참석 예정)이면 신청이 살아 있다 */
+  application?: { applicationStatus: string; matchStatus: string; attendanceStatus: string | null };
+  /** 멤버십이면 그 멤버십으로 낸 다른 신청 중 아직 진행 중인 수 */
+  passLive?: number;
+};
+
+/** 신청이 아직 살아 있는지: 취소되지 않았고, 매칭을 기다리거나 확정돼 참석 예정인 상태 */
+export function applicationLive(a: { applicationStatus: string; matchStatus: string; attendanceStatus: string | null }): boolean {
+  if (a.applicationStatus === "CANCELED") return false;
+  if (["WAITING", "MATCHING", "REALLOCATING"].includes(a.matchStatus)) return true;
+  return a.matchStatus === "CONFIRMED" && (a.attendanceStatus === null || a.attendanceStatus === "SCHEDULED");
+}
 
 /** 운영자 수동 환불을 할 수 있는지. 결제 완료 건만, 돈이 오간 결제만 */
 export function manualRefundCheck(p: RefundTarget): { ok: true } | { ok: false; message: string } {
   if (p.status !== "PAID") return { ok: false, message: "결제 완료 건만 환불할 수 있어요" };
   if (p.provider === "pass" || p.amount <= 0) return { ok: false, message: "보유 이용권으로 낸 신청이라 돌려드릴 금액이 없어요. 이용권은 신청 취소로 돌려주세요" };
   if (!p.hasApplication) return { ok: false, message: "이 결제에 연결된 신청을 찾지 못했어요" };
+  // 돈만 돌려주고 신청은 그대로 두면, 환불받은 사람이 테이블에 남거나 매칭 대기에 묶인다. 신청 취소는 대리 취소로(환불도 함께 된다)
+  if (p.application && applicationLive(p.application)) return { ok: false, message: "이 결제의 신청이 아직 진행 중이에요. 신청자 화면에서 대리 취소하면 환불도 함께 돼요" };
+  if (p.passLive) return { ok: false, message: `이 멤버십으로 낸 신청 ${p.passLive}건이 아직 진행 중이에요. 먼저 대리 취소하거나 모임이 끝난 뒤 환불해 주세요` };
   return { ok: true };
 }
 

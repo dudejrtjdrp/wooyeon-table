@@ -97,7 +97,7 @@ export default async function Settings() {
                                 <option value="full">전체 권한</option>
                                 <option value="viewer">조회 전용</option>
                               </select>
-                              <button className={btnLight}>바꾸기</button>
+                              <ConfirmButton confirm={`${a.name}님의 권한을 바꿔요. 조회 전용이 되면 바로 아무것도 고칠 수 없어요. 계속할까요?`} className={btnLight}>바꾸기</ConfirmButton>
                             </form>
                           )}
                         </td>

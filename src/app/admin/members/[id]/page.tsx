@@ -8,7 +8,7 @@ import { now } from "@/lib/clock";
 import { LEGACY_PASS_LABEL, PASSES, isMembership, won } from "@/lib/constants";
 import { fmtDate, fmtDateTime, fmtSlot } from "@/lib/format";
 import { ACCOUNT, ATTEND, MATCH, PAYMENT, actorLabel, eventText, label } from "@/lib/labels";
-import { maskPhone } from "@/lib/members";
+import { maskLoginId, maskPhone } from "@/lib/members";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "../../confirm-button";
 import { setAccountStatus } from "../../applicants/[id]/actions";
@@ -167,7 +167,7 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
           <Panel title="프로필">
             <dl className="space-y-2.5 text-[14px] text-ink">
               {[
-                ["로그인 ID", u.login_id],
+                ["로그인 ID", maskLoginId(u.login_id)],
                 ["로그인", (ids ?? []).map((i) => ({ kakao: "카카오", naver: "네이버", google: "Google" })[i.provider as "kakao"]).join(", ") || "휴대폰 번호"],
                 ["연락처", <span key="ph" className="flex items-center gap-2">{maskPhone(u.phone)}{u.phone_verified_at && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-semibold text-accent">인증 완료</span>}</span>],
                 ["프로필", p ? `${p.birth_year}년생 ${p.gender === "M" ? "남" : "여"}${p.mbti ? `, ${p.mbti}` : ""}` : "아직 안 만들었어요"],

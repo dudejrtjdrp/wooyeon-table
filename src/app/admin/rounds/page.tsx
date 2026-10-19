@@ -56,7 +56,9 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   const submitted = (roundApps ?? []).filter((a) => a.application_status === "SUBMITTED").length;
   const paid = (roundApps ?? []).filter((a) => a.payment_status === "PAID").length;
   const { data: run } = selected ? await db().from("match_runs").select("id").eq("round_id", selected.id).maybeSingle() : { data: null };
-  const cancelCheck = selected ? canCancelRound({ status: selected.status, hasMatchRun: !!run, matchAt: selected.match_at, now: t }) : null;
+  const cancelCheck = selected ? canCancelRound({ status: selected.status, hasMatchRun: !!run, matchAt: selected.match_at, now: t, canceled: canceled.has(selected.id) }) : null;
+  // 취소하다 끊겨 아직 정리되지 않은 신청이 남은 회차
+  const leftover = selected && statusOf(selected) === "canceled" ? (roundApps ?? []).length : 0;
   // '이렇게 바뀌어요' 미리보기: 고친 값을 주소로 받아 바로 저장하지 않고 먼저 보여 준다 (E3)
   const preview =
     selected && sp.edit === "1"
@@ -135,6 +137,15 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
             <Panel title={`${selected.title} 고치기`}>
               {ro ? (
                 <p className="text-[14px] text-muted">조회 전용 계정이라 회차를 고치거나 취소할 수 없어요. 전체 권한 운영자에게 부탁해 주세요.</p>
+              ) : leftover > 0 ? (
+                <div id="cancel" className="scroll-mt-6 rounded-2xl border border-danger/30 p-4 text-[14px]">
+                  <p className="font-semibold text-danger">취소한 회차인데 아직 정리되지 않은 신청이 {leftover}건 남아 있어요.</p>
+                  <p className="mt-1 text-[13px] text-muted">취소 처리 중에 끊긴 것 같아요. 남은 신청만 같은 방법으로 취소·환불하고 알려요. 이미 처리한 신청은 다시 건드리지 않아요.</p>
+                  <form action={cancelRound} className="mt-3">
+                    <input type="hidden" name="r" value={selected.id} />
+                    <ConfirmButton confirm={`남은 신청 ${leftover}건을 취소하고 결제한 분은 돌려드려요. 계속할까요?`} className={btnDanger}>남은 신청 정리하기</ConfirmButton>
+                  </form>
+                </div>
               ) : !editable ? (
                 <p className="text-[14px] text-muted">{statusOf(selected) === "canceled" ? "취소한 회차예요. 신청자 환불과 알림은 결제·환불, 자동 메시지에서 볼 수 있어요." : "모집 중인 회차만 고칠 수 있어요. 매칭이 시작된 뒤에는 테이블별로 처리해 주세요."}</p>
               ) : (

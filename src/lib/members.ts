@@ -26,6 +26,12 @@ export function escapeLike(s: string): string {
 }
 
 /** 연락처는 가운데를 가린다: 01012345678 → 010-****-5678 */
+/** 로그인 ID. 휴대폰 번호로 가입한 사람은 ID가 곧 번호라 연락처처럼 가린다 */
+export function maskLoginId(id: string | null | undefined): string {
+  if (!id) return "-";
+  return /^\+?[\d-]{10,13}$/.test(id) ? maskPhone(id) : id;
+}
+
 export function maskPhone(ph: string | null | undefined): string {
   if (!ph) return "-";
   const d = ph.replace(/\D/g, "");

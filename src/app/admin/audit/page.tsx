@@ -1,14 +1,15 @@
 import { Download } from "lucide-react";
 import Link from "next/link";
 import { PageHeader, btn, btnLight, ctl, td, th } from "@/components/admin-ui";
-import { AUDIT_KINDS, AUDIT_PAGE_SIZE, auditChange, auditSearch, auditTarget, maskText, parseAuditFilter, parseWeightsValue } from "@/lib/audit";
+import { AUDIT_KINDS, AUDIT_PAGE_SIZE, auditChange, auditSearch, auditTarget, maskText, parseAuditFilter, parseTemplateValue, parseWeightsValue, templateValue } from "@/lib/audit";
 import { auditContext, currentWeightsValue, loadAudit, templateLabel } from "@/lib/audit-query";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime } from "@/lib/format";
 import { actorLabel } from "@/lib/labels";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "../confirm-button";
-import { restoreWeights } from "./actions";
+import { restoreTemplate, restoreWeights } from "./actions";
+import { loadTemplates } from "@/lib/templates";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,11 @@ export const dynamic = "force-dynamic";
 export default async function Audit({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await requireAdmin();
   const f = parseAuditFilter(await searchParams);
-  const [{ rows, total }, { data: admins }, curWeights] = await Promise.all([
+  const [{ rows, total }, { data: admins }, curWeights, curTemplates] = await Promise.all([
     loadAudit(f),
     db().from("users").select("id,name").eq("role", "admin").is("deleted_at", null).order("created_at"),
     currentWeightsValue(),
+    loadTemplates(),
   ]);
   const { ctx, adminNames } = await auditContext(rows);
   const pages = Math.max(1, Math.ceil(total / AUDIT_PAGE_SIZE));
@@ -89,8 +91,14 @@ export default async function Audit({ searchParams }: { searchParams: Promise<Re
               {rows.map((e) => {
                 const t = auditTarget(e, ctx);
                 const w = e.field === "matching.weights";
-                const canTo = w && canRestore && parseWeightsValue(e.to_value) && e.to_value !== curWeights;
-                const canFrom = w && canRestore && parseWeightsValue(e.from_value) && e.from_value !== curWeights;
+                const tk = e.field?.startsWith("template:") ? e.field.slice("template:".length) : null;
+                const curTpl = tk ? templateValue(curTemplates[tk]) : null;
+                const okTpl = (v: string | null) => { const x = parseTemplateValue(v); return !!x && templateValue(x) !== curTpl; };
+                const canTo = canRestore && (w ? parseWeightsValue(e.to_value) && e.to_value !== curWeights : tk ? okTpl(e.to_value) : false);
+                const canFrom = canRestore && (w ? parseWeightsValue(e.from_value) && e.from_value !== curWeights : tk ? okTpl(e.from_value) : false);
+                const restore = w ? restoreWeights : restoreTemplate;
+                const what = w ? "매칭 기준을" : "이 자동 메시지 문구를";
+                const after = w ? "다음 자동 매칭부터 이 기준을 써요." : "다음 발송부터 이 문구로 나가요.";
                 return (
                   <tr key={e.id}>
                     <td className={`${td} whitespace-nowrap text-muted tabular-nums`}>{fmtDateTime(e.created_at)}</td>
@@ -104,19 +112,19 @@ export default async function Audit({ searchParams }: { searchParams: Promise<Re
                       {(canTo || canFrom) && (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {canTo && (
-                            <form action={restoreWeights}>
+                            <form action={restore}>
                               <input type="hidden" name="event_id" value={String(e.id)} />
                               <input type="hidden" name="which" value="to" />
                               <input type="hidden" name="back" value={here} />
-                              <ConfirmButton confirm="매칭 기준을 이 값(바꾼 뒤)으로 되돌릴까요? 다음 자동 매칭부터 이 기준을 써요." className={`${btnLight} h-11`}>이 값으로 되돌리기</ConfirmButton>
+                              <ConfirmButton confirm={`${what} 이 값(바꾼 뒤)으로 되돌릴까요? ${after}`} className={`${btnLight} h-11`}>이 값으로 되돌리기</ConfirmButton>
                             </form>
                           )}
                           {canFrom && (
-                            <form action={restoreWeights}>
+                            <form action={restore}>
                               <input type="hidden" name="event_id" value={String(e.id)} />
                               <input type="hidden" name="which" value="from" />
                               <input type="hidden" name="back" value={here} />
-                              <ConfirmButton confirm="매칭 기준을 이 변경 전 값으로 되돌릴까요? 다음 자동 매칭부터 이 기준을 써요." className={`${btnLight} h-11`}>바꾸기 전으로 되돌리기</ConfirmButton>
+                              <ConfirmButton confirm={`${what} 이 변경 전 값으로 되돌릴까요? ${after}`} className={`${btnLight} h-11`}>바꾸기 전으로 되돌리기</ConfirmButton>
                             </form>
                           )}
                         </div>

@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDate } from "@/lib/format";
 import { ACCOUNT, ageBand, label } from "@/lib/labels";
-import { escapeLike, maskPhone, parseMemberQuery } from "@/lib/members";
+import { escapeLike, maskLoginId, maskPhone, parseMemberQuery } from "@/lib/members";
 import { db } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -70,7 +70,7 @@ export default async function Members({ searchParams }: { searchParams: Promise<
                       <Link href={`/admin/members/${u.id}`} className="inline-flex min-h-11 items-center text-[16px] font-bold text-ink hover:text-accent">{u.name}</Link>
                       {u.deleted_at && <span className="ml-2"><Badge v={["탈퇴", "muted"]} /></span>}
                     </td>
-                    <td className={`${td} text-[#4c5368]`}>{u.login_id}</td>
+                    <td className={`${td} text-[#4c5368]`}>{maskLoginId(u.login_id)}</td>
                     <td className={`${td} tabular-nums`}>{maskPhone(u.phone)}</td>
                     <td className={`${td} text-[#4c5368]`}>{p ? `${ageBand(p.birth_year, year)} · ${p.gender === "M" ? "남" : "여"}` : "프로필 없음"}</td>
                     <td className={td}><Badge v={label(ACCOUNT, u.account_status)} /></td>

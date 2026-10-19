@@ -68,6 +68,12 @@ describe("회차 취소", () => {
     // 매칭 시각이 지났는데 아직 모집 중으로 남은 회차(스케줄러 직전)도 막는다
     expect(canCancelRound({ ...c, now: new Date("2026-10-21T00:00:00Z") }).ok).toBe(false);
   });
+  it("취소하다 끊긴 회차는 남은 신청을 이어서 정리할 수 있다", () => {
+    const c = { status: "closed", hasMatchRun: false, matchAt: CUT, now: new Date("2026-10-21T00:00:00Z") };
+    expect(canCancelRound({ ...c, canceled: true })).toEqual({ ok: true, resume: true });
+    // 그냥 끝난 회차는 안 된다
+    expect(canCancelRound(c).ok).toBe(false);
+  });
 });
 
 describe("일정 삭제 가능 여부", () => {

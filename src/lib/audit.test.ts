@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { auditChange, auditKindOf, auditQuery, auditSearch, auditTarget, cleanQuery, csvCell, describeFilter, maskText, parseAuditFilter, parseWeightsValue, weightsValue } from "./audit";
+import { auditChange, auditKindOf, auditQuery, auditSearch, auditTarget, cleanQuery, csvCell, describeFilter, maskText, parseAuditFilter, parseTemplateValue, parseWeightsValue, templateValue, weightsValue } from "./audit";
 
 const ADMIN = "11111111-2222-4333-8444-555555555555";
 
@@ -133,5 +133,20 @@ describe("개인정보·CSV", () => {
     expect(csvCell('그는 "안녕"')).toBe('"그는 ""안녕"""');
     expect(csvCell("=HYPERLINK(1)")).toBe(`"'=HYPERLINK(1)"`);
     expect(csvCell(null)).toBe('""');
+  });
+});
+
+describe("자동 메시지 문구 이력 값", () => {
+  it("title·body가 있는 값만 되돌릴 수 있다", () => {
+    expect(parseTemplateValue('{"title":"안녕","body":"본문"}')).toEqual({ title: "안녕", body: "본문" });
+    // 둘 다 비면 기본 문구로 되돌린다는 뜻
+    expect(parseTemplateValue('{"title":"","body":""}')).toEqual({ title: "", body: "" });
+    expect(parseTemplateValue('{"title":1}')).toBeNull();
+    expect(parseTemplateValue("깨진 값")).toBeNull();
+    expect(parseTemplateValue(null)).toBeNull();
+  });
+  it("저장된 문구가 없으면 빈 값과 같다", () => {
+    expect(templateValue(undefined)).toBe('{"title":"","body":""}');
+    expect(templateValue({ title: "a" })).toBe('{"title":"a","body":""}');
   });
 });

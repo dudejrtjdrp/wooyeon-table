@@ -86,7 +86,7 @@ export async function cancelConfirmed(
   const to = rule.kind === "early" ? "CANCELED_EARLY" : "CANCELED_LATE";
   const tableId = a.dining_tables.id;
   // 조건부: 두 번 눌러도 한 번만
-  const { data: up } = await db().from("applications").update({ attendance_status: to, table_id: null }).eq("id", appId).eq("attendance_status", "SCHEDULED").select("id");
+  const { data: up } = await db().from("applications").update({ attendance_status: to, table_id: null, match_reason: opts.byAdmin ? "운영팀이 참석을 취소했어요. 궁금한 점은 문의해 주세요." : null }).eq("id", appId).eq("attendance_status", "SCHEDULED").select("id");
   if (!up?.length) return { ok: false, message: "이미 처리된 신청이에요" };
   await logStatus({ entityType: "application", entityId: appId, field: "attendance_status", from: "SCHEDULED", to, actor, reason: `${opts.reason} (테이블 ${tableId.slice(0, 8)})` });
   // 이 사람에게 예약해 둔 이 테이블 안내는 보내지 않는다

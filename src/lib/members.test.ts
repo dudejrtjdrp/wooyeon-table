@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminBack, escapeLike, maskPhone, parseMemberQuery } from "./members";
+import { adminBack, escapeLike, maskLoginId, maskPhone, parseMemberQuery } from "./members";
 
 describe("회원 찾기 검색어 parseMemberQuery", () => {
   it("숫자 4자리는 연락처 뒤 4자리", () => {
@@ -37,5 +37,15 @@ describe("escapeLike·adminBack", () => {
     expect(adminBack("/admin/members/1", "/admin")).toBe("/admin/members/1");
     expect(adminBack("https://evil.com", "/admin")).toBe("/admin");
     expect(adminBack("/admin\\x", "/admin")).toBe("/admin");
+  });
+});
+
+describe("maskLoginId", () => {
+  it("번호로 된 ID는 연락처처럼 가리고, 나머지는 그대로", () => {
+    expect(maskLoginId("01012345678")).toBe("010-****-5678");
+    expect(maskLoginId("010-1234-5678")).toBe("010-****-5678");
+    expect(maskLoginId("minji")).toBe("minji");
+    expect(maskLoginId("kakao:1234567890123")).toBe("kakao:1234567890123");
+    expect(maskLoginId(null)).toBe("-");
   });
 });

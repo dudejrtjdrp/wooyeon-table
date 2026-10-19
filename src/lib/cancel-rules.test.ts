@@ -90,6 +90,19 @@ describe("수동 환불 manualRefundCheck", () => {
   it("연결된 신청이 없으면 막는다", () => {
     expect(manualRefundCheck({ ...p, hasApplication: false }).ok).toBe(false);
   });
+  it("신청이 아직 진행 중이면 돈만 돌려주지 않는다 (대리 취소로)", () => {
+    const app = (matchStatus: string, attendanceStatus: string | null, applicationStatus = "SUBMITTED") => ({ ...p, application: { applicationStatus, matchStatus, attendanceStatus } });
+    expect(manualRefundCheck(app("WAITING", null)).ok).toBe(false);
+    expect(manualRefundCheck(app("CONFIRMED", "SCHEDULED")).ok).toBe(false);
+    // 모임이 끝났거나 이미 취소된 신청은 된다
+    expect(manualRefundCheck(app("CONFIRMED", "ATTENDED")).ok).toBe(true);
+    expect(manualRefundCheck(app("CONFIRMED", "NO_SHOW")).ok).toBe(true);
+    expect(manualRefundCheck(app("NO_MATCH", null, "CANCELED")).ok).toBe(true);
+  });
+  it("멤버십으로 낸 신청이 진행 중이면 멤버십 환불을 막는다", () => {
+    expect(manualRefundCheck({ ...p, passLive: 2 }).ok).toBe(false);
+    expect(manualRefundCheck({ ...p, passLive: 0 }).ok).toBe(true);
+  });
 });
 
 describe("운영자 사유 cleanNote", () => {

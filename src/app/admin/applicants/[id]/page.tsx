@@ -89,7 +89,7 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
             </ol>
             {(a.match_reason || a.dining_tables) && (
               <div className="mt-4 rounded-2xl bg-accent-soft/50 p-4">
-                {a.match_reason && <p className="flex items-start gap-2 text-[15px] font-semibold text-accent"><PartyPopper size={19} className="mt-0.5 shrink-0" />{a.match_reason}</p>}
+                {a.match_reason && <p className="flex items-start gap-2 text-[15px] font-semibold text-accent">{a.application_status !== "CANCELED" && !a.attendance_status?.startsWith("CANCELED") && <PartyPopper size={19} className="mt-0.5 shrink-0" />}{a.match_reason}</p>}
                 {a.dining_tables && (
                   <Link href={`/admin/tables/${a.dining_tables.id}`} className="mt-3 flex items-center gap-3 rounded-xl bg-card px-4 py-3 text-[15px] text-ink">
                     <CalendarDays size={19} className="text-accent" />

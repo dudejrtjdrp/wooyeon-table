@@ -140,6 +140,18 @@ const WEIGHT_LABEL: Record<string, string> = { age: "연령대", gender: "성비
 export const WEIGHT_KEYS = ["age", "gender", "mbti", "interests", "wanted", "fresh"] as const;
 
 /** 매칭 기준 이력 값(JSON). 가중치 6개 + min이 모두 0~100 숫자일 때만 받는다 */
+/** 자동 메시지 문구 이력 값({"title","body"}). 둘 다 비면 '기본 문구'라는 뜻 */
+export function parseTemplateValue(v: string | null | undefined): { title: string; body: string } | null {
+  if (!v) return null;
+  let o: unknown;
+  try { o = JSON.parse(v); } catch { return null; }
+  if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+  const r = o as Record<string, unknown>;
+  if (typeof r.title !== "string" || typeof r.body !== "string" || r.title.length > 200 || r.body.length > 1000) return null;
+  return { title: r.title, body: r.body };
+}
+export const templateValue = (t: { title?: string; body?: string } | undefined) => JSON.stringify({ title: t?.title ?? "", body: t?.body ?? "" });
+
 export function parseWeightsValue(v: string | null | undefined): { weights: Record<string, number>; min: number } | null {
   if (!v) return null;
   let o: unknown;
