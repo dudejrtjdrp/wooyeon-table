@@ -2,7 +2,7 @@
 
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-import { safeNext } from "@/lib/auth";
+import { ADMIN_OFF_MESSAGE, safeNext } from "@/lib/auth";
 import { normalizeLoginId } from "@/lib/login-id";
 import { idvEnabled } from "@/lib/identity";
 import { db } from "@/lib/supabase";
@@ -25,6 +25,7 @@ export async function login(form: FormData) {
   if (!user || !user.password_hash || !(await bcrypt.compare(pw, user.password_hash))) {
     redirect(`/login/phone?e=${encodeURIComponent("휴대폰 번호나 비밀번호가 맞지 않아요. 다시 확인해 주세요")}${nq}`);
   }
+  if (user.account_status === "banned" && user.role === "admin") redirect(`/admin/login?e=${encodeURIComponent(ADMIN_OFF_MESSAGE)}`);
   if (user.account_status === "banned") {
     redirect(`/login/phone?e=${encodeURIComponent("이용이 제한된 계정이에요. help@wooyeon-table.app으로 문의해 주세요")}`);
   }

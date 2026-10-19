@@ -3,7 +3,7 @@ import { LogOut } from "lucide-react";
 import Image from "next/image";
 import { IMG } from "@/components/ui";
 import { Suspense } from "react";
-import { ADMIN_LEVEL_LABEL, adminLevelOf, getMe } from "@/lib/auth";
+import { ADMIN_LEVEL_LABEL, adminLevelOf, getMe, isActiveAdmin } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDateTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
@@ -13,7 +13,7 @@ import { AdminNav } from "./nav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const me = await getMe();
-  if (!me || me.role !== "admin") return <div className="admin-theme min-h-dvh bg-paper">{children}</div>;
+  if (!isActiveAdmin(me)) return <div className="admin-theme min-h-dvh bg-paper">{children}</div>;
   const [{ count }, { data: clock }, t, level] = await Promise.all([
     db().from("exceptions").select("id", { count: "exact", head: true }).eq("status", "open"),
     db().from("app_clock").select("offset_seconds").eq("id", 1).single(),
