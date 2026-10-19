@@ -14,10 +14,11 @@ const GROUPS: { g: MetricGroup; desc: string }[] = [
   { g: "반복 참여", desc: "한 번 온 사람이 다시 오고 후기를 남기는지. 후기는 다음 매칭에 들어가요." },
 ];
 
-export default async function Metrics({ searchParams }: { searchParams: Promise<{ r?: string }> }) {
+export default async function Metrics({ searchParams }: { searchParams: Promise<{ r?: string; demo?: string }> }) {
   await requireAdmin();
-  const { r } = await searchParams;
-  const [{ data: rounds }, input] = await Promise.all([db().from("rounds").select("id,title").order("match_at"), loadMetricsInput()]);
+  const { r, demo } = await searchParams;
+  const excludeDemo = demo === "0";
+  const [{ data: rounds }, input] = await Promise.all([db().from("rounds").select("id,title").order("match_at"), loadMetricsInput({ excludeDemo })]);
   const round = rounds?.find((x) => x.id === r);
   const metrics = computeMetrics(input, round?.id);
   const titles = new Map((rounds ?? []).map((x) => [x.id, x.title]));
@@ -26,7 +27,7 @@ export default async function Metrics({ searchParams }: { searchParams: Promise<
     <div>
       <PageHeader
         title="운영 지표"
-        desc="서비스 목표로 정한 핵심 지표 13개예요. 각 지표 아래에 무엇을 무엇으로 나눴는지 적어 두었어요. 시연용 테스트 참가자도 함께 세요."
+        desc="서비스 목표로 정한 핵심 지표 13개예요. 각 지표 아래에 무엇을 무엇으로 나눴는지 적어 두었어요."
         how={["전체 누적이나 한 회차 고르기", <>먼저 &lsquo;운영 효율&rsquo;의 <Term tip={TIP.자동확정률}>자동 확정률</Term>·<Term tip={TIP.개입률}>운영자 개입률</Term> 보기</>, "숫자가 이상하면 카드 아래 '세는 법' 읽기"]}
         actions={
           <form className="flex flex-wrap items-center gap-2">
@@ -34,10 +35,18 @@ export default async function Metrics({ searchParams }: { searchParams: Promise<
               <option value="">전체 회차 누적</option>
               {rounds?.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
             </select>
+            <label className="flex items-center gap-1.5 text-[13px] text-muted"><input type="checkbox" name="demo" value="0" defaultChecked={excludeDemo} className="size-4" />시연 데이터 빼기</label>
             <button className={btnLight}>보기</button>
           </form>
         }
       />
+      <p className="mt-3 text-[13px] text-muted">
+        {excludeDemo
+          ? `시연 계정(테스트 참가자·봇) 신청 ${input.demoApps}건과 거기 걸린 예외·후기를 빼고 셌어요.`
+          : input.demoApps
+            ? `시연 계정(테스트 참가자·봇) 신청 ${input.demoApps}건도 함께 셌어요. 실제 회원만 보려면 '시연 데이터 빼기'를 고르세요.`
+            : "모두 실제 회원 데이터예요."}
+      </p>
       {round && <p className="mt-3 text-[13px] text-muted">{round.title}만 봐요. 재방문율은 이 회차 참가자가 그 뒤 회차에 다시 신청했는지 봐요. 노쇼 반복·알림처럼 회차를 알 수 없는 예외는 개입률에서 빠져요.</p>}
 
       <div className="mt-6 space-y-6">

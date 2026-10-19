@@ -221,7 +221,8 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                     </span>
                     <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#4c5368]">
                       <span className="whitespace-nowrap font-semibold text-ink">{members.length}명</span>
-                      <span className="whitespace-nowrap font-semibold text-accent">매칭 {Math.round(Number(t.score))}점</span>
+                      <span className="whitespace-nowrap font-semibold text-accent">매칭 {Math.round(Number(t.score))}점{typeof d?.gate === "number" && Math.round(d.gate) !== Math.round(Number(t.score)) && <span className="font-normal text-muted"> (확정 판정 {Math.round(d.gate)}점)</span>}</span>
+                      {typeof d?.ageGap === "number" && <span className={`whitespace-nowrap ${d.ageGap > DEFAULT_SETTINGS.maxAgeGap ? "font-semibold text-danger" : ""}`}>나이 차 {d.ageGap}살</span>}
                       {t.reservation_name && <span className="whitespace-nowrap">예약명 <b className="font-semibold text-ink">{t.reservation_name}</b></span>}
                       <span className="min-w-0 break-keep">{t.venues?.address ?? "주소 없음"}</span>
                     </span>

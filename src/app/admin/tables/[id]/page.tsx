@@ -1,3 +1,4 @@
+import { isBot } from "@/lib/sim/persona-id";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, PageHeader, Panel, Term, btnInk, ctl } from "@/components/admin-ui";
@@ -45,7 +46,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
   if (!t) notFound();
   const { data: resv } = await db().from("reservations").select("id,channel,status,party_size,reservation_name,external_ref,deep_link,attempts,last_error,mode,updated_at").eq("table_id", id).maybeSingle();
   const [{ data: apps }, { data: room }, { data: events }] = await Promise.all([
-    db().from("applications").select("id,user_id,attendance_status,realloc_count,users(name,profiles(birth_year,gender,mbti,job))").eq("table_id", id),
+    db().from("applications").select("id,user_id,attendance_status,realloc_count,users(name,login_id,is_demo,profiles(birth_year,gender,mbti,job))").eq("table_id", id),
     db().from("chat_rooms").select("id,created_at").eq("table_id", id).maybeSingle(),
     db().from("status_events").select("id,entity_type,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "dining_table").eq("entity_id", id).order("created_at"),
   ]);
@@ -53,7 +54,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
   const { data: admins } = adminIds.length ? await db().from("users").select("id,name").in("id", adminIds) : { data: [] };
   const adminName = new Map((admins ?? []).map((a) => [a.id, a.name]));
   const { data: linkedEx } = ex ? await db().from("exceptions").select("id,kind,reason,status").eq("id", ex).maybeSingle() : { data: null };
-  const members = (apps ?? []) as unknown as { id: string; user_id: string; attendance_status: string | null; realloc_count: number; users: { name: string; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null } }[];
+  const members = (apps ?? []) as unknown as { id: string; user_id: string; attendance_status: string | null; realloc_count: number; users: { name: string; login_id?: string; is_demo?: boolean; profiles: { birth_year: number; gender: string; mbti: string | null; job: string | null } | null } }[];
   const { data: msgs } = room ? await db().from("chat_messages").select("id,kind,body,created_at,meta").eq("room_id", room.id).order("created_at") : { data: [] };
   const { data: notes } = members.length
     ? await db().from("notifications").select("id,title,status,scheduled_at,sent_at,read_at,attempts,user_id").in("user_id", members.map((m) => m.user_id)).eq("link", `/tables/${id}`).order("scheduled_at")
@@ -98,6 +99,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
               {members.map((m) => (
                 <li key={m.id} className="flex items-center justify-between py-2.5 text-[14px]">
                   <Link href={`/admin/applicants/${m.id}`} className="font-semibold hover:underline">{m.users.name}</Link>
+                  {isBot(m.users) && <span title="시연용 봇 계정이에요" className="ml-1.5 rounded-full bg-field px-2 py-0.5 text-[11px] font-semibold text-muted">시연 봇</span>}
                   <span className="text-muted">{m.users.profiles ? `${ageBand(m.users.profiles.birth_year, year)} ${m.users.profiles.gender === "M" ? "남" : "여"} ${m.users.profiles.mbti ?? ""} ${m.users.profiles.job ?? ""}` : ""}{m.realloc_count ? `, 재배치 ${m.realloc_count}번` : ""}</span>
                   <Badge v={label(ATTEND, m.attendance_status)} />
                 </li>

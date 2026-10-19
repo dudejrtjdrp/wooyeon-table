@@ -1,3 +1,4 @@
+import { isBot } from "@/lib/sim/persona-id";
 import { Download } from "lucide-react";
 import Link from "next/link";
 import { Badge, PageHeader, TableScroll, Term, btn, btnLight, ctl, table, td, tdNowrap, th } from "@/components/admin-ui";
@@ -104,6 +105,7 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
                 <tr key={a.id} className="hover:bg-paper/60">
                   <td className={tdNowrap}>
                     <Link href={`/admin/applicants/${a.id}`} className="text-[16px] font-bold text-ink hover:text-accent">{a.users.name}</Link>
+                    {a.users.is_demo && <span title={isBot(a.users) ? "시연용 봇 계정이에요(시연 패널에서 켜고 끔)" : "시연용 계정이에요"} className="ml-1.5 rounded-full bg-field px-2 py-0.5 text-[11px] font-semibold text-muted">{isBot(a.users) ? "시연 봇" : "시연"}</span>}
                     {a.users.account_status !== "active" && <span className="ml-2"><Badge v={label(ACCOUNT, a.users.account_status)} /></span>}
                   </td>
                   <td className={`${td} min-w-[180px] text-[#4c5368]`}>{p ? <><span className="block whitespace-nowrap">{ageBand(p.birth_year, year)} · {p.gender === "M" ? "남" : "여"}{p.mbti ? ` · ${p.mbti}` : ""}</span>{p.job && <span className="block text-[12px] text-muted">{p.job}</span>}</> : "-"}</td>

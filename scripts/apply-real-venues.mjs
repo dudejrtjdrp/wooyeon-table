@@ -18,8 +18,12 @@ const row = (v) => ({
   name: v.name, region: v.region, address: v.address, category: v.category, price_range: v.price_range,
   seats_per_table: v.seats_per_table ?? 4, rating: v.rating, review_count: v.review_count,
   booking_channel: v.booking_channel, booking_url: v.booking_url, phone: v.phone, map_url: v.map_url,
-  photo_url: v.photo, active: true,
+  photo_url: v.photo,
 });
+// 이력: 누가 언제 어떤 식당을 무엇으로 바꿨는지 남긴다(변경 이력 화면에 보인다)
+const ACTOR = "system:real-venues";
+const logEv = (entity_id, field, from_value, to_value, reason) =>
+  dry ? null : db.from("status_events").insert({ entity_type: "venue", entity_id, field, from_value, to_value, actor: ACTOR, reason });
 
 const { data: venues, error } = await db.from("venues").select("id,name,region,active");
 if (error) throw error;
@@ -33,7 +37,7 @@ for (const region of [...new Set(real.map((v) => v.region))]) {
     const same = venues.find((x) => x.region === region && x.name === v.name);
     if (same) {
       log.push(`맞춤  ${region} ${v.name}`);
-      if (!dry) { const { error: e } = await db.from("venues").update(row(v)).eq("id", same.id); if (e) throw e; }
+      if (!dry) { const { error: e } = await db.from("venues").update(row(v)).eq("id", same.id); if (e) throw e; } // 배정 켜짐/꺼짐은 운영자가 정한 그대로
       touched.push(same.id);
       continue;
     }
@@ -42,17 +46,18 @@ for (const region of [...new Set(real.map((v) => v.region))]) {
       log.push(`바꿈  ${region} ${fake.name} → ${v.name}`);
       if (!dry) {
         await db.from("venue_photos").delete().eq("venue_id", fake.id); // 예전 업로드 사진은 새 사진과 안 맞는다
-        const { error: e } = await db.from("venues").update(row(v)).eq("id", fake.id); if (e) throw e;
+        const { error: e } = await db.from("venues").update({ ...row(v), active: true }).eq("id", fake.id); if (e) throw e;
+        await logEv(fake.id, "name", fake.name, v.name, "시연용 가상 식당을 실제 식당 정보로 교체(지난 테이블 기록을 지키려고 같은 id를 고쳐 씀)");
       }
       touched.push(fake.id);
     } else {
       log.push(`추가  ${region} ${v.name}`);
-      if (!dry) { const { data, error: e } = await db.from("venues").insert(row(v)).select("id").single(); if (e) throw e; touched.push(data.id); }
+      if (!dry) { const { data, error: e } = await db.from("venues").insert({ ...row(v), active: true }).select("id").single(); if (e) throw e; touched.push(data.id); await logEv(data.id, "status", null, "active", "실제 식당 추가"); }
     }
   }
   for (const f of fakes) {
     log.push(`끄기  ${region} ${f.name}`);
-    if (!dry) await db.from("venues").update({ active: false }).eq("id", f.id);
+    if (!dry) { await db.from("venues").update({ active: false }).eq("id", f.id); await logEv(f.id, "active", "true", "false", "실제 식당으로 바꾸고 남은 가상 식당 배정 끄기"); }
   }
 }
 
@@ -60,7 +65,7 @@ for (const region of [...new Set(real.map((v) => v.region))]) {
 const regions = new Set(real.map((v) => v.region));
 for (const v of venues.filter((x) => !regions.has(x.region) && x.active)) {
   log.push(`끄기  ${v.region} ${v.name} (운영 동네 밖)`);
-  if (!dry) await db.from("venues").update({ active: false }).eq("id", v.id);
+  if (!dry) { await db.from("venues").update({ active: false }).eq("id", v.id); await logEv(v.id, "active", "true", "false", "운영 동네 밖 가상 식당 배정 끄기"); }
 }
 
 // 앞으로의 모집 중 회차 일정에 재고 잡기 (이미 있으면 그대로)

@@ -42,7 +42,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
       />
       <p className="mt-6 text-[13px] text-muted">{filtered ? `아래 숫자는 고른 조건에 맞는 ${sum.count.toLocaleString("ko-KR")}건 기준이에요.` : "아래 숫자는 전체 결제 기준이에요."}</p>
       <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="결제 완료 금액" value={won(sum.paidSum)} />
+        <Stat label="결제 완료 금액" value={won(sum.paidSum)} sub={sum.demoPaidSum ? `시연 계정 모의 결제 ${won(sum.demoPaidSum)} 포함` : undefined} />
         <Stat label="자동 환불" value={`${sum.refundedN}건`} sub={won(sum.refundedSum)} />
         <Stat label="환불 실패" value={`${sum.failedRefund}건`} tone={sum.failedRefund ? "danger" : undefined} sub="실패만 예외 처리함으로 가요" />
         <Stat label="보유 이용권 사용" value={`${sum.passUses}건`} sub="결제 없이 신청한 건" />

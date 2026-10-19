@@ -1,6 +1,8 @@
 // 시연용 봇. 심사 시연에서 혼자 신청해도 테이블이 차고, 단체방에서 사람처럼 대화하고, 체크인·후기까지 남긴다.
 // 실제 운영 기능이 아니다. settings 'demo.bots'로 끄면 아무것도 하지 않는다 (docs/06-demo-bots.md)
 // 봇 = is_demo이면서 login_id가 'test-'로 시작하는 계정 (시연 패널 '테스트 참가자'와 같은 규칙). 시연 참가자 계정(010…)은 사람으로 본다.
+import { loadRelations } from "../matching/runner";
+import { pairKey } from "../matching/types";
 import bcrypt from "bcryptjs";
 import { OPEN_REGIONS, PASSES } from "../constants";
 import { logStatus } from "../events";
@@ -15,12 +17,13 @@ export const BOTS_KEY = "demo.bots";
 const ACTOR = "system:demo-bot";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export const isBot = (u: { login_id?: string | null; is_demo?: boolean | null } | null | undefined) => Boolean(u?.is_demo) && (u?.login_id ?? "").startsWith("test-");
+export { isBot } from "./persona-id";
+import { isBot } from "./persona-id";
 
-/** 기본은 켜짐. 운영자가 시연 패널에서 끌 수 있다 */
+/** 기본은 꺼짐. 운영자가 시연 패널에서 켜야 돈다(설정이 없으면 실제 회원이 봇과 앉는 일이 없게) */
 export async function botsOn(): Promise<boolean> {
   const { data } = await db().from("settings").select("value").eq("key", BOTS_KEY).maybeSingle();
-  return (data?.value as { on?: boolean } | null)?.on !== false;
+  return (data?.value as { on?: boolean } | null)?.on === true;
 }
 
 type Profile = { job: string | null; mbti: string | null; interests: string[] | null; my_traits: string[] | null; gender: string | null; birth_year: number | null };
@@ -268,7 +271,11 @@ export async function botsJoin(appId: string): Promise<number> {
     rounds: { status: string } | null;
     application_slots: { slots: { id: string; region: string; starts_at: string } | null }[];
   } | null;
-  if (!app || isBot(app.users) || app.payment_status !== "PAID" || app.application_status === "CANCELED" || app.rounds?.status !== "open") return 0;
+  // 시연 계정(is_demo)이 결제했을 때만 붙는다. 실제 회원은 봇과 매칭되지 않는다
+  if (!app || !app.users.is_demo || isBot(app.users) || app.payment_status !== "PAID" || app.application_status === "CANCELED" || app.rounds?.status !== "open") return 0;
+  // 같은 결제 완료 알림이 두 번 와도(토스 콜백 중복 등) 한 번만 붙인다: settings 키를 먼저 잡는다
+  const { error: lockErr } = await db().from("settings").insert({ key: `bots-join:${app.id}`, value: { at: new Date().toISOString() } });
+  if (lockErr) return 0;
   const me = Array.isArray(app.users.profiles) ? app.users.profiles[0] : app.users.profiles;
   if (!me) return 0;
   const slots = app.application_slots.map((x) => x.slots).filter((s): s is NonNullable<typeof s> => Boolean(s)).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
@@ -298,7 +305,10 @@ export async function botsJoin(appId: string): Promise<number> {
     .filter((u) => !u.applications.some((a) => a.round_id === app.round_id))
     .map((u) => ({ userId: u.id, profile: (Array.isArray(u.profiles) ? u.profiles[0] : u.profiles) as JoinProfile }))
     .filter((c) => Boolean(c.profile));
-  const picked = chooseBots(me, cands, need, genders, app.id);
+  // 이 사람과 제외 관계(차단·신고·다시는 싫어요)이거나 이미 만난 적 있는 봇은 고르지 않는다(엔진이 빼면 3명이 되어 실패하고, '새로운 사람' 점수도 떨어진다)
+  const rel = await loadRelations([app.user_id, ...cands.map((c) => c.userId)]);
+  const fresh = cands.filter((c) => { const k = pairKey(app.user_id, c.userId); return !rel.excluded.has(k) && !rel.met.has(k); });
+  const picked = chooseBots(me, fresh, need, genders, app.id);
   const ids = picked.map((c) => c.userId);
   for (const c of picked) genders.push(c.profile.gender);
 

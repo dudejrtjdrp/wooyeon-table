@@ -272,10 +272,12 @@ export async function resetRound(form: FormData) {
 
 /** 시연 봇 켜기·끄기 (settings demo.bots). 끄면 봇이 같이 신청·대화·체크인·후기를 하지 않는다 */
 export async function toggleBots(form: FormData) {
-  await requireAdminWrite();
+  const me = await requireAdminWrite();
   const on = form.get("on") === "1";
-  const { BOTS_KEY } = await import("@/lib/sim/bots");
+  const { BOTS_KEY, botsOn } = await import("@/lib/sim/bots");
+  const was = await botsOn();
   await db().from("settings").upsert({ key: BOTS_KEY, value: { on } }, { onConflict: "key" });
+  if (was !== on) await logStatus({ entityType: "setting", entityId: me.id, field: BOTS_KEY, from: was ? "on" : "off", to: on ? "on" : "off", actor: `admin:${me.id}`, reason: on ? "시연 봇 켜기" : "시연 봇 끄기" });
   back(on ? "시연 봇을 켰어요" : "시연 봇을 껐어요");
 }
 
