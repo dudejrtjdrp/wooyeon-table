@@ -8,7 +8,7 @@ import { loadRelations, loadSettings } from "./matching/runner";
 import type { Candidate } from "./matching/types";
 import { notify } from "./notify";
 import { ensureRoom } from "./pipeline";
-import { refundCutoff } from "./policy";
+import { cancelRule } from "./cancel-rules";
 import { neighborsOf } from "./regions";
 import { db } from "./supabase";
 import { postSystem } from "./delivery";
@@ -18,16 +18,7 @@ import { loadTemplates, render, slotVars } from "./templates";
 const KST = (d: Date) => new Date(d.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
 const sameDay = (iso: string, at: Date) => KST(new Date(iso)) === KST(at);
 
-export type CancelRule = { kind: "early" | "late" | "blocked"; message: string };
-
-/** 지금 취소하면 어떻게 되는지. 모임 주 화요일 24:00 전까지는 전액 환불, 그 뒤는 환불 없이 취소, 당일은 취소 불가 */
-export function cancelRule(startsAt: string, at: Date): CancelRule {
-  const start = new Date(startsAt);
-  if (at >= start) return { kind: "blocked", message: "모임이 이미 시작됐어요" };
-  if (KST(at) === KST(start)) return { kind: "blocked", message: "당일 취소는 할 수 없어요. 늦을 것 같으면 단체방에 알려 주세요" };
-  if (at < refundCutoff(startsAt)) return { kind: "early", message: "지금 취소하면 전액 돌려드려요" };
-  return { kind: "late", message: "환불 마감(모임 주 화요일 밤 12시)이 지나 환불 없이 취소돼요" };
-}
+export { cancelRule, type CancelRule } from "./cancel-rules";
 
 export type Member = {
   id: string;
@@ -67,14 +58,27 @@ export const toCand = (m: Member): Candidate => ({
 
 /** 참가자가 확정된 모임을 취소한다 */
 export async function cancelAttendance(appId: string, userId: string): Promise<{ ok: boolean; message: string }> {
+  return cancelConfirmed(appId, { actor: `user:${userId}`, ownerId: userId, reason: "참가자 취소" });
+}
+
+/**
+ * 확정된 모임 취소의 본체. 참가자 본인 취소와 운영자 대리 취소가 같은 규칙(cancelRule)과 같은 뒷정리(환불·빈자리 제안·재배치)를 쓴다.
+ * ownerId를 주면 그 사람의 신청일 때만 된다. byAdmin이면 참가자 알림 문구를 '운영팀이 취소했어요'로 바꾼다.
+ */
+export async function cancelConfirmed(
+  appId: string,
+  opts: { actor: string; reason: string; ownerId?: string; byAdmin?: boolean },
+): Promise<{ ok: boolean; message: string }> {
   const { data } = await db()
     .from("applications")
     .select("id,user_id,table_id,match_status,attendance_status,dining_tables(id,status,slots(starts_at))")
     .eq("id", appId)
     .maybeSingle();
   const a = data as unknown as { id: string; user_id: string; table_id: string | null; match_status: string; attendance_status: string | null; dining_tables: { id: string; status: string; slots: { starts_at: string } } | null } | null;
-  if (!a || a.user_id !== userId) return { ok: false, message: "취소할 수 없는 신청이에요" };
+  if (!a || (opts.ownerId && a.user_id !== opts.ownerId)) return { ok: false, message: "취소할 수 없는 신청이에요" };
   if (a.match_status !== "CONFIRMED" || a.attendance_status !== "SCHEDULED" || !a.dining_tables) return { ok: false, message: "이미 처리된 신청이에요" };
+  const userId = a.user_id;
+  const { actor } = opts;
   const t = await now();
   const rule = cancelRule(a.dining_tables.slots.starts_at, t);
   if (rule.kind === "blocked") return { ok: false, message: rule.message };
@@ -84,19 +88,26 @@ export async function cancelAttendance(appId: string, userId: string): Promise<{
   // 조건부: 두 번 눌러도 한 번만
   const { data: up } = await db().from("applications").update({ attendance_status: to, table_id: null }).eq("id", appId).eq("attendance_status", "SCHEDULED").select("id");
   if (!up?.length) return { ok: false, message: "이미 처리된 신청이에요" };
-  await logStatus({ entityType: "application", entityId: appId, field: "attendance_status", from: "SCHEDULED", to, actor: `user:${userId}`, reason: `참가자 취소 (테이블 ${tableId.slice(0, 8)})` });
+  await logStatus({ entityType: "application", entityId: appId, field: "attendance_status", from: "SCHEDULED", to, actor, reason: `${opts.reason} (테이블 ${tableId.slice(0, 8)})` });
   // 이 사람에게 예약해 둔 이 테이블 안내는 보내지 않는다
   await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/tables/${tableId}`);
 
   let body: string;
-  if (rule.kind === "early") body = await releaseUse(appId, `user:${userId}`, "환불 마감 전 취소");
+  if (rule.kind === "early") body = await releaseUse(appId, actor, opts.byAdmin ? `${opts.reason}, 환불 마감 전` : "환불 마감 전 취소");
   else body = "환불 마감(모임 주 화요일 밤 12시)이 지나 환불 없이 취소됐어요.";
-  await notify({ userId, template: "attendance_canceled", title: "참석을 취소했어요", body: rule.kind === "early" ? "환불은 내 신청 화면에서 확인할 수 있어요" : "환불 마감이 지나 환불 없이 취소됐어요", link: `/applications/${appId}`, dedupeKey: `attendance_canceled:${appId}` });
+  await notify({
+    userId,
+    template: "attendance_canceled",
+    title: opts.byAdmin ? "운영팀이 참석을 취소했어요" : "참석을 취소했어요",
+    body: rule.kind === "early" ? "환불은 내 신청 화면에서 확인할 수 있어요" : "환불 마감이 지나 환불 없이 취소됐어요",
+    link: `/applications/${appId}`,
+    dedupeKey: `attendance_canceled:${appId}`,
+  });
 
   const roomId = await ensureRoom(tableId);
   await postSystem(roomId, "한 분이 사정이 생겨 함께하지 못하게 됐어요.");
   // 빈자리는 먼저 대기자에게 묻고, 받을 사람이 없을 때만 남은 인원으로 정리한다 (STA-07)
-  await fillOrReflow(tableId, `user:${userId}`);
+  await fillOrReflow(tableId, actor);
   return { ok: true, message: body };
 }
 
