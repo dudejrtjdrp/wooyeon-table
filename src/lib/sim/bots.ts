@@ -193,8 +193,20 @@ async function scheduled(tb: Table, t: Date): Promise<number> {
     .sort((a, b) => a.real - b.real);
   if (!due.length) return 0;
   const last = room.msgs.length ? Date.parse(room.msgs[room.msgs.length - 1].created_at) : realNow - 60_000;
-  const at = spreadTimes(due.map((m) => m.real), last, realNow);
-  return insert(room.roomId, due.map((m, k) => ({ userId: m.userId, body: m.body, key: m.key, at: at[k] })));
+  // 시연 시계를 한 번에 옮기면 대화 주제 공지(모임 시작)가 먼저 올라간다. 시작 전에 했어야 할 말(도착 소식 등)은 그 공지 앞에 끼워 순서가 뜻과 맞게 한다
+  const contentAt = content ? Date.parse(content.created_at) : null;
+  const early = contentAt !== null ? due.filter((m) => m.phase !== "hello" && m.due < tb.start) : [];
+  const rest = due.filter((m) => !early.includes(m));
+  const rows: { userId: string; body: string; key: string; at: number }[] = [];
+  if (early.length && contentAt !== null) {
+    const before = room.msgs.filter((m) => Date.parse(m.created_at) < contentAt).at(-1);
+    const lo = before ? Date.parse(before.created_at) : contentAt - 60_000 * (early.length + 1);
+    const at = spreadTimes(early.map((m) => Math.min(m.real, contentAt - 1000)), lo, contentAt - 1000);
+    early.forEach((m, k) => rows.push({ userId: m.userId, body: m.body, key: m.key, at: at[k] }));
+  }
+  const at = spreadTimes(rest.map((m) => m.real), last, realNow);
+  rest.forEach((m, k) => rows.push({ userId: m.userId, body: m.body, key: m.key, at: at[k] }));
+  return insert(room.roomId, rows);
 }
 
 /** tick마다: 일정에 맞춘 봇 대화, 놓친 답장, 끝난 모임 후기 */

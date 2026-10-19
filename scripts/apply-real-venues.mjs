@@ -1,7 +1,6 @@
 // 실제 식당 24곳(data/real-venues.json)을 DB에 넣는다. 여러 번 돌려도 결과가 같다(멱등).
-// - 이미 같은 동네·같은 이름이 있으면 정보만 맞춘다
-// - 없으면 그 동네의 가상 식당(실제 목록에 없는 식당)을 하나씩 실제 식당으로 바꿔 쓴다. 지난 테이블·예약 기록이 그 식당을 가리키므로 지우지 않고 고쳐 쓴다
-// - 가상 식당이 모자라면 새로 넣고, 남는 가상 식당은 배정 끄기(active=false)
+// - 이미 같은 동네·같은 이름이 있으면 정보만 맞춘다(배정 켜짐/꺼짐은 그대로)
+// - 없으면 새로 넣는다. 가상 식당은 고쳐 쓰지 않고 배정만 끈다(지난 테이블·공지·예약 기록이 그때 식당 그대로 남게)
 // - 앞으로 열릴 일정(지금 이후 시작, 모집 중 회차)에는 새로 들어온 식당 재고를 2테이블씩 잡는다
 // 사진은 AI로 만든 분위기 사진(public/venues/ai-*.jpg)이다. 실제 매장 사진이 아니라는 표시는 화면이 photo_url로 판단한다
 // 쓰는 법: node --env-file=.env.local scripts/apply-real-venues.mjs [--dry]
@@ -32,7 +31,6 @@ const log = [];
 const touched = [];
 
 for (const region of [...new Set(real.map((v) => v.region))]) {
-  const fakes = venues.filter((v) => v.region === region && !realKey.has(`${v.region}|${v.name}`) && v.active);
   for (const v of real.filter((x) => x.region === region)) {
     const same = venues.find((x) => x.region === region && x.name === v.name);
     if (same) {
@@ -41,23 +39,13 @@ for (const region of [...new Set(real.map((v) => v.region))]) {
       touched.push(same.id);
       continue;
     }
-    const fake = fakes.shift();
-    if (fake) {
-      log.push(`바꿈  ${region} ${fake.name} → ${v.name}`);
-      if (!dry) {
-        await db.from("venue_photos").delete().eq("venue_id", fake.id); // 예전 업로드 사진은 새 사진과 안 맞는다
-        const { error: e } = await db.from("venues").update({ ...row(v), active: true }).eq("id", fake.id); if (e) throw e;
-        await logEv(fake.id, "name", fake.name, v.name, "시연용 가상 식당을 실제 식당 정보로 교체(지난 테이블 기록을 지키려고 같은 id를 고쳐 씀)");
-      }
-      touched.push(fake.id);
-    } else {
-      log.push(`추가  ${region} ${v.name}`);
-      if (!dry) { const { data, error: e } = await db.from("venues").insert({ ...row(v), active: true }).select("id").single(); if (e) throw e; touched.push(data.id); await logEv(data.id, "status", null, "active", "실제 식당 추가"); }
-    }
+    log.push(`추가  ${region} ${v.name}`);
+    if (!dry) { const { data, error: e } = await db.from("venues").insert({ ...row(v), active: true }).select("id").single(); if (e) throw e; touched.push(data.id); await logEv(data.id, "status", null, "active", "실제 식당 추가"); }
   }
-  for (const f of fakes) {
+  // 실제 목록에 없는 식당(시연용 가상 식당)은 지우지도 고쳐 쓰지도 않고 배정만 끈다. 지난 테이블·공지는 그때 식당 이름 그대로 남는다
+  for (const f of venues.filter((x) => x.region === region && !realKey.has(`${x.region}|${x.name}`) && x.active)) {
     log.push(`끄기  ${region} ${f.name}`);
-    if (!dry) { await db.from("venues").update({ active: false }).eq("id", f.id); await logEv(f.id, "active", "true", "false", "실제 식당으로 바꾸고 남은 가상 식당 배정 끄기"); }
+    if (!dry) { await db.from("venues").update({ active: false }).eq("id", f.id); await logEv(f.id, "active", "true", "false", "실제 식당으로 바꾸면서 가상 식당 배정 끄기"); }
   }
 }
 
