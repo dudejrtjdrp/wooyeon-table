@@ -168,7 +168,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
         </>
       )}
 
-      {me.hasProfile && !owned && !!upcoming.length && (
+      {/* 결제 대기·매칭 실패처럼 지금 할 일이 있는 동안에는 멤버십 홍보로 주 버튼과 경쟁하지 않는다 */}
+      {me.hasProfile && !owned && !!upcoming.length && !(active && (active.match_status === "ALTERNATIVE_OFFERED" || ["PENDING", "FAILED"].includes(active.payment_status))) && (
         <Link href="/rounds" className="mt-6 flex items-center justify-between gap-3 rounded-[18px] bg-accent-soft px-5 py-4 text-accent-text active:opacity-90">
           <span>
             <span className="block text-[13px] text-accent-text">한 달에 네 번 오면 1회권 {won(PASSES.single.amount * 4)}</span>

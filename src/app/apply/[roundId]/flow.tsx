@@ -23,6 +23,10 @@ const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 const CHECK = (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
+/** 체크칸: 안 고르면 빈 칸(테두리만), 고르면 채운 칸 + 체크. 안 고른 칸에 회색 체크가 보여 고른 것처럼 보이던 문제를 막는다 */
+const Box = ({ on, round = false, size = 22 }: { on: boolean; round?: boolean; size?: number }) => (
+  <span style={{ width: size, height: size }} className={`flex shrink-0 items-center justify-center ${round ? "rounded-full" : "rounded-[6px]"} ${on ? "bg-accent" : "border-2 border-box bg-card"}`}>{on && CHECK}</span>
+);
 
 export function ApplyFlow({
   action, round, sidos, hot, slots, passes, owned, refund, error, nudge = null, initialStep = 1,
@@ -98,7 +102,9 @@ export function ApplyFlow({
     });
   };
 
-  const nb = neighborsOf(picked).map((a) => a.split("·")[0]);
+  // 안내 문구에는 이번에 테이블이 열린 옆 동네만 적는다 (안 여는 동네를 적으면 거기서도 모이는 줄 안다)
+  const openNames = new Set(sidos.flatMap((s) => s.areas.filter((a) => a.open).map((a) => a.name)));
+  const nb = neighborsOf(picked).filter((a) => openNames.has(a)).map((a) => a.split("·")[0]);
   const nearLabel = nb.length ? `${nb.slice(0, 3).join("·")}${nb.length > 3 ? " 같은 곳" : ""}` : "";
 
   // 날짜 화면: 고른 동네에 테이블이 열리는 날
@@ -127,6 +133,12 @@ export function ApplyFlow({
   const areaLabel = picked.length ? (picked.length === 1 ? picked[0] : `${picked[0]} 외 ${picked.length - 1}곳`) : "";
   const dayLabel = days.length ? [...days].sort().map((d) => `${Number(d.slice(8))}일`).join(", ") + (days.length > 1 ? " 중 하루" : "") : "";
   const sidoList = sidos.find((s) => s.name === active)!;
+  // 시·도 탭은 이번에 테이블이 열린 곳만. 아직 안 여는 시·도는 목록 아래 '다른 지역 원해요' 한 줄로 보낸다
+  const openSidos = sidos.filter((s) => s.areas.some((a) => a.open));
+  const tabs = openSidos.length ? openSidos : sidos.slice(0, 1);
+  const closedSidos = sidos.filter((s) => !tabs.includes(s));
+  const openAreas = sidoList.areas.filter((a) => a.open);
+  const closedAreas = sidoList.areas.filter((a) => !a.open);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-paper">
@@ -171,9 +183,10 @@ export function ApplyFlow({
                 ))}
               </ul>
             )}
-            <div className="mt-4 flex min-h-[360px] flex-1 border-t border-line2">
+            <div className="mt-4 flex flex-1 border-t border-line2">
+              {tabs.length > 1 && (
               <ul className="w-[112px] shrink-0 bg-field" aria-label="시·도">
-                {sidos.map((s) => {
+                {tabs.map((s) => {
                   const on = s.name === active;
                   const n = countIn(s.name);
                   return (
@@ -186,35 +199,47 @@ export function ApplyFlow({
                   );
                 })}
               </ul>
-              <ul className="min-w-0 flex-1 pl-[18px] pr-5" aria-label={`${active} 동네`}>
-                {[{ name: `${active} 전체`, open: sidoList.areas.some((a) => a.open) }, ...sidoList.areas].map((a) => {
-                  const on = picked.includes(a.name) || (!a.name.endsWith(" 전체") && picked.includes(`${active} 전체`));
-                  if (!a.open) {
-                    // 아직 안 여는 동네는 수요 조사로 보낸다 (운영사 Q&A: 서울 4곳 먼저)
-                    const whole = a.name.endsWith(" 전체");
+              )}
+              <div className={`min-w-0 flex-1 ${tabs.length > 1 ? "pl-[18px] pr-5" : "px-6"}`}>
+                {tabs.length === 1 && <p className="pt-4 text-[13px] font-bold text-muted">{active}에서 지금 모여요</p>}
+                <ul aria-label={`${active} 동네`}>
+                  {/* 지금 테이블이 열린 동네만 고를 수 있게 먼저 보여 준다 */}
+                  {[...(openAreas.length > 1 ? [{ name: `${active} 전체`, open: true }] : []), ...openAreas].map((a) => {
+                    const on = picked.includes(a.name) || (!a.name.endsWith(" 전체") && picked.includes(`${active} 전체`));
                     return (
                       <li key={a.name} className="border-b border-line2">
-                        <Link href={whole ? `/wish?sido=${encodeURIComponent(active)}` : `/wish?area=${encodeURIComponent(a.name)}`} className="flex min-h-[52px] w-full items-center gap-2.5 py-2 text-left">
-                          <span className="min-w-0 flex-1 text-[15px] text-faint">{a.name}</span>
-                          <span className="shrink-0 rounded-[5px] bg-[#EEF1EF] px-1.5 py-[3px] text-[11px] font-bold text-ink2">열리면 알림</span>
-                        </Link>
+                        <button type="button" role="checkbox" aria-checked={on} onClick={() => toggleArea(a.name, active)} className="flex min-h-[52px] w-full items-center gap-2.5 py-2 text-left">
+                          <span className={`min-w-0 flex-1 text-[15px] ${on ? "font-extrabold text-accent-text" : "text-ink2"}`}>{a.name}</span>
+                          {hot.includes(a.name) && <span className="shrink-0 rounded-[5px] bg-accent-soft px-1.5 py-[3px] text-[11px] font-bold text-accent">많이 골라요</span>}
+                          <Box on={on} />
+                        </button>
                       </li>
                     );
-                  }
-                  return (
-                    <li key={a.name} className="border-b border-line2">
-                      <button type="button" role="checkbox" aria-checked={on} onClick={() => toggleArea(a.name, active)} className="flex min-h-[52px] w-full items-center gap-2.5 py-2 text-left">
-                        <span className={`min-w-0 flex-1 text-[15px] ${on ? "font-extrabold text-accent-text" : "text-ink2"}`}>{a.name}</span>
-                        {hot.includes(a.name) && <span className="shrink-0 rounded-[5px] bg-accent-soft px-1.5 py-[3px] text-[11px] font-bold text-accent">많이 골라요</span>}
-                        <span className={`flex size-[22px] shrink-0 items-center justify-center rounded-[6px] ${on ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-                <li>
-                  <Link href={`/wish?sido=${encodeURIComponent(active)}`} className="flex min-h-[52px] items-center text-[13px] font-bold text-accent underline underline-offset-4">찾는 동네가 없나요? 원하는 곳 남기기</Link>
-                </li>
-              </ul>
+                  })}
+                </ul>
+                {/* 아직 안 여는 동네는 접어 두고, 펼치면 수요 조사(열리면 알림)로 보낸다 (운영사 Q&A: 서울 4곳 먼저) */}
+                {closedAreas.length > 0 && (
+                  <details className="group/closed border-b border-line2">
+                    <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-2 text-[14px] text-muted">
+                      <span className="flex-1">아직 안 여는 동네 {closedAreas.length}곳</span>
+                      <ChevronRight size={16} className="transition group-open/closed:rotate-90" aria-hidden="true" />
+                    </summary>
+                    <ul className="pb-2">
+                      {closedAreas.map((a) => (
+                        <li key={a.name}>
+                          <Link href={`/wish?area=${encodeURIComponent(a.name)}`} className="flex min-h-11 items-center gap-2.5 text-left">
+                            <span className="min-w-0 flex-1 text-[14px] text-muted">{a.name}</span>
+                            <span className="shrink-0 text-[12px] font-bold text-accent">열리면 알림</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+                <Link href="/wish" className="flex min-h-[52px] items-center text-[13px] font-bold text-accent underline underline-offset-4">
+                  {closedSidos.length ? `다른 지역 원해요 (${closedSidos.slice(0, 3).map((s) => s.name).join("·")} 등)` : "찾는 동네가 없나요? 원하는 곳 남기기"}
+                </Link>
+              </div>
             </div>
           </>
         )}
@@ -223,7 +248,7 @@ export function ApplyFlow({
           <>
             <div className="px-6 pt-2">
               <h1 className="text-[26px] font-extrabold leading-[1.38]">갈 수 있는 날을<br />모두 골라주세요</h1>
-              <p className="mt-2.5 text-[15px] text-muted">진하게 표시된 날에 테이블이 열려요.</p>
+              <p className="mt-2.5 text-[15px] text-muted">동그라미 친 날만 테이블이 열려요.</p>
             </div>
             <div className="mx-4 mt-5 rounded-[20px] bg-field px-3 pb-3 pt-[18px]">
               <div className="flex items-center justify-between px-2 pb-3">
@@ -253,7 +278,7 @@ export function ApplyFlow({
                           aria-pressed={on}
                           aria-label={`${m}월 ${d}일${isOpen ? "" : ", 열린 테이블 없음"}`}
                           onClick={() => { setMsg(null); setDays((cur) => (cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key])); }}
-                          className={`flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-paper font-extrabold text-ink" : "font-medium text-muted line-through decoration-1"} ${today && !on ? "ring-[1.5px] ring-inset ring-ink" : ""}`}
+                          className={`flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-paper font-extrabold text-ink" : "font-medium text-muted/60"} ${today && !on ? "ring-[1.5px] ring-inset ring-ink" : ""}`}
                         >
                           {d}
                         </button>
@@ -315,7 +340,7 @@ export function ApplyFlow({
             </details>
             </div>
             <button type="button" role="checkbox" aria-checked={agree} onClick={() => setAgree(!agree)} className="mx-6 mt-2 flex min-h-[48px] items-center gap-2.5 text-left text-[15px] font-bold">
-              <span className={`flex size-[22px] items-center justify-center rounded-[6px] ${agree ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
+              <Box on={agree} />
               환불 규정을 확인했어요
             </button>
           </>
@@ -326,7 +351,7 @@ export function ApplyFlow({
         <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-line2 bg-paper px-6 pt-3">
           {step === 1 && (
             <button type="button" role="checkbox" aria-checked={near} onClick={() => setNear(!near)} className="mb-2.5 flex min-h-[52px] w-full items-center gap-2.5 rounded-[14px] bg-field px-3.5 py-2 text-left">
-              <span className={`flex size-[22px] shrink-0 items-center justify-center rounded-[6px] ${near ? "bg-accent" : "bg-dot"}`}>{CHECK}</span>
+              <Box on={near} />
               <span className="flex flex-col gap-0.5">
                 <span className="text-[15px] font-extrabold">가까운 동네도 괜찮아요</span>
                 <span className="text-[12px] text-muted">{nearLabel ? `사람이 모자라면 바로 옆 ${nearLabel}${ro(nearLabel)} 잡아드려요` : "사람이 모자라면 바로 옆 동네로 잡아드려요"}</span>
@@ -359,7 +384,7 @@ export function ApplyFlow({
   function PassRow({ on, onClick, title, sub, price, badge }: { on: boolean; onClick: () => void; title: string; sub: string; price: string; badge?: string }) {
     return (
       <button type="button" role="radio" aria-checked={on} onClick={onClick} className={`flex items-center gap-3 rounded-[18px] p-[18px] text-left transition ${on ? "bg-accent-soft" : "bg-row"}`}>
-        <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${on ? "bg-accent" : "bg-dot"}`}>{on && CHECK}</span>
+        <Box on={on} round size={24} />
         <span className="min-w-0 flex-1">
           <span className={`flex items-center gap-1.5 text-[17px] ${on ? "font-extrabold text-accent-text" : "font-bold"}`}>{title}{badge && <span className="rounded-[5px] bg-accent px-1.5 py-[2px] text-[11px] font-bold text-white">{badge}</span>}</span>
           <span className={`mt-0.5 block text-[13px] ${on ? "text-ink2" : "text-muted"}`}>{sub}</span>

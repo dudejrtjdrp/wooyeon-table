@@ -32,6 +32,10 @@ export default async function Rounds() {
   const notTable = mine.filter((a) => a.match_status !== "CONFIRMED");
   const pending = notTable.filter((a) => a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED"));
   const closed = notTable.filter((a) => !pending.includes(a)).slice(0, 5);
+  // 위 일정 카드에 이미 상태가 보이는 신청은 아래 '진행 중인 신청'에 한 번 더 늘어놓지 않는다
+  const shownRounds = new Set((rounds ?? []).map((r) => r.id));
+  const pendingRest = pending.filter((a) => !shownRounds.has(a.round_id));
+  const byId = new Map(mine.map((a) => [a.id, a]));
 
   return (
     <TabScreen title="일정" sub="동네와 날짜를 여러 개 고를수록 테이블이 잘 꾸려져요.">
@@ -55,7 +59,7 @@ export default async function Rounds() {
                   <h2 className="text-[19px] font-bold leading-snug">{r.title}</h2>
                   <p className="mt-1 text-[13px] text-muted">{fmtSlot(r.apply_deadline)} 마감</p>
                 </div>
-                {appId ? <Pill tone="accent">신청했어요</Pill> : <span className="shrink-0 rounded-full bg-ink px-3 py-1 text-[13px] font-semibold text-paper">{ddayLabel(dday(times[0] ?? r.apply_deadline, t))}</span>}
+                {appId ? (() => { const h = headline(byId.get(appId)!, t); return <Pill tone={h.tone}>{h.label}</Pill>; })() : <span className="shrink-0 rounded-full bg-ink px-3 py-1 text-[13px] font-semibold text-paper">{ddayLabel(dday(times[0] ?? r.apply_deadline, t))}</span>}
               </div>
               <div className="px-5 pb-5 pt-4">
                 <ul className="space-y-1.5">
@@ -69,7 +73,7 @@ export default async function Rounds() {
           );
         })}
       </div>
-      {[["진행 중인 신청", pending], ["마무리된 신청", closed]].map(([label, list]) =>
+      {[["진행 중인 신청", pendingRest], ["마무리된 신청", closed]].map(([label, list]) =>
         (list as typeof mine).length > 0 && (
           <section key={label as string} aria-label={label as string}>
             <SectionTitle>{label as string}</SectionTitle>
@@ -94,7 +98,6 @@ export default async function Rounds() {
       <p className="mt-6 text-center text-[13px] text-muted">
         {openRegions.size ? `지금은 서울 ${openRegions.size === 4 ? "네 " : openRegions.size}곳에서 먼저 모여요.` : "지금은 서울에서 먼저 모여요."} <Link href="/wish" className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">다른 동네 원해요</Link>
       </p>
-      {!me && <p className="mt-5 text-center text-[13px] text-muted"><Link href="/login" className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">로그인</Link>하면 바로 신청할 수 있어요.</p>}
     </TabScreen>
   );
 }

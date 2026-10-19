@@ -58,6 +58,12 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     { label: "테이블 확정 · 안내", done: matched, when: "", note: "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
     { label: "모임", done: app.attendance_status === "ATTENDED", when: "", note: "정해진 식당에서 저녁을 함께 먹어요." },
   ];
+  // 매칭 실패면 '테이블 확정' 단계가 아직 올 것처럼 보이지 않게, 그 자리에서 실패와 다음 할 일을 말한다
+  if (app.match_status === "ALTERNATIVE_OFFERED") {
+    steps[3] = app.resolution === "wait"
+      ? { label: "자리 기다리는 중", done: false, when: "", note: "고른 일정에 자리가 나면 먼저 여쭤볼게요." }
+      : { label: "매칭 실패 · 다음 방법 고르기", done: false, when: "", note: "다른 일정으로 옮기거나 보관·환불을 골라 주세요." };
+  }
   // 취소된 신청은 진행 단계를 이어 보여 주지 않는다: 마친 단계까지 두고 '취소됨'으로 끝낸다
   const canceledApp = app.application_status === "CANCELED" || !!app.attendance_status?.startsWith("CANCELED");
   if (canceledApp) {
