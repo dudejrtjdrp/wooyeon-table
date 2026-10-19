@@ -80,7 +80,10 @@ export async function requireProfile(): Promise<Me> {
 export type AdminLevel = "full" | "viewer";
 export type AdminMe = Me & { level: AdminLevel };
 export const ADMIN_LEVEL_LABEL: Record<AdminLevel, string> = { full: "전체 권한", viewer: "조회 전용" };
-export const VIEWER_DENIED = "조회 전용 계정이라 바꿀 수 없어요. 전체 권한 운영자에게 부탁해 주세요";
+export const ADMIN_OFF_MESSAGE = "꺼진 운영자 계정이에요. 다른 운영자에게 다시 켜 달라고 부탁해 주세요";
+/** 화면·API에서 쓰는 운영자 확인: 운영자이고 꺼지지 않았을 때만 */
+export const isActiveAdmin = (me: Pick<Me, "role" | "account_status"> | null): me is Me => Boolean(me && me.role === "admin" && me.account_status !== "banned");
+export const VIEWER_DENIED ="조회 전용 계정이라 바꿀 수 없어요. 전체 권한 운영자에게 부탁해 주세요";
 
 export async function adminLevels(): Promise<Record<string, AdminLevel>> {
   const { data } = await db().from("settings").select("value").eq("key", "admin.levels").maybeSingle();
@@ -94,6 +97,8 @@ export async function adminLevelOf(userId: string): Promise<AdminLevel> {
 export async function requireAdmin(): Promise<AdminMe> {
   const me = await getMe();
   if (!me || me.role !== "admin") redirect("/admin/login");
+  // 꺼진 운영자 계정(account_status=banned)은 로그인해 둔 세션이 남아 있어도 들어오지 못한다
+  if (me.account_status === "banned") redirect(`/admin/login?e=${encodeURIComponent(ADMIN_OFF_MESSAGE)}`);
   return { ...me, level: await adminLevelOf(me.id) };
 }
 
