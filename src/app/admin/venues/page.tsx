@@ -10,6 +10,8 @@ import { BulkPhotos, ExcelImport, VenuePhotoButton } from "./photo-upload";
 const linkBtn = `${btn} border border-line bg-card text-ink hover:bg-field`;
 
 export const dynamic = "force-dynamic";
+// 엑셀로 식당을 많이 넣을 때 서버 요청이 기본 시간 제한에 걸리지 않게
+export const maxDuration = 60;
 
 type V = { id: string; name: string; region: string; category: string | null; address: string; price_range: string | null; rating: number | null; review_count: number | null; booking_channel: string | null; photo_url: string | null; active: boolean };
 

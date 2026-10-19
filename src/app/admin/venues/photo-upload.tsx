@@ -140,7 +140,7 @@ export function ExcelImport({ action }: { action: (prev: ImportResult | null, f:
           )}
           {res.skipped.length > 0 && (
             <ul className="mt-1.5 space-y-0.5 text-[13px] text-danger">
-              {res.skipped.map((x) => <li key={x.line}>{x.line}번째 줄: {x.why}</li>)}
+              {res.skipped.map((x, i) => <li key={i}>{x.line ? `${x.line}번째 줄: ` : ""}{x.why}</li>)}
             </ul>
           )}
           {res.preview && res.ok && (

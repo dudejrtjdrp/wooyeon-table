@@ -24,15 +24,20 @@ const MAX_ROWS = 500;
 const FIELD_LABEL: Record<string, string> = { category: "업종", address: "주소", price_range: "가격대", rating: "평점", review_count: "리뷰 수", booking_channel: "예약 채널", booking_url: "예약 페이지", phone: "전화", map_url: "지도 링크", seats_per_table: "좌석", active: "사용" };
 const fail = (message: string): ImportResult => ({ ok: false, preview: false, added: 0, updated: 0, inventory: 0, skipped: [], changes: [], message });
 
-/** 사용 중인 식당이 모집 중인 같은 동네 일정에 재고가 없으면 2테이블씩 잡는다(0002 시드와 같은 시연용 가정, 회차·식당 재고에서 바꾼다). 만든 칸 수 */
-async function ensureInventory(venueId: string, region: string) {
-  const { data: slots } = await db().from("slots").select("id,rounds!inner(status)").eq("region", region).eq("rounds.status", "open");
+/**
+ * 사용 중인 식당이 모집 중인 같은 동네 일정에 재고가 없으면 2테이블씩 잡는다(0002 시드와 같은 시연용 가정, 회차·식당 재고에서 바꾼다).
+ * 식당 여러 곳을 한 번에: 모집 중 일정·이미 있는 재고를 한 번씩 읽고, 빠진 칸을 한 번에 넣는다. 만든 칸 수, 실패하면 -1
+ */
+async function ensureInventory(venues: { id: string; region: string }[]) {
+  if (!venues.length) return 0;
+  const regions = [...new Set(venues.map((v) => v.region))];
+  const { data: slots } = await db().from("slots").select("id,region,rounds!inner(status)").in("region", regions).eq("rounds.status", "open");
   if (!slots?.length) return 0;
-  const { data: have } = await db().from("venue_slots").select("slot_id").eq("venue_id", venueId);
-  const missing = slots.filter((s) => !(have ?? []).some((h) => h.slot_id === s.id));
-  if (!missing.length) return 0;
-  const { error } = await db().from("venue_slots").insert(missing.map((s) => ({ venue_id: venueId, slot_id: s.id, tables_available: 2 })));
-  return error ? -1 : missing.length;
+  // 이미 있는 재고는 건드리지 않는다(같은 식당·일정은 기본 키로 걸러 건너뜀). 실제로 새로 생긴 칸만 센다
+  const want = venues.flatMap((v) => slots.filter((s) => s.region === v.region).map((s) => ({ venue_id: v.id, slot_id: s.id, tables_available: 2 })));
+  if (!want.length) return 0;
+  const { data, error } = await db().from("venue_slots").upsert(want, { onConflict: "venue_id,slot_id", ignoreDuplicates: true }).select("venue_id");
+  return error ? -1 : (data?.length ?? 0);
 }
 
 /**
@@ -86,34 +91,45 @@ export async function importVenues(_prev: ImportResult | null, form: FormData): 
     };
   }
 
-  let done = 0, inventory = 0;
-  for (const { line, v } of good) {
-    const cur = byKey.get(`${v.region}|${v.name}`);
-    let id = cur?.id;
-    if (cur) {
-      const { error } = await db().from("venues").update(v).eq("id", cur.id);
-      if (error) { skipped.push({ line, why: "저장하지 못했어요" }); continue; }
-      // 감사 로그: 바뀐 칸마다 이전 값 → 새 값
-      const diff = Object.keys(FIELD_LABEL).filter((k) => String(cur[k] ?? "") !== String((v as Record<string, unknown>)[k] ?? ""));
-      if (diff.length) await logStatus({ entityType: "venue", entityId: cur.id, field: "import", from: diff.map((k) => `${FIELD_LABEL[k]}=${cur[k] ?? ""}`).join("; "), to: diff.map((k) => `${FIELD_LABEL[k]}=${(v as Record<string, unknown>)[k] ?? ""}`).join("; "), actor: `admin:${me.id}`, reason: `엑셀로 식당 고침: ${v.name} (${file.name})` });
-    } else {
-      const { data: ins, error } = await db().from("venues").insert(v).select("id").single();
-      if (error || !ins) { skipped.push({ line, why: "저장하지 못했어요" }); continue; }
-      id = ins.id;
-      await logStatus({ entityType: "venue", entityId: ins.id, field: "import", to: "추가", actor: `admin:${me.id}`, reason: `엑셀로 식당 추가: ${v.region} ${v.name} (${file.name})` });
-    }
-    done++;
-    if (v.active && id) {
-      const n = await ensureInventory(id, v.region);
-      if (n < 0) skipped.push({ line, why: "식당은 넣었지만 일정별 재고를 잡지 못했어요. 회차·식당 재고에서 확인해 주세요" });
-      else inventory += n;
+  // 식당이 많아도 서버 요청 시간 안에 끝나게 묶어서 처리한다: 새 식당은 한 번에 넣고, 고칠 식당은 몇 곳씩 동시에, 감사 로그·재고도 한 번에
+  const actor = `admin:${me.id}`;
+  const logs: Record<string, unknown>[] = [];
+  const saved: { id: string; region: string; active: boolean }[] = [];
+  const fresh = good.filter(({ v }) => !byKey.has(`${v.region}|${v.name}`));
+  if (fresh.length) {
+    const { data: ins, error } = await db().from("venues").insert(fresh.map((g) => g.v)).select("id,region,name,active");
+    if (error || !ins) fresh.forEach(({ line }) => skipped.push({ line, why: "저장하지 못했어요" }));
+    else for (const r of ins) {
+      saved.push(r);
+      logs.push({ entity_type: "venue", entity_id: r.id, field: "import", from_value: null, to_value: "추가", actor, reason: `엑셀로 식당 추가: ${r.region} ${r.name} (${file.name})` });
     }
   }
+  const edits = good.filter(({ v }) => byKey.has(`${v.region}|${v.name}`));
+  for (let i = 0; i < edits.length; i += 8) {
+    await Promise.all(edits.slice(i, i + 8).map(async ({ line, v }) => {
+      const cur = byKey.get(`${v.region}|${v.name}`)!;
+      const { error } = await db().from("venues").update(v).eq("id", cur.id);
+      if (error) { skipped.push({ line, why: "저장하지 못했어요" }); return; }
+      saved.push({ id: cur.id, region: v.region, active: v.active });
+      // 감사 로그: 바뀐 칸마다 이전 값 → 새 값
+      const diff = Object.keys(FIELD_LABEL).filter((k) => String(cur[k] ?? "") !== String((v as Record<string, unknown>)[k] ?? ""));
+      if (diff.length) logs.push({ entity_type: "venue", entity_id: cur.id, field: "import", from_value: diff.map((k) => `${FIELD_LABEL[k]}=${cur[k] ?? ""}`).join("; "), to_value: diff.map((k) => `${FIELD_LABEL[k]}=${(v as Record<string, unknown>)[k] ?? ""}`).join("; "), actor, reason: `엑셀로 식당 고침: ${v.name} (${file.name})` });
+    }));
+  }
+  if (logs.length) {
+    const { error } = await db().from("status_events").insert(logs);
+    if (error) skipped.push({ line: 0, why: "식당은 넣었지만 처리 이력을 남기지 못했어요" });
+  }
+  const done = saved.length;
+  const addedNow = saved.filter((v) => !edits.some(({ v: e }) => byKey.get(`${e.region}|${e.name}`)?.id === v.id)).length;
+  const updatedNow = done - addedNow;
+  const inventory = await ensureInventory(saved.filter((v) => v.active));
+  if (inventory < 0) skipped.push({ line: 0, why: "식당은 넣었지만 일정별 재고를 잡지 못했어요. 회차·식당 재고에서 확인해 주세요" });
   revalidatePath("/admin/venues");
   revalidatePath("/admin/rounds");
   return {
-    ok: done > 0, preview: false, added, updated, inventory, skipped, changes,
-    message: `새로 ${added}곳, 고친 곳 ${updated}곳${inventory ? `, 모집 중인 일정에 재고 ${inventory}칸` : ""}${skipped.length ? `, 건너뛴 줄 ${skipped.length}개` : ""}`,
+    ok: done > 0, preview: false, added: addedNow, updated: updatedNow, inventory: Math.max(inventory, 0), skipped, changes,
+    message: `새로 ${addedNow}곳, 고친 곳 ${updatedNow}곳${inventory > 0 ? `, 모집 중인 일정에 재고 ${inventory}칸` : ""}${skipped.length ? `, 건너뛴 줄 ${skipped.length}개` : ""}`,
   };
 }
 
