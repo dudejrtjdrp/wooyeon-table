@@ -90,7 +90,7 @@ export default async function Guide() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6 sm:py-12">
       <p className="text-sm font-medium text-accent">심사위원 안내</p>
-      <h1 className="mt-2 text-[26px] font-bold leading-snug">처음 만나는 4~6명을 한 테이블에 앉히고,<br />그다음 모임까지 자동으로 이어요</h1>
+      <h1 className="mt-2 text-[22px] font-bold leading-snug sm:text-[26px]">처음 만나는 4~6명을 한 테이블에 앉히고<br className="hidden sm:block" /> 다음 모임까지 자동으로 이어요</h1>
       <p className="mt-3 leading-relaxed text-muted">
         참가자는 고르고 결제하고 와서 먹기만 해요. 그 사이는 시스템이 하고, 운영자는 <b className="text-ink">자동으로 끝내지 못한 예외만</b> 봐요.
       </p>
@@ -110,18 +110,18 @@ export default async function Guide() {
           ))}
         </ol>
         <p className="mt-3 rounded-[14px] bg-field px-4 py-3 text-[13px] leading-relaxed text-ink2">
-          6에서 다시 1로 돌아가요. 모일수록 다음 테이블이 더 잘 맞춰져요. 운영자 화면에는 결제 오류·식당 부족·풀리지 않은 조건 충돌·신고 같은 <b>예외만</b> 올라와요.
+          6에서 다시 1로 돌아가요. 만남과 후기가 쌓일수록 다음 테이블이 더 잘 맞아요. 운영자 화면에는 결제 오류·식당 부족·풀리지 않은 조건 충돌·신고 같은 <b>예외만</b> 올라와요.
         </p>
       </section>
 
       <section className="mt-10" aria-labelledby="tour-title">
         <h2 id="tour-title" className="text-[17px] font-bold">3분 둘러보기</h2>
-        <p className="mt-1 text-[14px] text-muted">버튼 하나로 그 상태의 사람이 되어 화면을 열어요. 비밀번호는 필요 없어요. 참가자 화면은 휴대폰 크기(390px)로 보시면 좋아요.</p>
+        <p className="mt-1 text-[14px] text-muted">버튼을 누르면 그 상태인 참가자로 바로 들어가요. 비밀번호는 필요 없어요. 참가자 화면은 휴대폰 크기(390px)로 보시면 좋아요.</p>
         <ol className="mt-4 space-y-2.5">
           {[
-            { n: 1, who: "신청하고 기다리는 사람", see: "홈 첫 화면에 신청·결제·매칭 상태와 결과 발표 시각이 보여요.", btn: waiting && <As login={waiting.users.login_id} to="/">{withRo(waiting.users.name)} 보기</As> },
+            { n: 1, who: "신청하고 기다리는 사람", see: "홈 첫 화면에 신청·결제·매칭 상태와 결과 발표 시각이 보여요.", btn: waiting && <As login={waiting.users.login_id} to="/">{withRo(waiting.users.name)} 들어가기</As> },
             { n: 2, who: "테이블이 확정된 사람", see: "같이 앉는 이유, 식당과 찾아가는 길, 단체방의 첫 공지·리마인드·대화 주제가 보여요.", btn: ok && <><As login={ok.users.login_id} to={`/tables/${ok.table_id}`}>{withRo(ok.users.name)} · 테이블</As><As login={ok.users.login_id} to={`/tables/${ok.table_id}/chat`}>단체방</As></> },
-            { n: 3, who: "테이블에 못 든 사람", see: "이유와 함께 빈자리 합류·다른 일정·보관·환불을 한 화면에서 골라요. 옮기면 결제는 그대로예요.", btn: fail && <As login={fail.users.login_id} to={`/applications/${fail.id}/resolve`}>{withRo(fail.users.name)} 보기</As> },
+            { n: 3, who: "테이블에 못 든 사람", see: "이유와 함께 빈자리 합류·다른 일정·보관·환불을 한 화면에서 골라요. 옮기면 결제는 그대로예요.", btn: fail && <As login={fail.users.login_id} to={`/applications/${fail.id}/resolve`}>{withRo(fail.users.name)} 들어가기</As> },
             { n: 4, who: "운영자", see: "오늘 처리할 일과 예외만 보여요. 자동 매칭 모니터에서 테이블마다 묶인 이유와 재배치 기록을 볼 수 있어요.", btn: A && <><As admin login={A} to="/admin">운영자로 · 오늘 처리할 일</As><As admin login={A} to="/admin/matching">자동 매칭 모니터</As></> },
           ].map((x) => (
             <li key={x.n} className="rounded-[16px] border border-line bg-card p-4">
