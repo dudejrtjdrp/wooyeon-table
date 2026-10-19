@@ -1,3 +1,4 @@
+import { AI_PHOTO_NOTE, isAiPhoto } from "@/lib/venue-photo-kind";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { RoundTable } from "@/components/brand";
@@ -99,12 +100,13 @@ export default async function TablePage({ params, searchParams }: { params: Prom
         <div className="relative z-10 flex h-14 items-center px-3"><span className="flex size-11 items-center justify-center rounded-full bg-card"><BackButton href="/my-tables" /></span></div>
         {t.venues?.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={t.venues.photo_url} alt={`${t.venues.name} 사진`} className="absolute inset-0 size-full object-cover" />
+          <img src={t.venues.photo_url} alt={`${t.venues.name} 분위기 사진`} className="absolute inset-0 size-full object-cover" />
         ) : (
           <div className="pointer-events-none absolute -bottom-12 -right-6" aria-hidden="true">
             <RoundTable size={230} filled={Math.min(6, mems.length)} seats={Math.max(mems.length, 4)} />
           </div>
         )}
+        {isAiPhoto(t.venues?.photo_url) && <span className="absolute bottom-9 right-3 z-10 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white">{AI_PHOTO_NOTE}</span>}
       </header>
 
       <main className="relative -mt-6 flex-1 rounded-t-[24px] bg-paper px-5 pb-40 pt-6">

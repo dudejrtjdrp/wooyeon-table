@@ -1,3 +1,4 @@
+import { AI_PHOTO_NOTE, isAiPhoto } from "@/lib/venue-photo-kind";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { after } from "next/server";
@@ -231,6 +232,7 @@ function Hero({ children, right, photo }: { children: React.ReactNode; right?: R
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={photo.src} alt={photo.alt} className="absolute inset-0 size-full object-cover" />
         <div className="absolute left-4 top-4">{children}</div>
+        {isAiPhoto(photo.src) && <span className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white">{AI_PHOTO_NOTE}</span>}
       </div>
     );
   }
@@ -268,7 +270,7 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
   const others = members.filter((_, i) => memberIds[i] !== meId);
   return (
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
-      <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
+      <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 분위기 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
         <span className="inline-flex h-7 items-center rounded-full bg-ink px-3 text-[13px] font-semibold text-paper">
           {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
         </span>
