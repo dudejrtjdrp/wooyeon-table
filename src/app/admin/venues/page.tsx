@@ -1,10 +1,11 @@
 import { Download, ImageOff, Plus } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, Panel, Term, btn, btnPrimary, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, Term, btn, btnLight, btnPrimary, ctl, td, th } from "@/components/admin-ui";
 import { TIP } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
+import { CHANNEL_NONE, filterVenues, parseVenueFilter, venueFiltered } from "@/lib/venue-list-rules";
 import { importVenues, uploadPhotoByName, uploadVenuePhoto } from "./actions";
 import { BulkPhotos, ExcelImport, VenuePhotoButton } from "./photo-upload";
 
@@ -17,30 +18,52 @@ export const maxDuration = 60;
 type V = { id: string; name: string; region: string; category: string | null; address: string; price_range: string | null; rating: number | null; review_count: number | null; booking_channel: string | null; photo_url: string | null; active: boolean };
 
 /** 식당 관리: 제휴 식당 목록, 사진, 엑셀로 한 번에 넣기. 배정은 매칭 확정 때 이 목록에서 자동으로 한다 */
-export default async function Venues() {
+export default async function Venues({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await requireAdmin();
+  const f = parseVenueFilter(await searchParams);
   const ro = me.level === "viewer";
   const { data } = await db().from("venues").select("id,name,region,category,address,price_range,rating,review_count,booking_channel,photo_url,active").order("region").order("name");
   const venues = (data ?? []) as V[];
   const noPhoto = venues.filter((v) => !v.photo_url).length;
   const regions = [...new Set(venues.map((v) => v.region))];
+  const shown = filterVenues(venues, f);
+  const filtered = venueFiltered(f);
 
   return (
     <div>
       <PageHeader
         title="식당 관리"
         desc="제휴 식당 목록이에요. 테이블이 확정되면 이 목록에서 동네·시간·인원·평점·예약 채널을 보고 자동으로 배정해요."
-        how={["'식당 추가'로 한 곳씩, 또는 오른쪽 엑셀로 여러 곳 넣기", "식당 이름을 눌러 정보 고치기·배정 끄기", "사진 없는 곳은 사진 올리기", <>일정별 <Term tip={TIP.식당재고}>식당 재고</Term>는 회차·식당 재고에서</>]}
+        how={["'식당 추가'로 한 곳씩, 또는 오른쪽 엑셀로 여러 곳 넣기", "위 칸으로 찾고 거르기 (사진 없는 곳도)", "식당 이름을 눌러 고치기·배정 끄기·지우기", <>일정별 <Term tip={TIP.식당재고}>식당 재고</Term>는 회차·식당 재고에서</>]}
         actions={!ro && <Link href="/admin/venues/new" className={btnPrimary}><Plus size={16} aria-hidden="true" />식당 추가</Link>}
       />
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
         <Panel title={`제휴 식당 ${venues.length}곳 · ${regions.length}개 동네${noPhoto ? ` · 사진 없는 곳 ${noPhoto}곳` : ""}`}>
+          {/* 거르기는 주소에 남는다(새로 고침·공유해도 같은 목록) */}
+          <form className="mb-4 flex flex-wrap items-end gap-2" role="search" aria-label="식당 찾기">
+            <label className="block min-w-48 flex-1"><span className="text-[12px] font-semibold text-muted">이름·주소</span><input name="q" defaultValue={f.q} placeholder="예: 을지로, 파스타" className={`${ctl} mt-1 w-full`} /></label>
+            <label className="block"><span className="text-[12px] font-semibold text-muted">동네</span>
+              <select name="region" defaultValue={f.region ?? ""} className={`${ctl} mt-1 block`}><option value="">모든 동네</option>{regions.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+            </label>
+            <label className="block"><span className="text-[12px] font-semibold text-muted">배정</span>
+              <select name="state" defaultValue={f.state ?? ""} className={`${ctl} mt-1 block`}><option value="">전체</option><option value="on">배정함</option><option value="off">쉬는 중</option></select>
+            </label>
+            <label className="block"><span className="text-[12px] font-semibold text-muted">사진</span>
+              <select name="photo" defaultValue={f.photo ?? ""} className={`${ctl} mt-1 block`}><option value="">전체</option><option value="yes">있음</option><option value="no">없음</option></select>
+            </label>
+            <label className="block"><span className="text-[12px] font-semibold text-muted">예약 채널</span>
+              <select name="ch" defaultValue={f.ch ?? ""} className={`${ctl} mt-1 block`}><option value="">전체</option>{(Object.keys(CHANNEL_LABEL) as Channel[]).map((c) => <option key={c} value={c}>{CHANNEL_LABEL[c]}</option>)}<option value={CHANNEL_NONE}>비어 있음</option></select>
+            </label>
+            <button className={btnLight}>찾기</button>
+            {filtered && <Link href="/admin/venues" className="inline-flex h-11 items-center px-2 text-[13px] font-semibold text-muted hover:text-ink">거르기 풀기</Link>}
+          </form>
+          {filtered && <p className="mb-2 text-[13px] text-muted" aria-live="polite">{venues.length}곳 중 {shown.length}곳</p>}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-[14px]">
               <thead><tr>{["사진", "동네", "식당", "가격대", "평점", "예약", "상태", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-line">
-                {venues.map((v) => (
+                {shown.map((v) => (
                   <tr key={v.id}>
                     <td className={td}>
                       {v.photo_url ? (
@@ -64,6 +87,7 @@ export default async function Venues() {
                 ))}
               </tbody>
             </table>
+            {!!venues.length && !shown.length && <p className="p-8 text-center text-muted">찾는 조건에 맞는 식당이 없어요. <Link href="/admin/venues" className="font-semibold text-accent underline underline-offset-4">거르기 풀기</Link></p>}
             {!venues.length && <p className="p-8 text-center text-muted">아직 식당이 없어요. 위 &lsquo;식당 추가&rsquo;로 한 곳씩, 또는 오른쪽 엑셀로 한 번에 넣어 보세요.</p>}
           </div>
         </Panel>

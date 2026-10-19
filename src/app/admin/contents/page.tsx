@@ -3,6 +3,7 @@ import { Badge, PageHeader, Panel, Term, btnInk, btnLight, ctl } from "@/compone
 import { TIP } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
 import { TABLE_TYPES, TYPE_LABEL, loadContentRules } from "@/lib/contents";
+import { TAG_NONE, TYPE_NONE, contentFiltered, contentSearch, filterContents, parseContentFilter, tagOptions } from "@/lib/content-filter";
 import { INTERESTS } from "@/lib/constants";
 import { db } from "@/lib/supabase";
 import { saveContent, saveRules, toggleContent } from "./actions";
@@ -24,18 +25,23 @@ function TypeChecks({ value = [] }: { value?: string[] }) {
   );
 }
 
-export default async function Contents({ searchParams }: { searchParams: Promise<{ k?: string }> }) {
+export default async function Contents({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await requireAdmin();
   const ro = me.level !== "full";
-  const { k } = await searchParams;
-  const kind = k === "icebreaker" ? "icebreaker" : "topic";
+  const f = parseContentFilter(await searchParams);
+  const kind = f.k;
+  // 저장·노출 전환 뒤 같은 검색·거르기로 돌아온다
+  const here = contentSearch(f);
   const [{ data }, rules, { data: posted }] = await Promise.all([
     db().from("conversation_contents").select("id,kind,body,tags,table_types,priority,active,updated_at").order("active", { ascending: false }).order("priority", { ascending: false }).order("created_at"),
     loadContentRules(),
     db().from("chat_messages").select("id").eq("kind", "system").contains("meta", { type: "content" }),
   ]);
   const all = (data ?? []) as C[];
-  const list = all.filter((c) => c.kind === kind);
+  const ofKind = all.filter((c) => c.kind === kind);
+  const list = filterContents(ofKind, f);
+  const filtered = contentFiltered(f);
+  const tags = tagOptions(ofKind);
   const count = (k2: string) => all.filter((c) => c.kind === k2 && c.active).length;
 
   return (
@@ -43,24 +49,43 @@ export default async function Contents({ searchParams }: { searchParams: Promise
       <PageHeader
         title="대화 콘텐츠"
         desc={<>모임 시작 시각에 단체방에 자동으로 올라가는 대화 주제와 <Term tip={TIP.아이스브레이킹}>아이스브레이킹</Term>이에요. 테이블의 공통 관심사와 <Term tip={TIP.테이블유형}>테이블 유형</Term>에 맞는 것부터 골라요(<Term tip={TIP.큐레이션}>큐레이션</Term>).</>}
-        how={["대화 주제·아이스브레이킹 탭 고르기", "새 콘텐츠 쓰고 관심사 태그 붙이기", "오른쪽 '노출 규칙'에서 개수·가중치 정하기", "테이블 상세에서 실제로 나갈 주제 미리 보기"]}
+        how={["대화 주제·아이스브레이킹 탭 고르고 검색·거르기", "새 콘텐츠 쓰고 관심사 태그 붙이기", "오른쪽 '노출 규칙'에서 개수·가중치 정하기", "테이블 상세에서 실제로 나갈 주제 미리 보기"]}
       />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             {(["topic", "icebreaker"] as const).map((x) => (
-              <Link key={x} href={`/admin/contents?k=${x}`} className={`rounded-full px-4 py-2 text-[14px] font-semibold ${kind === x ? "bg-ink text-white" : "bg-card text-muted"}`}>
+              <Link key={x} href={`/admin/contents${contentSearch({ k: x, q: f.q, type: f.type, state: f.state })}`} className={`rounded-full px-4 py-2 text-[14px] font-semibold ${kind === x ? "bg-ink text-white" : "bg-card text-muted"}`}>
                 {x === "topic" ? "대화 주제" : "아이스브레이킹"} <span className="ml-1 tabular-nums opacity-70">{count(x)}</span>
               </Link>
             ))}
             <span className="ml-auto text-[13px] text-muted">지금까지 단체방에 자동으로 올린 횟수 {posted?.length ?? 0}번</span>
           </div>
 
+          {/* 검색·거르기: 주소에 남아 새로 고침·저장 뒤에도 그대로 */}
+          <form role="search" aria-label="콘텐츠 찾기" className="flex flex-wrap items-end gap-2 rounded-2xl bg-card p-4">
+            <input type="hidden" name="k" value={kind} />
+            <label className="block min-w-48 flex-1"><span className="text-[12px] font-semibold text-muted">본문·태그·테이블 유형</span><input name="q" defaultValue={f.q} placeholder="예: 여행, 첫 참가" className={`${ctl} mt-1 w-full`} /></label>
+            <label className="block"><span className="text-[12px] font-semibold text-muted">관심사 태그</span>
+              <select name="tag" defaultValue={f.tag ?? ""} className={`${ctl} mt-1 block max-w-44`}><option value="">전체</option>{tags.map((t) => <option key={t} value={t}>#{t}</option>)}<option value={TAG_NONE}>태그 없음(모든 관심사)</option></select>
+            </label>
+            <label className="block"><span className="text-[12px] font-semibold text-muted"><Term tip={TIP.테이블유형}>테이블 유형</Term></span>
+              <select name="type" defaultValue={f.type ?? ""} className={`${ctl} mt-1 block max-w-44`}><option value="">전체</option>{TABLE_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}<option value={TYPE_NONE}>유형 없음(모든 유형)</option></select>
+            </label>
+            <label className="block"><span className="text-[12px] font-semibold text-muted">노출</span>
+              <select name="state" defaultValue={f.state ?? ""} className={`${ctl} mt-1 block`}><option value="">전체</option><option value="on">노출 중</option><option value="off">노출 중지</option></select>
+            </label>
+            <button className={btnLight}>찾기</button>
+            {filtered && <Link href={`/admin/contents?k=${kind}`} className="inline-flex h-11 items-center px-2 text-[13px] font-semibold text-muted hover:text-ink">거르기 풀기</Link>}
+            {filtered && <p className="w-full text-[13px] text-muted" aria-live="polite">{ofKind.length}개 중 {list.length}개</p>}
+          </form>
+
           {ro ? <p className="rounded-xl bg-field px-4 py-3 text-[13px] text-muted">조회 전용 계정이라 콘텐츠와 노출 규칙을 볼 수만 있어요.</p> : (
           <Panel title={kind === "topic" ? "새 대화 주제" : "새 아이스브레이킹"}>
             <form action={saveContent} className="space-y-3">
               <input type="hidden" name="kind" value={kind} />
+              <input type="hidden" name="back" value={here} />
               <textarea name="body" required rows={2} maxLength={200} placeholder={kind === "topic" ? "예: 요즘 퇴근하고 제일 기다려지는 시간은 언제예요?" : "예: 각자 휴대폰 최근 사진 한 장으로 자기소개하기"} className={`${ctl} h-auto w-full py-2.5`} />
               <div className="grid gap-3 md:grid-cols-[1fr_120px]">
                 <label className="block text-[12px] font-semibold text-muted">관심사 태그 (쉼표로 구분, 비우면 모든 테이블)
@@ -99,6 +124,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                   {!ro && <form action={saveContent} className="mt-3 space-y-3 border-t border-line pt-3">
                     <input type="hidden" name="id" value={c.id} />
                     <input type="hidden" name="kind" value={c.kind} />
+                    <input type="hidden" name="back" value={here} />
                     <textarea name="body" defaultValue={c.body} rows={2} maxLength={200} className={`${ctl} h-auto w-full py-2.5`} />
                     <div className="grid gap-3 md:grid-cols-[1fr_120px]">
                       <input name="tags" list="interest-list" defaultValue={(c.tags ?? []).join(", ")} placeholder="관심사 태그" className={ctl} />
@@ -113,17 +139,19 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                 {!ro && <form action={toggleContent} className="mt-2">
                   <input type="hidden" name="id" value={c.id} />
                   <input type="hidden" name="active" value={String(!c.active)} />
+                  <input type="hidden" name="back" value={here} />
                   <button className="text-[12px] font-semibold text-muted hover:text-ink">{c.active ? "노출 멈추기" : "다시 노출하기"}</button>
                 </form>}
               </li>
             ))}
-            {!list.length && <li className="shadow-card rounded-[20px] bg-card p-10 text-center text-muted">등록된 콘텐츠가 없어요.</li>}
+            {!list.length && <li className="shadow-card rounded-[20px] bg-card p-10 text-center text-muted">{filtered && ofKind.length ? <>찾는 조건에 맞는 콘텐츠가 없어요. <Link href={`/admin/contents?k=${kind}`} className="font-semibold text-accent underline underline-offset-4">거르기 풀기</Link></> : "등록된 콘텐츠가 없어요."}</li>}
           </ul>
         </div>
 
         <div className="space-y-4">
           <Panel title="노출 규칙">
             <form action={saveRules} className="space-y-3 text-[14px]">
+              <input type="hidden" name="back" value={here} />
               <label className="flex items-center justify-between gap-3">대화 주제 개수 <input name="topicCount" type="number" min={3} max={6} defaultValue={rules.topicCount} className={`${ctl} w-20`} /></label>
               <label className="flex items-center justify-between gap-3">아이스브레이킹 개수 <input name="icebreakerCount" type="number" min={1} max={3} defaultValue={rules.icebreakerCount} className={`${ctl} w-20`} /></label>
               <label className="flex items-center justify-between gap-3"><span>공통 관심사 <Term tip="관심사 태그가 테이블 사람들과 겹칠수록 더하는 점수예요. 클수록 관심사가 맞는 주제가 먼저 뽑혀요.">가중치</Term></span> <input name="interestWeight" type="number" min={0} max={30} defaultValue={rules.interestWeight} className={`${ctl} w-20`} /></label>

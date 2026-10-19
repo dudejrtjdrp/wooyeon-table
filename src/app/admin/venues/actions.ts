@@ -8,6 +8,8 @@ import { db } from "@/lib/supabase";
 import { COLUMNS, matchPhotoName, parseVenueRow, type VenueRow } from "@/lib/venue-sheet";
 import { saveVenuePhoto } from "@/lib/venue-photo";
 import { readVenueWorkbook } from "@/lib/venue-xlsx";
+import { canDeleteVenue } from "@/lib/venue-list-rules";
+import { venueUsage } from "@/lib/venue-usage";
 
 export type ImportResult = {
   ok: boolean;
@@ -216,4 +218,26 @@ export async function toggleVenue(form: FormData) {
   revalidatePath("/admin/rounds");
   const to = String(form.get("back") ?? "") === "list" ? "/admin/venues" : `/admin/venues/${id}`;
   redirect(`${to}?m=${encodeURIComponent(`${cur.name}: ${next ? `다시 배정해요${n > 0 ? ` (모집 중인 일정 ${n}곳에 재고 잡음)` : ""}` : "이제 새 테이블에 배정하지 않아요. 이미 배정된 모임은 그대로예요"}`)}`);
+}
+
+/**
+ * 식당 지우기. 아무 데도 안 쓰인 식당만 지운다(사진도 함께). 배정·예약·재고 기록이 있으면 지우지 않고 '배정 끄기'를 안내한다.
+ * 처리 이력은 식당이 사라져도 남는다(status_events는 식당 id만 들고 있다)
+ */
+export async function deleteVenue(form: FormData) {
+  const me = await requireAdminWrite("/admin/venues");
+  const id = String(form.get("id") ?? "");
+  const { data: cur } = await db().from("venues").select("id,name,region,active,photo_url").eq("id", id).maybeSingle();
+  if (!cur) redirect(`/admin/venues?e=${encodeURIComponent("식당을 찾지 못했어요. 이미 지워졌을 수 있어요")}`);
+  const check = canDeleteVenue(await venueUsage(id));
+  if (!check.ok) redirect(`/admin/venues/${id}?e=${encodeURIComponent(check.reason)}`);
+  const { error: photoErr } = await db().from("venue_photos").delete().eq("venue_id", id);
+  if (photoErr) redirect(`/admin/venues/${id}?e=${encodeURIComponent("사진을 지우지 못해 식당도 그대로 뒀어요. 잠시 뒤 다시 해 주세요")}`);
+  const { error } = await db().from("venues").delete().eq("id", id);
+  // 그 사이 배정·예약이 생기면 외래 키에 걸려 지워지지 않는다
+  if (error) redirect(`/admin/venues/${id}?e=${encodeURIComponent("지우지 못했어요. 방금 배정이나 예약이 생겼을 수 있어요. 새로 고침해서 다시 확인해 주세요")}`);
+  await logStatus({ entityType: "venue", entityId: id, field: "status", from: cur.active ? "active" : "inactive", to: "deleted", actor: `admin:${me.id}`, reason: `식당 지움: ${cur.region} ${cur.name}${cur.photo_url ? " (사진 함께)" : ""}` });
+  revalidatePath("/admin/venues");
+  revalidatePath("/admin/rounds");
+  redirect(`/admin/venues?m=${encodeURIComponent(`${cur.name}을(를) 지웠어요`)}`);
 }

@@ -111,6 +111,8 @@ const COMMON_VALUE: Record<string, string> = {
   JOINED: "합류", REQUESTED: "요청", CONFIRMED: "확정", CANCELED: "취소", updated: "수정", created: "등록", true: "켬", false: "끔",
   pending: "보내는 중", sent: "보냄", failed: "실패", full: "전체 권한", viewer: "조회 전용", reset: "초기화", uploaded: "올림",
   open: "열림", reviewed: "검토 끝", resolved: "처리됨",
+  // 식당 지우기(venues/actions.ts deleteVenue)
+  deleted: "지움", active: "배정함", inactive: "쉬는 중",
 };
 const VALUE_MAPS: Record<string, Record<string, [string, Tone]>> = {
   payment_status: PAYMENT, match_status: MATCH, attendance_status: ATTEND, account_status: ACCOUNT, application_status: APP_STATUS,

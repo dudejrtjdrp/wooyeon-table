@@ -26,6 +26,8 @@ function failRound(form: FormData, msg: string): never {
     duration: String(form.get("duration") ?? ""),
     regions: form.getAll("regions").map(String),
     max_tables: String(form.get("max_tables") ?? ""),
+    // 복제해서 연 칸이면 검증에 걸려 돌아와도 '…에서 가져왔어요' 안내를 그대로 보인다
+    from: String(form.get("from") ?? "").slice(0, 60) || undefined,
   };
   redirect(`/admin/rounds?tab=new&e=${encodeURIComponent(msg)}&f=${encodeURIComponent(JSON.stringify(keep))}#new-round`);
 }

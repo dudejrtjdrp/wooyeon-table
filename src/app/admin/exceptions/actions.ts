@@ -7,6 +7,7 @@ import { logStatus } from "@/lib/events";
 import { refundPayment } from "@/lib/payments";
 import { assignVenue, afterConfirm, triedVenues } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
+import { canReopen, exceptionsHref } from "@/lib/exception-view";
 
 // 처리하면 예외를 닫고(누가·언제·무엇) 상태 이력에도 한 줄 남긴다. 결과는 ?m=/?e= 로 화면에 알린다.
 // 처리 문구는 요청마다 따로 돌려받는다(모듈 전역에 두면 동시에 누른 두 요청의 문구가 섞인다)
@@ -14,6 +15,30 @@ async function close(id: string, adminId: string, resolution: string): Promise<s
   await db().from("exceptions").update({ status: "resolved", resolution, resolved_by: adminId, resolved_at: new Date().toISOString() }).eq("id", id).eq("status", "open");
   await logStatus({ entityType: "exception", entityId: id, field: "status", from: "open", to: "resolved", actor: `admin:${adminId}`, reason: resolution });
   return resolution;
+}
+
+/**
+ * 처리한 예외 다시 열기. 사유를 꼭 받고, 열린 목록 맨 위로 올린다(화면이 처리 이력의 resolved → open 을 보고 올린다).
+ * 처리하면서 바뀐 데이터(환불·제재·배정·출석 등)는 되돌리지 않는다. 예외만 다시 '처리할 것'이 된다
+ */
+export async function reopenException(form: FormData) {
+  const back = String(form.get("back") ?? "") || "/admin/exceptions";
+  const me = await requireAdminWrite(back);
+  const id = String(form.get("id") ?? "");
+  const go = (k: "m" | "e", msg: string, to = back) => {
+    revalidatePath("/admin/exceptions");
+    revalidatePath("/admin");
+    redirect(`${to}${to.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(msg)}`);
+  };
+  const { data: ex } = await db().from("exceptions").select("id,kind,status,resolution").eq("id", id).maybeSingle();
+  if (!ex) return go("e", "이 예외를 찾지 못했어요. 이미 지워졌을 수 있어요");
+  const check = canReopen({ status: ex.status, note: form.get("note") });
+  if (!check.ok) return go("e", check.reason);
+  // 처리 결과 칸은 비워 열린 상태로 돌린다. 이전 처리(누가·무엇)는 처리 이력에 그대로 남는다
+  const { data: changed } = await db().from("exceptions").update({ status: "open", resolution: null, resolved_by: null, resolved_at: null }).eq("id", id).eq("status", "resolved").select("id");
+  if (!changed?.length) return go("m", "이미 다시 열린 예외예요");
+  await logStatus({ entityType: "exception", entityId: id, field: "status", from: "resolved", to: "open", actor: `admin:${me.id}`, reason: `${check.note} (이전 처리: ${ex.resolution ?? "처리 완료"})` });
+  go("m", "다시 열었어요. '처리할 것' 맨 위에 있어요. 처리하면서 바뀐 데이터는 그대로예요", exceptionsHref({ k: ex.kind }));
 }
 
 export async function resolveException(form: FormData) {
