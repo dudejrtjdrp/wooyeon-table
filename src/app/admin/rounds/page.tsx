@@ -1,3 +1,4 @@
+import { TableScroll } from "@/components/table-scroll";
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Copy, Plus } from "lucide-react";
 import Link from "next/link";
 import { Badge, PageHeader, Panel, RoundPicker, Term, btnDanger, btnLight, btnPrimary, ctl, td, th } from "@/components/admin-ui";
@@ -204,7 +205,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
           {tab === "status" && !!rounds?.length && (
             <div className="mt-6 space-y-4">
               <Panel title="회차 목록">
-                <div className="overflow-x-auto">
+                <TableScroll className="" label="회차 표">
                   <table className="w-full text-[14px]">
                     <thead><tr>
                       <th className={th}>회차 이름</th>
@@ -227,7 +228,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableScroll>
               </Panel>
 
               {selected && (
@@ -248,7 +249,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                     </p>
                   )}
                   {board.rows.length ? (
-                    <div className="mt-4 overflow-x-auto">
+                    <TableScroll className="mt-4" label="회차 표">
                       <table className="w-full min-w-[420px] text-[14px]">
                         <thead><tr>
                           <th className={th}>동네</th>
@@ -278,7 +279,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </TableScroll>
                   ) : (
                     <p className="p-8 text-center text-muted">이 회차에 일정이 없어요. 고치기 탭에서 일정을 더할 수 있어요.</p>
                   )}
@@ -361,7 +362,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                   {/* 2. 일정(날짜×동네)과 일정별 최대 테이블 수 */}
                   <section id="slots" className="scroll-mt-6">
                     <h3 className="text-[16px] font-bold text-ink"><Term tip={TIP.slot}>일정</Term>과 정원</h3>
-                    <div className="overflow-x-auto">
+                    <TableScroll className="" label="회차 표">
                       <table className="mt-3 w-full">
                         <thead><tr>
                           <th className={th}>일정</th>
@@ -401,7 +402,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                           })}
                         </tbody>
                       </table>
-                    </div>
+                    </TableScroll>
                     <form action={addSlot} className="mt-4 grid gap-3 rounded-2xl bg-field p-4 sm:grid-cols-[1fr_1fr_1.4fr_auto_auto] sm:items-end">
                       <input type="hidden" name="r" value={selected.id} />
                       <label className="block"><span className="text-[13px] font-semibold text-ink">날짜</span><input name="date" type="date" required min={dateKey(t.toISOString())} className={`${ctl} mt-1.5 w-full`} /></label>
@@ -440,7 +441,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
               <p className="text-[13px] text-muted">
                 <Term tip={TIP.stock}>식당 재고</Term>는 일정마다 식당이 받을 수 있는 테이블 수예요. 일정을 만들면 그 동네 식당마다 2테이블씩 잡히고, 자동 매칭은 이 안에서만 식당을 배정해요.
               </p>
-              <div className="mt-4 overflow-x-auto">
+              <TableScroll className="mt-4" label="회차 표">
                 <table className="w-full text-[14px]">
                   <thead><tr>{["일정", "식당", "받을 수 있는 테이블", "배정된 테이블"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
                   <tbody className="divide-y divide-line">
@@ -470,7 +471,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                     )}
                   </tbody>
                 </table>
-              </div>
+              </TableScroll>
               {!curSlots.length && <p className="p-8 text-center text-muted">이 회차에 일정이 없어요.</p>}
               <p className="mt-4 text-[13px] text-muted">제휴 식당 목록과 식당 추가·정보 고치기·배정 끄기는 <Link href="/admin/venues" className="font-semibold text-accent underline underline-offset-4">식당 관리</Link>에서 해요.</p>
             </Panel>

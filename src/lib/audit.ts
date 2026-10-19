@@ -120,7 +120,7 @@ export function describeFilter(f: AuditFilter, adminNames?: Map<string, string>)
   if (f.actor) parts.push(`누가 ${f.actor === "admin" ? "운영자 전체" : f.actor === "system" ? "자동" : f.actor === "user" ? "참가자" : actorLabel(f.actor, adminNames)}`);
   if (f.from || f.to) parts.push(`기간 ${f.from ?? "처음"}~${f.to ?? "오늘"}`);
   if (f.q) parts.push(`검색 '${f.q}'`);
-  return parts.length ? parts.join(" · ") : "거르기 없음";
+  return parts.length ? parts.join(" · ") : "조건 없음(전체)";
 }
 
 // ── 바뀐 내용 ────────────────────────────────────────

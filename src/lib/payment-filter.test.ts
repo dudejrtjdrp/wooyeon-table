@@ -62,7 +62,7 @@ describe("결제·환불 거르기", () => {
     expect(methodText({ provider: "toss", method: "간편결제" })).toBe("토스 · 간편결제");
     expect(methodText({ provider: "toss", method: null })).toBe("토스 · 카드");
     expect(methodText({ provider: "mock", method: "card" })).toBe("모의 결제");
-    expect(describePaymentFilter({ page: 1 })).toBe("거르기 없음");
+    expect(describePaymentFilter({ page: 1 })).toBe("조건 없음(전체)");
     expect(describePaymentFilter({ page: 1, r: R, s: "REFUNDED", kind: "owned", method: "toss", to: "2026-10-19" }, "10월 4주")).toBe(
       "회차 10월 4주 · 상태 환불 완료 · 수단 토스페이먼츠 · 종류 보유 이용권 사용 · 기간 처음~2026-10-19",
     );

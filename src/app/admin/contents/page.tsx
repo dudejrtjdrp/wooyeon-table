@@ -353,7 +353,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
               <select name="state" defaultValue={f.state ?? ""} className={`${ctl} mt-1 block`}><option value="">전체</option><option value="on">올리는 중</option><option value="off">멈춤</option></select>
             </label>
             <button className={btnLight}>찾기</button>
-            {filtered && <Link href={`/admin/contents${withPv(`?k=${kind}`)}`} className="inline-flex h-11 items-center px-2 text-[13px] font-semibold text-muted hover:text-ink">거르기 풀기</Link>}
+            {filtered && <Link href={`/admin/contents${withPv(`?k=${kind}`)}`} className="inline-flex h-11 items-center px-2 text-[13px] font-semibold text-muted hover:text-ink">조건 풀기</Link>}
             {filtered && <p className="w-full text-[13px] text-muted" aria-live="polite">{ofKind.length}개 중 {list.length}개</p>}
           </form>
 
@@ -395,7 +395,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                 </div>
               </li>
             ))}
-            {!list.length && <li className="shadow-card rounded-[20px] bg-card p-10 text-center text-muted">{filtered && ofKind.length ? <>찾는 조건에 맞는 콘텐츠가 없어요. <Link href={`/admin/contents${withPv(`?k=${kind}`)}`} className="font-semibold text-accent underline underline-offset-4">거르기 풀기</Link></> : "등록된 콘텐츠가 없어요."}</li>}
+            {!list.length && <li className="shadow-card rounded-[20px] bg-card p-10 text-center text-muted">{filtered && ofKind.length ? <>찾는 조건에 맞는 콘텐츠가 없어요. <Link href={`/admin/contents${withPv(`?k=${kind}`)}`} className="font-semibold text-accent underline underline-offset-4">조건 풀기</Link></> : "등록된 콘텐츠가 없어요."}</li>}
           </ul>
         </div>
 

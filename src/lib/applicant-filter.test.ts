@@ -66,7 +66,7 @@ describe("신청자 목록 거르기 (PRD 11장)", () => {
   });
 
   it("내려받기 설명을 사람 말로", () => {
-    expect(describeApplicantFilter({})).toBe("거르기 없음");
+    expect(describeApplicantFilter({})).toBe("조건 없음(전체)");
     expect(describeApplicantFilter({ r: R, s: "CHOOSING", pay: "PAID", att: "NONE", region: "잠실·송파", hist: "noshow", q: "김" }, "10월 4주")).toBe(
       "회차 10월 4주 · 매칭 다른 방법 아직 안 고름 · 결제 결제 완료 · 참석 아직 없음 · 동네 잠실·송파 · 전에 노쇼 있음 · 검색 '김'",
     );

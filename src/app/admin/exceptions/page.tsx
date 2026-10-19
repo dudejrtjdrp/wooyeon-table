@@ -152,7 +152,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
       <PageHeader
         title="예외 처리함"
         desc={<>자동으로 풀지 못한 일(<Term tip={TIP.예외}>예외</Term>)만 모았어요. 처리할 것은 오래된 것부터 보여 줘요. 정상 흐름은 여기에 올라오지 않아요.</>}
-        how={["위 유형 버튼으로 거르기", "'왜'와 '먼저 할 일' 읽기", "카드 아래 버튼 하나 누르기 (메모는 선택)", "처리한 건은 '처리한 것'에서 확인·다시 열기"]}
+        how={["위 유형 버튼으로 골라 보기", "'왜'와 '먼저 할 일' 읽기", "카드 아래 버튼 하나 누르기 (메모는 선택)", "처리한 건은 '처리한 것'에서 확인·다시 열기"]}
       />
       <nav aria-label="예외 보기" className="mt-6 flex gap-1 overflow-x-auto border-b border-line">
         {EXCEPTION_VIEWS.map((x) => (

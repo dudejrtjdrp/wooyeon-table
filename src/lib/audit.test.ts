@@ -51,7 +51,7 @@ describe("변경 이력 거르기 (A5·D5)", () => {
   });
 
   it("CSV 이력에 남길 거르기 설명", () => {
-    expect(describeFilter({ page: 1 })).toBe("거르기 없음");
+    expect(describeFilter({ page: 1 })).toBe("조건 없음(전체)");
     expect(describeFilter({ kind: "setting", actor: `admin:${ADMIN}`, from: "2026-10-01", q: "기준", page: 1 }, new Map([[ADMIN, "이지은"]])))
       .toBe("대상 설정 · 누가 운영자 이지은 · 기간 2026-10-01~오늘 · 검색 '기준'");
   });

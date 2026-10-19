@@ -1,3 +1,4 @@
+import { TableScroll } from "@/components/table-scroll";
 import { ChevronDown, Heart, Search, Settings2, ShieldCheck, Sparkles, Users, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -246,7 +247,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                     </div>
                   </div>
                   {/* 표가 넓으면 이 상자 안에서만 가로로 밀린다 */}
-                  <div className="mt-5 overflow-x-auto rounded-xl border border-line">
+                  <TableScroll className="mt-5 rounded-xl border border-line" label="배치 사유 표">
                     <table className="w-full min-w-[820px] text-[14px]">
                       <thead><tr>{["이름 · 배치 사유", "연령대", "성별", "MBTI", "희망 일정·동네", "희망 상대", "재배치"].map((h) => <th key={h} className={`${th} whitespace-nowrap first:rounded-none last:rounded-none`}>{h}</th>)}</tr></thead>
                       <tbody className="divide-y divide-line">
@@ -270,8 +271,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                         })}
                       </tbody>
                     </table>
-                  </div>
-                  <p className="mt-1.5 text-[12px] text-muted lg:hidden">표는 옆으로 밀어서 나머지 칸을 볼 수 있어요.</p>
+                  </TableScroll>
                   <ul className="mt-5 grid gap-x-8 gap-y-3 sm:grid-cols-2">
                     {Object.entries(d.parts).map(([k, v]) => {
                       const pct = Math.round(Number(v) * 100);

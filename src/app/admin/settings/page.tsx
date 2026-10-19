@@ -1,3 +1,4 @@
+import { TableScroll } from "@/components/table-scroll";
 import { Lock } from "lucide-react";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
@@ -77,7 +78,7 @@ export default async function Settings() {
               &lsquo;조회 전용&rsquo;은 모든 화면을 볼 수 있지만 환불·참가 제한·긴급 수정·시연 데이터 초기화·설정 변경은 못 해요. 끈 계정은 로그인할 수 없어요. 내 계정은 끄거나 권한을 바꿀 수 없어요.
             </p>
             <div className="mt-4"><CreateAdminForm /></div>
-            <div className="mt-4 overflow-x-auto">
+            <TableScroll className="mt-4" label="운영자 계정 표">
               <table className="w-full min-w-[760px] text-[14px]">
                 <thead><tr>{["운영자", "로그인 ID", "권한", "상태", ""].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
                 <tbody className="divide-y divide-line">
@@ -129,7 +130,7 @@ export default async function Settings() {
                   })}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           </Panel>
         </div>
       )}
