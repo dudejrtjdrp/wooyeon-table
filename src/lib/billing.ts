@@ -27,9 +27,11 @@ export async function releaseUse(appId: string, actor: string, reason: string): 
   }
   const returnsUse = p.amount === 0 || p.pass_type === "subscription";
   if (returnsUse && p.pass_id) {
+    // 결제 상태를 먼저 조건부로 바꾸고, 이긴 쪽만 횟수를 돌려준다 (두 취소가 겹쳐도 1회만)
+    const { data: claimed } = await db().from("applications").update({ payment_status: "REFUNDED" }).eq("id", appId).eq("payment_status", "PAID").select("id");
+    if (!claimed?.length) return "이미 돌려드렸어요.";
     const { data: pass } = await db().from("passes").select("remaining").eq("id", p.pass_id).single();
     await db().from("passes").update({ remaining: (pass?.remaining ?? 0) + 1 }).eq("id", p.pass_id);
-    await db().from("applications").update({ payment_status: "REFUNDED" }).eq("id", appId).eq("payment_status", "PAID");
     await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "PAID", to: "REFUNDED", actor, reason: `${reason}: 이용권 1회 반환` });
     return "쓴 이용권 1회를 돌려드렸어요. 다음 일정에 그대로 쓸 수 있어요.";
   }

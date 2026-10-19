@@ -8,7 +8,7 @@ import { now } from "@/lib/clock";
 import { OPEN_REGIONS, REGIONS } from "@/lib/constants";
 import { notify } from "@/lib/notify";
 import { roundCutoff } from "@/lib/policy";
-import { canCancelRound, canDeleteSlot, checkMaxTables, checkRoundEdit, checkSlotAdd, fromKstInput } from "@/lib/round-rules";
+import { canCancelRound, canDeleteSlot, roundCancelTargets, checkMaxTables, checkRoundEdit, checkSlotAdd, fromKstInput } from "@/lib/round-rules";
 import { loadTemplates, render } from "@/lib/templates";
 import { sidoOf } from "@/lib/regions";
 import { db } from "@/lib/supabase";
@@ -194,14 +194,14 @@ export async function cancelRound(form: FormData) {
   const tpl = await loadTemplates();
   const m = render("round_canceled", { round: round.title }, tpl);
   let told = 0;
-  for (const a of apps ?? []) {
+  for (const a of roundCancelTargets(apps ?? [], !!ok.resume)) {
     // 참가자 화면에 '본인이 취소한 것'처럼 보이지 않게 이유 한 줄을 남긴다 (match_reason은 신청 화면 본문)
-    if (a.application_status !== "CANCELED") {
+    if (a.needsCancel) {
       const { data: done } = await db().from("applications").update({ application_status: "CANCELED", match_status: "NO_MATCH", match_reason: ROUND_CANCELED_REASON }).eq("id", a.id).neq("application_status", "CANCELED").select("id");
       if (!done?.length) continue;
       await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: a.application_status, to: "CANCELED", actor, reason: why });
       if (a.match_status !== "NO_MATCH") await logStatus({ entityType: "application", entityId: a.id, field: "match_status", from: a.match_status, to: "NO_MATCH", actor, reason: why });
-    } else if (!ok.resume) continue; // 처음 취소할 때 이미 취소돼 있던 신청(본인 취소 등)은 건드리지 않는다
+    }
     await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${a.id}:%`);
     // 1회권은 refundPayment로 원결제수단 환불. 결제사에서 안 되면 10분 간격 재시도 → 세 번째 실패에 예외 처리함으로 (lib/payments.ts)
     await releaseUse(a.id, actor, why);

@@ -118,3 +118,17 @@ export function checkMaxTables(o: { status: string; maxTables: number }): string
   if (!Number.isInteger(o.maxTables) || o.maxTables < 1 || o.maxTables > MAX_TABLES_LIMIT) return `최대 테이블 수는 1~${MAX_TABLES_LIMIT} 사이로 넣어 주세요`;
   return null;
 }
+
+/**
+ * 회차 취소에서 처리할 신청 고르기.
+ * - 아직 취소되지 않은 신청: 취소하고 돌려준다
+ * - 이어서 정리할 때만: 취소는 됐는데 환불 전에 끊겨 결제가 PAID로 남은 신청은 돌려주기만 한다
+ * 처음 취소할 때 이미 취소돼 있던 신청(본인 취소 등)과 환불이 끝난 신청은 건드리지 않는다
+ */
+export function roundCancelTargets<T extends { application_status: string; payment_status: string }>(apps: T[], resume: boolean): (T & { needsCancel: boolean })[] {
+  return apps.flatMap((a): (T & { needsCancel: boolean })[] =>
+    a.application_status !== "CANCELED" ? [{ ...a, needsCancel: true }]
+    : resume && a.payment_status === "PAID" ? [{ ...a, needsCancel: false }]
+    : [],
+  );
+}

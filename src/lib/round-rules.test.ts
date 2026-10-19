@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OPEN_REGIONS } from "./constants";
-import { canCancelRound, canDeleteSlot, checkMaxTables, checkRoundEdit, checkSlotAdd, fromKstInput, toKstInput } from "./round-rules";
+import { canCancelRound, canDeleteSlot, roundCancelTargets, checkMaxTables, checkRoundEdit, checkSlotAdd, fromKstInput, toKstInput } from "./round-rules";
 
 const now = new Date("2026-10-19T00:00:00Z"); // 10월 19일(월) 오전 9시
 const FRI = "2026-10-23T10:30:00Z"; // 10월 23일(금) 저녁 7:30
@@ -118,5 +118,21 @@ describe("일정별 최대 테이블 수", () => {
     expect(checkMaxTables({ status: "open", maxTables: 6 })).toBeNull();
     expect(checkMaxTables({ status: "open", maxTables: 21 })).toContain("1~20");
     expect(checkMaxTables({ status: "matched", maxTables: 6 })).toContain("모집 중");
+  });
+});
+
+describe("회차 취소 처리 대상", () => {
+  const apps = [
+    { id: "a", application_status: "SUBMITTED", payment_status: "PAID" },     // 살아 있는 신청
+    { id: "b", application_status: "SUBMITTED", payment_status: "PENDING" },  // 결제 전
+    { id: "c", application_status: "CANCELED", payment_status: "PAID" },      // 취소 뒤 환불 전에 끊김
+    { id: "d", application_status: "CANCELED", payment_status: "REFUNDED" },  // 환불 끝
+    { id: "e", application_status: "CANCELED", payment_status: "PENDING" },   // 결제 전 취소
+  ];
+  it("처음 취소할 때는 아직 취소되지 않은 신청만", () => {
+    expect(roundCancelTargets(apps, false).map((x) => [x.id, x.needsCancel])).toEqual([["a", true], ["b", true]]);
+  });
+  it("이어서 정리할 때는 PAID로 남은 취소 신청도 돌려주기만 한다", () => {
+    expect(roundCancelTargets(apps, true).map((x) => [x.id, x.needsCancel])).toEqual([["a", true], ["b", true], ["c", false]]);
   });
 });
