@@ -45,7 +45,12 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   if (!app || app.user_id !== me.id) redirect(`/?m=${encodeURIComponent("이 신청을 찾지 못했어요. 내 신청은 일정 탭에서 볼 수 있어요")}`);
 
   const t = await now();
-  const h = headline(app, t);
+  const h0 = headline(app, t);
+  // 끝난 모임(시작 3시간 뒤)인데 아직 참석 예정이면 단체방 탭·테이블 화면과 같은 이름 '지난 모임'으로
+  const endedAt = app.dining_tables ? new Date(app.dining_tables.slots.starts_at).getTime() + 3 * 3600_000 : null;
+  const h = app.match_status === "CONFIRMED" && app.attendance_status === "SCHEDULED" && endedAt !== null && endedAt <= t.getTime()
+    ? { ...h0, label: "지난 모임", tone: "muted" as const, desc: "모임이 끝났어요. 참석 확인과 후기는 모임 정보에서 볼 수 있어요." }
+    : h0;
   const slots = app.application_slots.map((x) => x.slots).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const paid = !["PENDING", "FAILED"].includes(app.payment_status);
   const matched = app.match_status === "CONFIRMED";
