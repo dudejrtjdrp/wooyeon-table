@@ -10,7 +10,7 @@ import { db } from "@/lib/supabase";
 import { now } from "@/lib/clock";
 import { attendanceOps, type AttendOp } from "@/lib/admin-manual-rules";
 import { ctl } from "@/components/admin-ui";
-import { ConfirmButton } from "../confirm-button";
+import { ConfirmButton, SubmitButton } from "../confirm-button";
 import { attendanceAction } from "./actions";
 
 const OP_BTN: Record<AttendOp, { text: string; cls: string; confirm?: (name: string) => string }> = {
@@ -94,9 +94,9 @@ export default async function Attendance({ searchParams }: { searchParams: Promi
                             <input name="note" maxLength={100} placeholder="메모 (선택) 예: 현장에서 확인" className={`${ctl} h-10 min-w-0 flex-1 text-[13px]`} />
                             {ops.map((o) =>
                               OP_BTN[o].confirm ? (
-                                <ConfirmButton key={o} name="op" value={o} confirm={OP_BTN[o].confirm!(m.users.name)} className={`h-10 rounded-xl px-3 text-[13px] font-semibold ${OP_BTN[o].cls}`}>{OP_BTN[o].text}</ConfirmButton>
+                                <ConfirmButton key={o} name="op" value={o} confirm={OP_BTN[o].confirm!(m.users.name)} className={`inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold ${OP_BTN[o].cls}`}>{OP_BTN[o].text}</ConfirmButton>
                               ) : (
-                                <button key={o} name="op" value={o} className={`h-10 rounded-xl px-3 text-[13px] font-semibold ${OP_BTN[o].cls}`}>{OP_BTN[o].text}</button>
+                                <SubmitButton key={o} name="op" value={o} className={`inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-[13px] font-semibold ${OP_BTN[o].cls}`}>{OP_BTN[o].text}</SubmitButton>
                               ),
                             )}
                           </form>

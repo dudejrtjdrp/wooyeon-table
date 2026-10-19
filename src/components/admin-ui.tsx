@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 import { Pill } from "./ui";
 import { btnLight, ctl } from "./admin-classes";
-export { btn, btnDanger, btnInk, btnLight, btnPrimary, ctl, td, th } from "./admin-classes";
+export { btn, btnDanger, btnInk, btnLight, btnPrimary, ctl, table, td, tdNowrap, tdText, th } from "./admin-classes";
+// 풀이 말풍선은 포털로 띄우는 클라이언트 컴포넌트. 서버 화면에서도 그대로 <Term>으로 쓴다
+export { Term } from "./term";
+export { TableScroll } from "./table-scroll";
 
 /**
  * 화면 머리. how: 처음 온 운영자를 위한 '여기서 하는 일' 2~4단계(짧은 동사구). 제목 아래 한 줄 띠로 보인다
@@ -34,25 +37,6 @@ export function HowTo({ steps }: { steps: ReactNode[] }) {
         </li>
       ))}
     </ol>
-  );
-}
-
-/**
- * 처음 보면 모를 말: 점선 밑줄, 마우스를 올리거나(키보드로 가거나) 누르면 풀이가 뜬다. 화면 읽기에는 풀이까지 읽힌다
- * 예: <Term tip="같은 주에 여는 저녁 모임 묶음이에요">회차</Term>
- */
-export function Term({ children, tip, inLink }: { children: ReactNode; tip: string; inLink?: boolean }) {
-  // 풀이는 숨어 있을 때 자리를 차지하지 않게 display로 감춘다(좁은 화면에서 가로로 밀리지 않게).
-  // 링크 안에 들어가면 따로 포커스를 받지 않는다(링크 하나에 탭이 두 번 멈추지 않게). 마우스를 올리면 풀이는 그대로 뜬다
-  return (
-    <span tabIndex={inLink ? undefined : 0} className="group/term relative inline-flex cursor-help items-baseline underline decoration-dotted decoration-faint underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
-      {children}
-      <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 hidden w-max max-w-[min(260px,80vw)] rounded-xl bg-ink px-3 py-2 text-left text-[12px] font-medium leading-relaxed text-white no-underline shadow-lg group-hover/term:block group-focus/term:block">
-        {tip}
-      </span>
-      {/* 화면 읽기용 풀이. sr-only(absolute)는 표 안에서 스크롤 상자를 벗어나 문서 폭을 늘려서, 자리 없는 인라인으로 숨긴다 */}
-      <span className="inline-block h-px w-px overflow-hidden whitespace-nowrap [clip-path:inset(50%)]">: {tip}</span>
-    </span>
   );
 }
 

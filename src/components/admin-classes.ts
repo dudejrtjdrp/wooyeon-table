@@ -5,5 +5,11 @@ export const btnPrimary = `${btn} bg-accent text-white shadow-cta`;
 export const btnInk = `${btn} bg-accent text-white shadow-cta`;
 export const btnLight = `${btn} border border-accent/40 bg-card text-accent hover:bg-accent-soft/50`;
 export const btnDanger = `${btn} bg-danger text-white`;
-export const th = "bg-[#f4f7fc] px-4 py-3 text-left text-[13px] font-semibold text-muted first:rounded-l-xl last:rounded-r-xl";
+// 표 공통 규칙 (docs/05-admin-tables.md): 표는 TableScroll(가로 스크롤 상자) 안에 두고, 머리·배지·숫자·시각은 줄을 바꾸지 않는다
+export const table = "w-full text-[14px]";
+export const th = "whitespace-nowrap bg-[#f4f7fc] px-4 py-3 text-left text-[13px] font-semibold text-muted first:rounded-l-xl last:rounded-r-xl";
 export const td = "px-4 py-3";
+/** 이름·시각·금액·배지처럼 한 줄로 보여야 하는 칸 */
+export const tdNowrap = `${td} whitespace-nowrap`;
+/** 주소·사유·바뀐 내용처럼 긴 글: 칸 폭을 지키고 낱말 단위로만 줄을 바꾼다 */
+export const tdText = `${td} min-w-[200px] max-w-[320px] break-keep [overflow-wrap:break-word]`;

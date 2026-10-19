@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
+import { NavProgress } from "@/components/nav-progress";
 import { PwaRegister } from "@/components/pwa";
 import { Splash } from "@/components/splash";
 import "./globals.css";
@@ -34,6 +36,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="antialiased">
         <Splash />
         <PwaRegister />
+        <Suspense fallback={null}><NavProgress /></Suspense>
         {children}
       </body>
     </html>
