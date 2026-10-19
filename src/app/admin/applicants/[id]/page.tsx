@@ -2,14 +2,16 @@ import { CalendarDays, Check, ChevronRight, PartyPopper } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Panel, btnLight, ctl, th } from "@/components/admin-ui";
+import { Badge, Panel, btnDanger, btnLight, ctl, th } from "@/components/admin-ui";
 import { IMG, Required } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDate, fmtDateTime, fmtSlot } from "@/lib/format";
+import { adminCancelPlan } from "@/lib/cancel";
 import { ACCOUNT, ATTEND, MATCH, PAYMENT, actorLabel, eventText, label } from "@/lib/labels";
+import { maskPhone } from "@/lib/members";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "../../confirm-button";
-import { setAccountStatus } from "./actions";
+import { adminCancelAction, setAccountStatus } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -35,13 +37,14 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
   if (!a) notFound();
   const u = a.users;
 
-  const [{ data: events }, { data: userEvents }, { data: notes }, { data: history }, { data: ids }, { data: reportsAgainst }] = await Promise.all([
+  const [{ data: events }, { data: userEvents }, { data: notes }, { data: history }, { data: ids }, { data: reportsAgainst }, cancelPlan] = await Promise.all([
     db().from("status_events").select("id,entity_type,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "application").eq("entity_id", id).order("created_at"),
     db().from("status_events").select("id,entity_type,field,from_value,to_value,actor,reason,created_at").eq("entity_type", "user").eq("entity_id", u.id).order("created_at"),
     db().from("notifications").select("id,title,status,scheduled_at,sent_at,read_at").eq("user_id", u.id).order("scheduled_at", { ascending: false }).limit(15),
     db().from("applications").select("id,match_status,attendance_status,rounds(title)").eq("user_id", u.id).neq("id", id).order("created_at", { ascending: false }),
     db().from("user_identities").select("provider").eq("user_id", u.id),
     db().from("safety_reports").select("id,reason,created_at").eq("reported_id", u.id),
+    adminCancelPlan(id),
   ]);
   const timeline = [...(events ?? []), ...(userEvents ?? [])].sort((x, y) => x.created_at.localeCompare(y.created_at));
   const adminIds = [...new Set(timeline.filter((e) => e.actor.startsWith("admin:")).map((e) => e.actor.slice(6)))];
@@ -60,7 +63,6 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
     { l: a.attendance_status ? label(ATTEND, a.attendance_status)[0] : "참석 전", done: a.attendance_status === "ATTENDED" },
   ];
   const cur = steps.findIndex((x) => !x.done);
-  const maskPhone = (ph: string | null) => (ph ? ph.replace(/^(\d{3})(\d{3,4})(\d{4})$/, "$1-****-$3") : "-");
 
   return (
     <div className="relative">
@@ -134,7 +136,7 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
         </div>
 
         <div className="space-y-4">
-          <Panel title="회원 정보">
+          <Panel title="회원 정보" action={<Link href={`/admin/members/${u.id}`} className="inline-flex min-h-11 items-center text-[14px] font-semibold text-accent hover:underline">회원 상세</Link>}>
             <dl className="space-y-2.5 text-[14px] text-ink">
               {[
                 ["가입", fmtDate(u.created_at)],
@@ -174,6 +176,30 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
               <div className="flex justify-between"><dt className="text-muted">노쇼</dt><dd className={noShows ? "font-semibold text-danger" : "text-ink"}>{noShows ? `${noShows}회` : "없음"}</dd></div>
               <div className="flex justify-between gap-3"><dt className="shrink-0 text-muted">멤버십 기한 연장</dt><dd className="text-right text-ink">{extends_.length ? `${extends_.length}회, 지금 ${fmtDateTime(extends_[extends_.length - 1].to_value)}까지` : "없음"}</dd></div>
             </dl>
+          </Panel>
+
+          <Panel title="신청 취소">
+            {!cancelPlan.ok ? <p className="text-[14px] leading-relaxed text-muted">{cancelPlan.message}</p> : (
+              <>
+                <p className="text-[14px] leading-relaxed text-ink">참가자가 직접 취소할 때와 같은 규칙으로 처리해요.</p>
+                <p className={`mt-2 rounded-xl px-3 py-2 text-[13px] leading-relaxed ${cancelPlan.kind === "late" ? "bg-danger/10 text-danger" : "bg-field text-ink"}`}>{cancelPlan.money}{cancelPlan.warn ? `. ${cancelPlan.warn}` : ""}</p>
+                {me.level !== "full" ? <p className="mt-3 text-[13px] text-muted">조회 전용 계정이라 취소할 수 없어요.</p> : (
+                  <form action={adminCancelAction} className="mt-3 space-y-3">
+                    <input type="hidden" name="app_id" value={a.id} />
+                    <label className="block text-[14px] text-muted">
+                      <span>취소 사유<Required /></span>
+                      <textarea name="note" rows={2} required minLength={4} placeholder="예: 참가자가 전화로 취소를 부탁함" className="mt-1.5 w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
+                    </label>
+                    <ConfirmButton
+                      confirm={`${u.name}님의 신청을 취소할까요? ${cancelPlan.money}.${cancelPlan.warn ? ` ${cancelPlan.warn}.` : ""} 되돌릴 수 없어요.`}
+                      className={`${cancelPlan.kind === "late" ? btnDanger : btnLight} w-full`}
+                    >
+                      {cancelPlan.kind === "late" ? "환불 없이 취소하기" : cancelPlan.refund ? "취소하고 돌려주기" : "신청 취소하기"}
+                    </ConfirmButton>
+                  </form>
+                )}
+              </>
+            )}
           </Panel>
 
           <Panel title="계정 조치">
