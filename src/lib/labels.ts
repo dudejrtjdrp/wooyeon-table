@@ -93,6 +93,8 @@ export const FIELD: Record<string, string> = {
   edit: "고침",
   import: "엑셀로 넣기",
   photo: "사진",
+  venue_id: "식당",
+  match_run: "매칭 실행",
 };
 export const fieldLabel = (f: string) => FIELD[f] ?? (f.startsWith("template:") ? "자동 메시지 문구" : f.includes(".") ? "설정" : "기타 변경");
 

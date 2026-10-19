@@ -28,7 +28,8 @@ export async function applyNoShowPolicy(userId: string, appId: string, actor: st
     .eq("field", "attendance_status")
     .eq("to_value", "NO_SHOW")
     .gte("created_at", since)
-    .in("entity_id", (await db().from("applications").select("id").eq("user_id", userId)).data?.map((a) => a.id) ?? [appId]);
+    // 운영자가 '참석 예정으로 되돌린' 노쇼는 세지 않는다: 지금도 노쇼인 신청만 (참석 관리의 실수 정정)
+    .in("entity_id", (await db().from("applications").select("id").eq("user_id", userId).eq("attendance_status", "NO_SHOW")).data?.map((a) => a.id) ?? [appId]);
   const count = new Set([...(data ?? []).map((e) => e.entity_id), appId]).size;
   const step = noShowStep(count);
   if (step === "warn") {

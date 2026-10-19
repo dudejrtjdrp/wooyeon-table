@@ -131,7 +131,13 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
   }
 
   try {
-    await db().from("rounds").update({ status: "matching" }).eq("id", roundId).in("status", ["open", "matching"]);
+    // 0단계 확인과 여기 사이에 회차가 취소돼 닫혔으면(rounds/actions.ts cancelRound) 방금 잡은 실행 기록을 지우고 멈춘다.
+    // 취소 쪽은 '모집 중'일 때만 닫으므로, 여기서 먼저 '매칭 중'이 되면 취소가 막혀 둘이 엇갈리지 않는다
+    const { data: started } = await db().from("rounds").update({ status: "matching" }).eq("id", roundId).in("status", ["open", "matching"]).select("id");
+    if (!started?.length) {
+      await db().from("match_runs").delete().eq("id", run.id).eq("status", "running");
+      return { runId: "", alreadyRan: true, summary: { skipped: "closed" } };
+    }
 
     // 2. 대상 불러오기: 제출 + 결제 완료 + 매칭 대기
     const { data: slotRows, error: slotErr } = await db().from("slots").select("id,region,sido,starts_at,max_tables").eq("round_id", roundId);
