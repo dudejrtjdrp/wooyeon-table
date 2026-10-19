@@ -2,7 +2,8 @@ import { ChevronRight } from "lucide-react";
 import { reasonText } from "@/lib/admin-glossary";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Panel, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { AdminModal } from "@/components/admin-modal";
+import { Badge, Panel, btnLight, btnPrimary, ctl, td, th } from "@/components/admin-ui";
 import { Required } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { now } from "@/lib/clock";
@@ -85,7 +86,7 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
         <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">{u.name}님</h1>
         <Badge v={label(ACCOUNT, u.account_status)} />
         {u.deleted_at && <Badge v={["탈퇴", "muted"]} />}
-        {!u.deleted_at && <Link href={`/admin/messages?ns=member&nm=${u.id}#notice`} className={`${btnLight} ml-auto`}>공지 보내기</Link>}
+        {!u.deleted_at && <Link href={`/admin/messages/notice?ns=member&nm=${u.id}`} className={`${btnLight} ml-auto`}>공지 보내기</Link>}
       </div>
       <p className="mt-1 text-[15px] text-muted">
         {fmtDate(u.created_at)} 가입 · 신청 {apps.length}건 · 참석 {attended}번{noShows ? ` · 노쇼 ${noShows}번` : ""}{canceled ? ` · 취소 ${canceled}건` : ""}
@@ -201,10 +202,9 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
             )}
 
             {me.level !== "full" ? <p className="mt-4 text-[13px] text-muted">조회 전용 계정이라 이용권을 바꿀 수 없어요.</p> : u.deleted_at ? null : (
-              <div className="mt-4 space-y-2 border-t border-line pt-4">
-                <details>
-                  <summary className="inline-flex min-h-11 cursor-pointer items-center text-[14px] font-semibold text-accent">이용권 횟수 더하기</summary>
-                  <form action={grantPass} className="mt-2 space-y-2.5">
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
+                <AdminModal label="이용권 횟수 더하기" triggerClassName={`${btnLight} flex-1`} title="이용권 횟수 더하기" desc={`${u.name}님께 결제 없이 1회권을 드려요. 60일 동안 쓸 수 있고, 회원에게 알림이 가요.`}>
+                  <form action={grantPass} className="space-y-3">
                     <input type="hidden" name="user_id" value={u.id} />
                     <input type="hidden" name="stamp" value={stamp} />
                     <label className="flex items-center gap-3 text-[14px] text-muted">
@@ -215,16 +215,15 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
                     </label>
                     <label className="flex items-start gap-3 text-[14px] text-muted">
                       <span className="w-14 shrink-0 pt-2.5">사유<Required /></span>
-                      <textarea name="note" rows={2} required minLength={4} placeholder="예: 식당 사정으로 모임이 취소돼 보상" className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
+                      <textarea name="note" rows={3} required minLength={4} placeholder="예: 식당 사정으로 모임이 취소돼 보상" className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
                     </label>
-                    <p className="text-[12px] text-muted">결제 없이 1회권으로 드리고 60일 동안 쓸 수 있어요. 돈으로 산 이용권에는 더하지 않아요(환불하면 함께 사라져서).</p>
-                    <ConfirmButton confirm={`${u.name}님에게 이용권 횟수를 더하고 알림을 보내요. 계속할까요?`} className={`${btnLight} w-full`}>횟수 더하기</ConfirmButton>
+                    <p className="text-[12px] text-muted">돈으로 산 이용권에는 더하지 않아요(환불하면 함께 사라져서). 사유는 이용권 이력에 그대로 남아요.</p>
+                    <ConfirmButton confirm={`${u.name}님에게 이용권 횟수를 더하고 알림을 보내요. 계속할까요?`} className={`${btnPrimary} w-full`}>횟수 더하기</ConfirmButton>
                   </form>
-                </details>
+                </AdminModal>
                 {hasMembership && (
-                  <details>
-                    <summary className="inline-flex min-h-11 cursor-pointer items-center text-[14px] font-semibold text-accent">멤버십 기간 늘리기</summary>
-                    <form action={extendMembership} className="mt-2 space-y-2.5">
+                  <AdminModal label="멤버십 기간 늘리기" triggerClassName={`${btnLight} flex-1`} title="멤버십 기간 늘리기" desc={`${u.name}님의 멤버십 중 기한이 가장 늦은 것을 늘려요. 이미 끝났으면 오늘부터 늘리고, 회원에게 알림이 가요.`}>
+                    <form action={extendMembership} className="space-y-3">
                       <input type="hidden" name="user_id" value={u.id} />
                       <input type="hidden" name="stamp" value={stamp} />
                       <label className="flex items-center gap-3 text-[14px] text-muted">
@@ -234,12 +233,11 @@ export default async function MemberDetail({ params }: { params: Promise<{ id: s
                       </label>
                       <label className="flex items-start gap-3 text-[14px] text-muted">
                         <span className="w-14 shrink-0 pt-2.5">사유<Required /></span>
-                        <textarea name="note" rows={2} required minLength={4} placeholder="예: 앱 오류로 신청하지 못한 주 보상" className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
+                        <textarea name="note" rows={3} required minLength={4} placeholder="예: 앱 오류로 신청하지 못한 주 보상" className="w-full resize-none rounded-xl border border-line px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-accent" />
                       </label>
-                      <p className="text-[12px] text-muted">기한이 가장 늦은 멤버십을 늘려요. 이미 끝났으면 오늘부터 늘려요.</p>
-                      <ConfirmButton confirm={`${u.name}님의 멤버십 기간을 늘리고 알림을 보내요. 계속할까요?`} className={`${btnLight} w-full`}>기간 늘리기</ConfirmButton>
+                      <ConfirmButton confirm={`${u.name}님의 멤버십 기간을 늘리고 알림을 보내요. 계속할까요?`} className={`${btnPrimary} w-full`}>기간 늘리기</ConfirmButton>
                     </form>
-                  </details>
+                  </AdminModal>
                 )}
               </div>
             )}
