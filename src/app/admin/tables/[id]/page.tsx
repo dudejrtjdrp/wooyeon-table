@@ -115,6 +115,7 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
             </ol>
             <Link href="/admin/contents" className="mt-3 inline-block text-[13px] font-semibold text-accent hover:underline">콘텐츠와 노출 규칙 관리 →</Link>
           </Panel>
+          <div id="chat" className="scroll-mt-6" />
           <Panel title="단체방">
             {!room ? <p className="text-[14px] text-danger">단체방이 없어요.</p> : (
               <ul className="space-y-2 text-[13px]">
