@@ -108,7 +108,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
   for (const a of (apps ?? []) as unknown as { id: string; table_id: string | null; users: { name: string }; rounds: { title: string }; payments: { amount: number } | null }[])
     ctx.set(`application:${a.id}`, { who: `${a.users.name}님`, href: `/admin/applicants/${a.id}`, where: a.rounds.title, ops: a.table_id ? `/admin/tables/${a.table_id}` : undefined, amount: a.payments?.amount ? won(a.payments.amount) : undefined });
   for (const x of (tbs ?? []) as unknown as { id: string; round_id: string; slots: { starts_at: string; region: string }; venues: { name: string } | null }[])
-    ctx.set(`dining_table:${x.id}`, { who: `${x.slots.region} 테이블`, href: `/admin/tables/${x.id}`, where: `${fmtSlot(x.slots.starts_at)}${x.venues ? ` · ${x.venues.name}` : ""}`, ops: `/admin/tables/${x.id}`, inventory: `/admin/rounds?r=${x.round_id}` });
+    ctx.set(`dining_table:${x.id}`, { who: `${x.slots.region} 테이블`, href: `/admin/tables/${x.id}`, where: `${fmtSlot(x.slots.starts_at)}${x.venues ? ` · ${x.venues.name}` : ""}`, ops: `/admin/tables/${x.id}`, inventory: `/admin/rounds?r=${x.round_id}&tab=stock` });
   for (const x of (runs ?? []) as unknown as { id: string; round_id: string; rounds: { title: string } | null }[])
     ctx.set(`match_run:${x.id}`, { who: "자동 매칭 실행", href: `/admin/matching?r=${x.round_id}`, where: x.rounds?.title });
   for (const u of (users ?? []) as unknown as { id: string; name: string; applications: { id: string; created_at: string }[] }[]) {
@@ -247,7 +247,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                     <>
                       <ConfirmButton name="action" value="add_and_retry" confirm="같은 지역에서 평점이 가장 높은 식당의 이 일정 테이블 수를 1 늘리고 바로 배정해요. 식당에 자리가 있는지 확인했나요?" className={primary}>재고 1 늘리고 바로 배정</ConfirmButton>
                       <button name="action" value="retry" className={light}>식당 다시 배정</button>
-                      <Link href={c.inventory ?? "/admin/rounds"} className={`${B} flex items-center border border-line text-ink`}>식당 재고 열기</Link>
+                      <Link href={c.inventory ?? "/admin/rounds?tab=stock"} className={`${B} flex items-center border border-line text-ink`}>식당 재고 열기</Link>
                       <button name="action" value="done" className={light}>직접 처리함</button>
                     </>
                   ) : (

@@ -88,7 +88,7 @@ export default async function Venues() {
             </Panel>
           )}
 
-          <p className="px-1 text-[13px] text-muted">일정별 받을 수 있는 테이블 수는 <Link href="/admin/rounds" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>에서 바꿔요.</p>
+          <p className="px-1 text-[13px] text-muted">일정별 받을 수 있는 테이블 수는 <Link href="/admin/rounds?tab=stock" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>에서 바꿔요.</p>
         </div>
       </div>
     </div>

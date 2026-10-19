@@ -30,7 +30,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
         <div className="shadow-card mt-6 rounded-[20px] bg-card p-10 text-center">
           <p className="text-[17px] font-bold text-ink">아직 회차가 없어요</p>
           <p className="mt-1.5 text-[14px] text-muted">회차를 만들면 신청 마감 시각에 결제를 마친 사람끼리 자동으로 테이블을 꾸리고, 그 결과와 이유가 여기에 보여요.</p>
-          {me.level === "full" && <Link href="/admin/rounds" className={`${btnPrimary} mt-5`}>회차 만들기</Link>}
+          {me.level === "full" && <Link href="/admin/rounds?tab=new" className={`${btnPrimary} mt-5`}>회차 만들기</Link>}
         </div>
       </div>
     );

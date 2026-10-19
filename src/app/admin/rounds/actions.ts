@@ -27,7 +27,7 @@ function failRound(form: FormData, msg: string): never {
     regions: form.getAll("regions").map(String),
     max_tables: String(form.get("max_tables") ?? ""),
   };
-  redirect(`/admin/rounds?e=${encodeURIComponent(msg)}&f=${encodeURIComponent(JSON.stringify(keep))}#new-round`);
+  redirect(`/admin/rounds?tab=new&e=${encodeURIComponent(msg)}&f=${encodeURIComponent(JSON.stringify(keep))}#new-round`);
 }
 
 export async function createRound(form: FormData) {
@@ -100,7 +100,7 @@ export async function setCapacity(form: FormData) {
     await logStatus({ entityType: "venue", entityId: venueId, field: "tables_available", from: String(prev?.tables_available ?? 0), to: String(n), actor: `admin:${me.id}`, reason: `식당 재고: ${v?.name ?? "식당"}${sl ? ` · ${fmtSlot(sl.starts_at)} ${sl.region}` : ""} 받을 수 있는 테이블 ${prev?.tables_available ?? 0} → ${n}` });
   revalidatePath("/admin/rounds");
   const r = String(form.get("r") ?? "");
-  redirect(`/admin/rounds?${r ? `r=${r}&` : ""}m=${encodeURIComponent(`받을 수 있는 테이블을 ${n}개로 바꿨어요. 다음 식당 배정부터 반영돼요`)}`);
+  redirect(`/admin/rounds?${r ? `r=${r}&` : ""}tab=stock&m=${encodeURIComponent(`받을 수 있는 테이블을 ${n}개로 바꿨어요. 다음 식당 배정부터 반영돼요`)}`);
 }
 
 // ─────────────────────────────────────────────
@@ -108,8 +108,9 @@ export async function setCapacity(form: FormData) {
 // 판단은 lib/round-rules.ts 순수 함수에서 하고, 여기서는 읽고 쓰고 기록만 한다
 // ─────────────────────────────────────────────
 
+// 고치기·일정·취소는 모두 '고치기' 탭에 있다. 해시는 그 탭 안의 칸(#edit·#slots·#cancel)으로 내려 준다
 const back = (roundId: string, q: { m?: string; e?: string }, hash = "edit"): never =>
-  redirect(`/admin/rounds?r=${roundId}${q.m ? `&m=${encodeURIComponent(q.m)}` : ""}${q.e ? `&e=${encodeURIComponent(q.e)}` : ""}#${hash}`);
+  redirect(`/admin/rounds?r=${roundId}&tab=edit${q.m ? `&m=${encodeURIComponent(q.m)}` : ""}${q.e ? `&e=${encodeURIComponent(q.e)}` : ""}#${hash}`);
 
 async function loadRound(roundId: string) {
   const { data } = await db().from("rounds").select("id,title,status,apply_deadline,match_at,slots(id,region,starts_at,ends_at,max_tables)").eq("id", roundId).maybeSingle();

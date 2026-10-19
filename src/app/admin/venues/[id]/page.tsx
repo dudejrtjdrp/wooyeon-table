@@ -70,7 +70,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
               ))}
               {!rows.length && <li className="text-muted">잡힌 일정이 없어요.</li>}
             </ul>
-            <p className="mt-3 text-[13px] text-muted">테이블 수는 <Link href="/admin/rounds" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>에서 바꿔요.</p>
+            <p className="mt-3 text-[13px] text-muted">테이블 수는 <Link href="/admin/rounds?tab=stock" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>에서 바꿔요.</p>
           </Panel>
           <Panel title="처리 이력">
             <ul className="space-y-2 text-[13px]">

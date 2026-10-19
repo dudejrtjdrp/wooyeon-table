@@ -126,7 +126,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         <section className="shadow-card relative mt-6 rounded-[20px] bg-card p-8 text-center">
           <p className="text-[18px] font-bold text-ink">아직 회차가 없어요</p>
           <p className="mt-1.5 text-[14px] text-muted">첫 회차를 만들면 신청을 받고, 마감 시각에 매칭이 자동으로 돌아요. 이 화면에서 결과와 처리할 일을 보면 돼요.</p>
-          {me.level === "full" ? <Link href="/admin/rounds" className={`${btnPrimary} mt-5`}>회차 만들기</Link> : <p className="mt-4 text-[13px] text-muted">조회 전용 계정이라 회차는 전체 권한 운영자가 만들어요.</p>}
+          {me.level === "full" ? <Link href="/admin/rounds?tab=new" className={`${btnPrimary} mt-5`}>회차 만들기</Link> : <p className="mt-4 text-[13px] text-muted">조회 전용 계정이라 회차는 전체 권한 운영자가 만들어요.</p>}
         </section>
       )}
 
