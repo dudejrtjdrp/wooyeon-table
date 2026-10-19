@@ -98,7 +98,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       <Toast msg={m} />
       <section className="animate-rise relative mt-3 overflow-hidden rounded-[20px] bg-card">
         <div className="pointer-events-none absolute right-4 top-6">
-          <RoundTable size={104} filled={matched ? 6 : app.match_status === "ALTERNATIVE_OFFERED" ? 3 : 1} />
+          <RoundTable size={104} me={!canceledApp} filled={canceledApp ? 0 : matched ? 6 : app.match_status === "ALTERNATIVE_OFFERED" ? 3 : 1} />
         </div>
         <div className="relative p-6">
           <Pill tone={h.tone}>{h.label}</Pill>
