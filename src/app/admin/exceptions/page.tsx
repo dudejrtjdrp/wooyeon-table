@@ -11,7 +11,9 @@ import { TIP, reasonText } from "@/lib/admin-glossary";
 import { ConfirmButton } from "../confirm-button";
 import { EXCEPTION_VIEWS, exceptionsHref, reopenElsewhere, openRank, parseExceptionView, reopenConfirm, sortOpenFirst, viewStatus } from "@/lib/exception-view";
 import { ADMIN_NOTE_MIN } from "@/lib/cancel-rules";
-import { reopenException, resolveException } from "./actions";
+import { reopenException, resolveException, resolveNoShowBulk } from "./actions";
+import { BulkNoShow } from "./bulk-noshow";
+import { type NoShowFacts, noShowFacts } from "@/lib/noshow-view";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,7 @@ const LABEL: Record<string, string> = {
 };
 
 // 처음 온 운영자도 바로 고를 수 있게, 건마다 누구·어디를 넣어 먼저 해 볼 일을 적는다
-function adviceFor(e: { kind: string; ref_type: string; reason?: string | null }, c: Ctx, sug: MoveSuggestion | null | undefined): string | undefined {
+function adviceFor(e: { kind: string; ref_type: string; reason?: string | null }, c: Ctx, sug: MoveSuggestion | null | undefined, ns?: NoShowFacts): string | undefined {
   const who = c.who ?? "이 참가자";
   const where = c.where ? `${c.where} ` : "";
   switch (e.kind) {
@@ -46,9 +48,7 @@ function adviceFor(e: { kind: string; ref_type: string; reason?: string | null }
     case "no_show":
       return e.ref_type === "user"
         ? `${who}은(는) 최근 90일 안에 노쇼가 세 번이에요. 소명이 있었으면 제한을 풀고, 없으면 영구 제한해요. 그 전까지 신청은 막혀 있어요.`
-        : isClaimed(e.reason)
-          ? `${who}이(가) 직접 '참석했는데 체크인을 못 했어요'라고 알렸어요. 단체방 대화와 같은 테이블 분들 체크인을 보고 맞으면 '참석으로 정정'을 눌러요. 정정하면 곧 후기 요청이 자동으로 가요.`
-          : `${who}의 체크인 기록이 없어요. 테이블 단체방과 '늦을 것 같아요' 기록을 보고 고르세요. 노쇼로 확정하면 횟수에 따라 경고·신청 제한이 자동으로 걸려요.`;
+        : ns?.advice ?? "위 체크인·단체방 기록을 보고 골라요. 노쇼로 확정하면 횟수에 따라 경고·신청 제한이 자동으로 걸려요.";
     case "safety":
       return `신고 내용을 보고 조치를 골라요. 두 사람은 신고가 들어온 순간부터 같은 테이블에 앉지 않아요. 지금 같은 테이블이면 '긴급 수정 열기'에서 한 사람을 옮겨요.`;
     case "reservation":
@@ -116,7 +116,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
   const resolverIds = [...new Set(data.map((e) => e.resolved_by).filter(Boolean))] as string[];
   const [{ data: reports }, { data: apps }, { data: tbs }, { data: users }, { data: rooms }, { data: notes }, { data: resolvers }, { data: runs }] = await Promise.all([
     reportIds.length ? db().from("safety_reports").select("id,reason,detail,table_id,reported_id,reporter:users!safety_reports_reporter_id_fkey(name),reported:users!safety_reports_reported_id_fkey(name)").in("id", reportIds) : Promise.resolve({ data: [] }),
-    idsOf("application").length ? db().from("applications").select("id,table_id,users(name),rounds(title),payments(amount)").in("id", idsOf("application")) : Promise.resolve({ data: [] }),
+    idsOf("application").length ? db().from("applications").select("id,user_id,table_id,users(name),rounds(title),payments(amount)").in("id", idsOf("application")) : Promise.resolve({ data: [] }),
     idsOf("dining_table").length ? db().from("dining_tables").select("id,round_id,slots(starts_at,region),venues(name)").in("id", idsOf("dining_table")) : Promise.resolve({ data: [] }),
     idsOf("user").length ? db().from("users").select("id,name,applications(id,created_at)").in("id", idsOf("user")) : Promise.resolve({ data: [] }),
     idsOf("chat_room").length ? db().from("chat_rooms").select("id,table_id,dining_tables(slots(starts_at,region))").in("id", idsOf("chat_room")) : Promise.resolve({ data: [] }),
@@ -141,6 +141,38 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
     ctx.set(`chat_room:${r.id}`, { who: "단체방 공지", href: `/admin/tables/${r.table_id}`, where: r.dining_tables ? `${fmtSlot(r.dining_tables.slots.starts_at)} ${r.dining_tables.slots.region}` : undefined });
   for (const n of (notes ?? []) as unknown as { id: string; title: string; users: { name: string } | null }[])
     ctx.set(`notification:${n.id}`, { who: n.users ? `${n.users.name}님` : undefined, href: "/admin/messages", where: `'${n.title}' 알림` });
+  // 노쇼 후보(신청): 같은 테이블 체크인, '늦을 것 같아요', 단체방 마지막 말을 카드에 바로 보인다
+  const nsApps = ((apps ?? []) as unknown as { id: string; user_id: string; table_id: string | null }[]).filter((a) => a.table_id && data.some((e) => e.kind === "no_show" && e.ref_type === "application" && e.ref_id === a.id));
+  const nsTables = [...new Set(nsApps.map((a) => a.table_id!))];
+  const [{ data: nsMembers }, { data: nsSlots }, { data: nsLate }, { data: nsRooms }] = nsTables.length
+    ? await Promise.all([
+        db().from("applications").select("user_id,table_id,attendance_status").in("table_id", nsTables).eq("match_status", "CONFIRMED"),
+        db().from("dining_tables").select("id,slots(starts_at)").in("id", nsTables),
+        db().from("status_events").select("entity_id,to_value,created_at").eq("entity_type", "dining_table").eq("field", "late").in("entity_id", nsTables).order("created_at"),
+        db().from("chat_rooms").select("id,table_id").in("table_id", nsTables),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  const roomIdsNs = (nsRooms ?? []).map((r) => r.id);
+  const { data: nsChat } = roomIdsNs.length
+    ? await db().from("chat_messages").select("room_id,sender_id,body,created_at").in("room_id", roomIdsNs).in("sender_id", nsApps.map((a) => a.user_id)).eq("kind", "user").order("created_at", { ascending: false }).limit(1000)
+    : { data: [] };
+  const roomOf = new Map((nsRooms ?? []).map((r) => [r.table_id, r.id]));
+  const startOf = new Map(((nsSlots ?? []) as unknown as { id: string; slots: { starts_at: string } | null }[]).map((x) => [x.id, x.slots?.starts_at ?? null]));
+  const facts = new Map<string, NoShowFacts>();
+  for (const a of nsApps) {
+    const room = roomOf.get(a.table_id!);
+    const chat = (nsChat ?? []).find((m) => m.room_id === room && m.sender_id === a.user_id);
+    const ex = data.find((e) => e.kind === "no_show" && e.ref_type === "application" && e.ref_id === a.id);
+    facts.set(a.id, noShowFacts({
+      members: (nsMembers ?? []).filter((m) => m.table_id === a.table_id).map((m) => ({ userId: m.user_id, attendance: m.attendance_status })),
+      userId: a.user_id,
+      startsAt: startOf.get(a.table_id!),
+      lateAt: (nsLate ?? []).find((l) => l.entity_id === a.table_id && l.to_value === a.user_id)?.created_at ?? null,
+      lastChat: chat ? { at: chat.created_at, body: chat.body } : null,
+      claimed: isClaimed(ex?.reason),
+    }));
+  }
+  const bulkTargets = data.filter((e) => e.kind === "no_show" && e.ref_type === "application" && e.status === "open");
   const resolverName = new Map(((resolvers ?? []) as { id: string; name: string }[]).map((u) => [u.id, u.name]));
   const canAct = me.level === "full";
   // 조건 충돌은 서버에서 받아 줄 테이블을 미리 골라 둔다(필수 조건 canJoin 통과). 버튼 하나와 확인으로 끝나게
@@ -168,6 +200,8 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
         ))}
       </div>
 
+      {canAct && view !== "done" && bulkTargets.length > 1 && <BulkNoShow action={resolveNoShowBulk} back={back} total={bulkTargets.length} />}
+
       {!data.length && (
         <div className="shadow-card mt-6 rounded-[20px] bg-card p-10 text-center">
           <p className="text-[17px] font-bold text-ink">{view === "open" ? "처리할 예외가 0건이에요" : view === "done" ? "처리한 예외가 없어요" : "기록된 예외가 없어요"}</p>
@@ -184,12 +218,19 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
             ? { who: `${rep.reported?.name}님 (신고한 사람 ${rep.reporter?.name}님)`, href: rep.table_id ? `/admin/tables/${rep.table_id}` : undefined, ops: rep.table_id ? `/admin/tables/${rep.table_id}` : undefined }
             : ctx.get(`${e.ref_type}:${e.ref_id}`) ?? {};
           const sug = sugs.get(e.id);
-          const advice = adviceFor(e, c, sug);
+          const ns = e.kind === "no_show" && e.ref_type === "application" ? facts.get(e.ref_id) : undefined;
+          const advice = adviceFor(e, c, sug, ns);
+          const bulkable = canAct && bulkTargets.length > 1 && e.kind === "no_show" && e.ref_type === "application" && e.status === "open";
           // 조건 충돌·데이터 누락은 긴급 수정으로 고치면 이 건도 닫힌다. 신고는 조치를 따로 골라야 하므로 테이블만 연다
           const opsHref = c.ops && ["condition_conflict", "data_missing"].includes(e.kind) ? `${c.ops}?ex=${e.id}#ops` : c.ops && e.kind === "safety" ? `${c.ops}#ops` : undefined;
           return (
             <li key={e.id} className={`shadow-card rounded-[20px] bg-card p-6 ring-1 ${e.status === "open" ? TONE[e.kind] ?? "ring-line" : "ring-line"}`}>
               <div className="flex flex-wrap items-center gap-3">
+                {bulkable && (
+                  <label className="-m-1 flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg hover:bg-paper">
+                    <input type="checkbox" name="ids" value={e.id} form="bulk-noshow" aria-label={`${c.who ?? "이 참가자"} 한꺼번에 처리할 건으로 고르기`} className="size-5 accent-[var(--accent)]" />
+                  </label>
+                )}
                 <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${PILL[e.kind] ?? "bg-danger/10 text-danger"}`}>{KIND_TIP[e.kind] ? <Term tip={KIND_TIP[e.kind]}>{LABEL[e.kind]}</Term> : LABEL[e.kind] ?? "기타 예외"}</span>
                 {e.status === "open" && reopened.has(e.id) && <span className="rounded-full bg-danger/10 px-3 py-1 text-[14px] font-semibold text-danger">다시 엶</span>}
                 {e.kind === "no_show" && isClaimed(e.reason) && <span className="rounded-full bg-accent-soft px-3 py-1 text-[14px] font-semibold text-accent">본인 참석 알림</span>}
@@ -206,6 +247,24 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                   {e.reason}
                   {rep && <span className="mt-0.5 block text-[13px] font-normal text-muted">신고 사유: {rep.reason}{rep.detail ? ` · "${rep.detail}"` : ""}</span>}
                 </dd>
+                {ns && (
+                  <>
+                    <dt className="text-[13px] font-semibold leading-6 text-muted">근거</dt>
+                    <dd className="text-[14px] text-ink">
+                      <ul className="space-y-0.5">
+                        <li>{ns.checkin}</li>
+                        <li>{ns.late}</li>
+                        <li className="break-keep [overflow-wrap:anywhere]">{ns.chat}</li>
+                      </ul>
+                      {c.ops && (
+                        <span className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] font-semibold">
+                          <Link href={c.ops} className="text-accent hover:underline">테이블 상세 →</Link>
+                          <Link href={`${c.ops}#chat`} className="text-accent hover:underline">단체방 대화 →</Link>
+                        </span>
+                      )}
+                    </dd>
+                  </>
+                )}
                 {e.status === "open" && reopened.has(e.id) && (
                   <>
                     <dt className="text-[13px] font-semibold leading-6 text-muted">다시 연 이유</dt>

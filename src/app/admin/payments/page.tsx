@@ -1,5 +1,6 @@
 import { Download } from "lucide-react";
 import Link from "next/link";
+import { passUsage } from "@/lib/admin-cells";
 import { Badge, PageHeader, Stat, TableScroll, Term, btn, btnDanger, btnLight, ctl, table, td, tdNowrap, th } from "@/components/admin-ui";
 import { TIP } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
@@ -115,7 +116,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                 </td>
                 <td className={`${tdNowrap} tabular-nums`}>{won(p.amount)}</td>
                 <td className={tdNowrap}><Badge v={label(PAYMENT, p.status)} /></td>
-                <td className={`${td} min-w-[170px]`}>{p.passes ? `${p.passes.total_count}회 중 ${p.passes.remaining}회 남음${p.passes.expires_at ? `, ${fmtDateTime(p.passes.expires_at).split(" ").slice(0, 2).join(" ")}까지` : ""}` : "-"}</td>
+                <td className={`${td} min-w-[170px]`}>{passUsage(p.pass_type, p.passes)}</td>
                 <td className={`${tdNowrap} text-muted`}>{p.refunded_at ? fmtDateTime(p.refunded_at) : "-"}</td>
                 <td className={`${td} min-w-[260px]`}>
                   {me.level === "full" && manualRefundCheck({ status: p.status, provider: p.provider, amount: p.amount, hasApplication: p.applications.length > 0 }).ok ? (() => {

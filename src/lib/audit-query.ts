@@ -62,12 +62,18 @@ export async function auditContext(rows: AuditEvent[]): Promise<{ ctx: AuditCont
   const userIds = byType(rows, "user");
   const adminIds = [...new Set(rows.filter((r) => r.actor.startsWith("admin:") && r.actor !== "admin:demo").map((r) => r.actor.slice(6)))];
   const none = { data: [] as never[] };
-  const [apps, rooms, resv, users, admins] = await Promise.all([
+  const roundIds = byType(rows, "round");
+  const runIds = byType(rows, "match_run");
+  const slotIds = byType(rows, "slot");
+  const [apps, rooms, resv, users, admins, rounds, runs, slots] = await Promise.all([
     appIds.length ? db().from("applications").select("id,users(name),rounds(title)").in("id", appIds) : none,
     roomIds.length ? db().from("chat_rooms").select("id,table_id").in("id", roomIds) : none,
     resIds.length ? db().from("reservations").select("id,table_id,venues(name)").in("id", resIds) : none,
     userIds.length ? db().from("users").select("id,name,role").in("id", userIds) : none,
     adminIds.length ? db().from("users").select("id,name").in("id", adminIds) : none,
+    roundIds.length ? db().from("rounds").select("id,title").in("id", roundIds) : none,
+    runIds.length ? db().from("match_runs").select("id,round_id,rounds(title)").in("id", runIds) : none,
+    slotIds.length ? db().from("slots").select("id,round_id,region,starts_at,rounds(title)").in("id", slotIds) : none,
   ]);
   const roomRows = (rooms.data ?? []) as { id: string; table_id: string }[];
   const resRows = (resv.data ?? []) as unknown as { id: string; table_id: string; venues: { name: string } | null }[];
@@ -89,6 +95,9 @@ export async function auditContext(rows: AuditEvent[]): Promise<{ ctx: AuditCont
     users: new Map(((users.data ?? []) as { id: string; name: string; role: string }[]).map((u) => [u.id, { name: u.name, role: u.role, appId: lastApp.get(u.id) }])),
     tables: new Map(((tables.data ?? []) as unknown as { id: string; slots: { region: string; starts_at: string } | null; venues: { name: string } | null }[]).map((t) => [t.id, [t.slots ? `${fmtSlot(t.slots.starts_at)} ${t.slots.region}` : `#${t.id.slice(0, 6)}`, t.venues?.name].filter(Boolean).join(" · ")])),
     venues: new Map(((venues.data ?? []) as { id: string; name: string }[]).map((v) => [v.id, v.name])),
+    rounds: new Map(((rounds.data ?? []) as { id: string; title: string }[]).map((r) => [r.id, r.title])),
+    runs: new Map(((runs.data ?? []) as unknown as { id: string; round_id: string; rounds: { title: string } | null }[]).map((r) => [r.id, { roundId: r.round_id, round: r.rounds?.title }])),
+    slots: new Map(((slots.data ?? []) as unknown as { id: string; round_id: string; region: string; starts_at: string; rounds: { title: string } | null }[]).map((x) => [x.id, { roundId: x.round_id, name: `${x.rounds?.title ? `${x.rounds.title} · ` : ""}${fmtSlot(x.starts_at)} ${x.region}` }])),
     templateLabel,
   };
   return { ctx, adminNames: new Map(((admins.data ?? []) as { id: string; name: string }[]).map((a) => [a.id, a.name])) };

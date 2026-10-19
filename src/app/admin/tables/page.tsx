@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { roomCell } from "@/lib/admin-cells";
 import { Badge, PageHeader, RoundPicker, TableScroll, Term, table, td, tdNowrap, th } from "@/components/admin-ui";
 import { TIP } from "@/lib/admin-glossary";
 import { roundsAndCurrent } from "@/lib/admin-data";
@@ -49,7 +50,7 @@ export default async function Tables({ searchParams }: { searchParams: Promise<{
                   <td className={tdNowrap}>{live.length}명</td>
                   <td className={`${tdNowrap} tabular-nums`}>{att ? `${att}명` : <span className="text-muted">-</span>}</td>
                   <td className={`${tdNowrap} tabular-nums`}>{Math.round(Number(t.score))}점</td>
-                  <td className={tdNowrap}>{t.chat_rooms ? "생성됨" : <span className="text-danger">없음</span>}</td>
+                  <td className={tdNowrap}>{(() => { const c = roomCell(t.status, t.chat_rooms); return <span className={c.tone === "danger" ? "text-danger" : c.tone === "muted" ? "text-muted" : undefined}>{c.text}</span>; })()}</td>
                   <td className={tdNowrap}><Badge v={TABLE_STATUS[t.status] ?? ["기타", "muted"]} /></td>
                 </tr>
               );

@@ -226,8 +226,13 @@ export function auditChange(e: Pick<AuditEvent, "entity_type" | "field" | "from_
     if (p) return `${e.field === "import" ? "엑셀로 고침" : "고침"} ${p}`;
   }
   if (e.field === "csv_export") return `CSV 내려받기 ${e.to_value}건`;
-  return eventText(e);
+  const t = eventText(e);
+  // 회차·일정 칸은 공통 라벨에 없어 '기타 변경'으로 나오던 것을 이름으로 바꾼다
+  const own = (e.entity_type === "round" || e.entity_type === "slot") && ROUND_FIELD[e.field];
+  return own && t.startsWith("기타 변경") ? `${own}${t.slice("기타 변경".length)}` : t;
 }
+
+const ROUND_FIELD: Record<string, string> = { apply_deadline: "신청 마감", match_at: "자동 매칭 실행 시각", title: "회차 이름", canceled: "회차 취소", max_tables: "최대 테이블 수", slot: "일정" };
 
 // ── 개인정보 ─────────────────────────────────────────
 /** 이력 문구 속 휴대폰 번호·이메일은 가려서 보여 준다: 010-****-5678, ab***@kakao.com */
@@ -246,6 +251,12 @@ export interface AuditContext {
   venues?: Map<string, string>;
   rooms?: Map<string, string>; // chat_room → table
   reservations?: Map<string, { tableId: string; venue?: string }>;
+  /** 회차 id → 회차 이름 */
+  rounds?: Map<string, string>;
+  /** 매칭 실행 id → 회차 */
+  runs?: Map<string, { roundId: string; round?: string }>;
+  /** 일정 id → 회차·일정 이름 */
+  slots?: Map<string, { roundId: string; name: string }>;
   templateLabel?: (key: string) => string | undefined;
 }
 
@@ -295,8 +306,22 @@ export function auditTarget(e: Pick<AuditEvent, "entity_type" | "entity_id" | "f
       return { kind: "새 동네 요청", name: short, href: "/admin/demand" };
     case "exception":
       return { kind: "예외", name: short, href: "/admin/exceptions" };
-    case "match_run":
-      return { kind: "자동 매칭", name: short, href: "/admin/matching" };
+    case "match_run": {
+      const r = c.runs?.get(id);
+      return { kind: "자동 매칭", name: `매칭 실행 · ${r?.round ?? short}`, href: r ? `/admin/matching?r=${r.roundId}` : "/admin/matching" };
+    }
+    case "round": {
+      const name = c.rounds?.get(id) ?? short;
+      // 회차에 남긴 '지금 매칭 돌리기' 기록은 매칭 실행으로 보인다
+      if (e.field === "match_run") return { kind: "자동 매칭", name: `매칭 실행 · ${name}`, href: `/admin/matching?r=${id}` };
+      return { kind: "회차", name, href: `/admin/rounds?r=${id}` };
+    }
+    case "slot": {
+      const sl = c.slots?.get(id);
+      return { kind: "회차 일정", name: sl?.name ?? short, href: sl ? `/admin/rounds?r=${sl.roundId}` : "/admin/rounds" };
+    }
+    case "safety_report":
+      return { kind: "안전 신고", name: short, href: "/admin/feedback" };
     case "notification":
       return { kind: "알림", name: short, href: "/admin/messages" };
     case "admin_export":

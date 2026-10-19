@@ -119,6 +119,17 @@ describe("대상 이름과 링크", () => {
     expect(auditTarget({ entity_type: "setting", entity_id: ADMIN, field: "matching.weights" })).toEqual({ kind: "설정", name: "매칭 기준", href: "/admin/settings" });
     expect(auditTarget({ entity_type: "setting", entity_id: ADMIN, field: "template:reminder" }, { templateLabel: () => "하루 전 안내" }).name).toBe("하루 전 안내");
   });
+
+  it("매칭 실행은 '기타 #…' 대신 '매칭 실행 · 회차 이름'", () => {
+    const rounds = new Map([["a6d88d4d", "10월 4주차"]]);
+    expect(auditTarget({ entity_type: "round", entity_id: "a6d88d4d", field: "match_run" }, { rounds })).toEqual({ kind: "자동 매칭", name: "매칭 실행 · 10월 4주차", href: "/admin/matching?r=a6d88d4d" });
+    expect(auditTarget({ entity_type: "match_run", entity_id: "run1", field: "retry" }, { runs: new Map([["run1", { roundId: "a6d88d4d", round: "10월 4주차" }]]) })).toEqual({ kind: "자동 매칭", name: "매칭 실행 · 10월 4주차", href: "/admin/matching?r=a6d88d4d" });
+    expect(auditTarget({ entity_type: "round", entity_id: "a6d88d4d", field: "status" }, { rounds })).toEqual({ kind: "회차", name: "10월 4주차", href: "/admin/rounds?r=a6d88d4d" });
+    expect(auditTarget({ entity_type: "slot", entity_id: "s1", field: "max_tables" }, { slots: new Map([["s1", { roundId: "a6d88d4d", name: "10월 4주차 · 강남" }]]) }).name).toBe("10월 4주차 · 강남");
+    expect(auditTarget({ entity_type: "safety_report", entity_id: "rep12345", field: "status" }).kind).toBe("안전 신고");
+    expect(auditChange({ entity_type: "round", field: "match_at", from_value: "2026-11-16T15:00:00Z", to_value: "2026-11-10T01:04:00Z" })).toMatch(/^자동 매칭 실행 시각 /);
+    expect(auditChange({ entity_type: "round", field: "apply_deadline", from_value: "2026-11-16T15:00:00Z", to_value: "2026-11-10T01:04:00Z" })).not.toContain("기타");
+  });
 });
 
 describe("개인정보·CSV", () => {
