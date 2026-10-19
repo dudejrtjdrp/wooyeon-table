@@ -1,3 +1,4 @@
+import { isAiPhoto } from "@/lib/venue-photo-kind";
 import { TableScroll } from "@/components/table-scroll";
 import { Download, FileSpreadsheet, ImageOff, Images, Plus } from "lucide-react";
 import Link from "next/link";
@@ -94,8 +95,11 @@ export default async function Venues({ searchParams }: { searchParams: Promise<R
                   <tr key={v.id}>
                     <td className={td}>
                       {v.photo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={v.photo_url} alt={`${v.name} 사진`} className="size-14 rounded-lg object-cover" />
+                        <span className="block">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={v.photo_url} alt={`${v.name} 사진`} className="size-14 rounded-lg object-cover" />
+                          {isAiPhoto(v.photo_url) && <span className="mt-1 block text-[11px] text-muted">AI 사진</span>}
+                        </span>
                       ) : (
                         <span className="flex size-14 items-center justify-center rounded-lg bg-field text-muted" title="사진 없음"><ImageOff size={18} aria-label="사진 없음" /></span>
                       )}
