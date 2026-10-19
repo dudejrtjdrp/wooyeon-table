@@ -60,7 +60,7 @@ export function AdminNav({ exCount, mobile }: { exCount: number; mobile?: boolea
     );
   }
   return (
-    <nav className="mt-6 flex min-h-0 flex-col gap-3 overflow-y-auto">
+    <nav className="mt-6 flex flex-col gap-3">
       {GROUPS.map((g) => (
         <div key={g.name}>
           <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted/80">{g.name}</p>
