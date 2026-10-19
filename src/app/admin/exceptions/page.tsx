@@ -80,6 +80,9 @@ function since(iso: string, t: Date) {
   return `${Math.floor(min / 1440)}일째`;
 }
 
+/** 받침에 따라 을/를 (안지민님을, 이 참가자를) */
+const objectOf = (w: string) => { const c = w.charCodeAt(w.length - 1) - 0xac00; return `${w}${c >= 0 && c <= 11171 && c % 28 !== 0 ? "을" : "를"}`; };
+
 export default async function Exceptions({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await requireAdmin();
   const sp = await searchParams;
@@ -176,6 +179,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
       <ul className="mt-6 space-y-3">
         {data.map((e) => {
           const rep = e.kind === "safety" ? repMap.get(e.ref_id) : undefined;
+          const elsewhere = e.status === "resolved" ? reopenElsewhere(e.kind, e.ref_type, e.ref_id) : null;
           const c: Ctx = rep
             ? { who: `${rep.reported?.name}님 (신고한 사람 ${rep.reporter?.name}님)`, href: rep.table_id ? `/admin/tables/${rep.table_id}` : undefined, ops: rep.table_id ? `/admin/tables/${rep.table_id}` : undefined }
             : ctx.get(`${e.ref_type}:${e.ref_id}`) ?? {};
@@ -220,12 +224,12 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                   처리됨 · {e.resolution ?? "처리 완료"} · {e.resolved_by ? `운영자 ${resolverName.get(e.resolved_by) ?? ""}` : "자동"}{e.resolved_at ? ` · ${fmtDateTime(e.resolved_at)}` : ""}
                 </p>
               )}
-              {e.status === "resolved" && canAct && reopenElsewhere(e.kind, e.ref_type, e.ref_id) && (
+              {e.status === "resolved" && canAct && elsewhere && (
                 <p className="mt-3 text-[13px] text-muted">
-                  {reopenElsewhere(e.kind, e.ref_type, e.ref_id)!.reason}. <Link href={reopenElsewhere(e.kind, e.ref_type, e.ref_id)!.href} className="font-semibold text-accent-text underline underline-offset-4">{reopenElsewhere(e.kind, e.ref_type, e.ref_id)!.label}</Link>
+                  {elsewhere.reason}. <Link href={elsewhere.href} className="font-semibold text-accent-text underline underline-offset-4">{elsewhere.label}</Link>
                 </p>
               )}
-              {e.status === "resolved" && canAct && !reopenElsewhere(e.kind, e.ref_type, e.ref_id) && (
+              {e.status === "resolved" && canAct && !elsewhere && (
                 <form action={reopenException} className="mt-3 flex flex-wrap items-center gap-2">
                   <input type="hidden" name="id" value={e.id} />
                   <input type="hidden" name="back" value={back} />
@@ -247,7 +251,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                     </>
                   ) : e.kind === "no_show" ? (
                     <>
-                      <ConfirmButton name="action" value="noshow" confirm={`${c.who ?? "이 참가자"}를 노쇼로 확정해요. 노쇼 횟수에 따라 경고나 신청 제한이 바로 걸려요. 계속할까요?`} className={primary}>노쇼 확정</ConfirmButton>
+                      <ConfirmButton name="action" value="noshow" confirm={`${objectOf(c.who ?? "이 참가자")} 노쇼로 확정해요. 노쇼 횟수에 따라 경고나 신청 제한이 바로 걸려요. 계속할까요?`} className={primary}>노쇼 확정</ConfirmButton>
                       <button name="action" value="attended" className={light}>참석으로 정정</button>
                     </>
                   ) : e.kind === "safety" ? (

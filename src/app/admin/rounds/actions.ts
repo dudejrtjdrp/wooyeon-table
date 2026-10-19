@@ -53,7 +53,7 @@ export async function createRound(form: FormData) {
   if (matchAtRaw < deadline) failRound(form, "자동 매칭은 신청 마감과 같거나 뒤여야 해요");
   if (!(maxTables >= 1)) failRound(form, "일정당 최대 테이블 수는 1 이상이어야 해요");
 
-  // 이미 열린 회차(취소·종료 제외)와 같은 날짜·동네 일정이 있으면 막는다(복제를 두 번 누르거나 같은 주를 또 만들지 않게)
+  // 이미 열린 회차(취소·종료 제외. 취소한 회차도 status closed로 남는다)와 같은 날짜·동네 일정이 있으면 막는다(복제를 두 번 누르거나 같은 주를 또 만들지 않게)
   const { data: takenRows, error: takenErr } = await db().from("slots").select("region,starts_at,rounds!inner(status,title)").in("region", regions).neq("rounds.status", "closed")
     .gte("starts_at", new Date(`${[...dates].sort()[0]}T00:00:00+09:00`).toISOString()).lt("starts_at", new Date(Date.parse(`${[...dates].sort().at(-1)}T00:00:00+09:00`) + 86_400_000).toISOString());
   if (takenErr) failRound(form, "이미 있는 일정을 확인하지 못했어요. 잠시 뒤 다시 해 주세요");
