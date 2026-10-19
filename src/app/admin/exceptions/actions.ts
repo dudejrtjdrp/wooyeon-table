@@ -8,13 +8,69 @@ import { refundPayment } from "@/lib/payments";
 import { assignVenue, afterConfirm, triedVenues } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { canReopen, exceptionsHref } from "@/lib/exception-view";
+import { type NoShowAction, bulkNoShowMessage, bulkNoShowTargets, closePlan, noShowPlan, parseNoShowAction } from "@/lib/exception-resolve";
 
 // 처리하면 예외를 닫고(누가·언제·무엇) 상태 이력에도 한 줄 남긴다. 결과는 ?m=/?e= 로 화면에 알린다.
 // 처리 문구는 요청마다 따로 돌려받는다(모듈 전역에 두면 동시에 누른 두 요청의 문구가 섞인다)
+// 무엇을 쓰는지는 lib/exception-resolve.ts closePlan (테스트 있음)
 async function close(id: string, adminId: string, resolution: string): Promise<string> {
-  await db().from("exceptions").update({ status: "resolved", resolution, resolved_by: adminId, resolved_at: new Date().toISOString() }).eq("id", id).eq("status", "open");
-  await logStatus({ entityType: "exception", entityId: id, field: "status", from: "open", to: "resolved", actor: `admin:${adminId}`, reason: resolution });
+  const plan = closePlan(id, adminId, resolution, new Date());
+  await db().from("exceptions").update(plan.update).eq("id", id).eq("status", "open");
+  await logStatus(plan.event);
   return resolution;
+}
+
+/**
+ * 노쇼 후보(신청) 한 건 처리. 카드 버튼과 '한꺼번에 처리'가 같이 쓴다.
+ * 출석이 아직 '참석 예정'일 때만 바꾸고(노쇼 제재가 두 번 걸리지 않게), 예외는 닫고, 건마다 처리 이력을 남긴다
+ */
+async function settleNoShow(ex: { id: string; ref_id: string }, action: NoShowAction, adminId: string, note: string): Promise<{ resolution: string; changed: boolean }> {
+  const actor = `admin:${adminId}`;
+  const { data: app } = await db().from("applications").select("id,user_id,attendance_status").eq("id", ex.ref_id).maybeSingle();
+  const plan = noShowPlan({ exceptionId: ex.id, appId: ex.ref_id, attendance: app?.attendance_status ?? null, action, adminId, note, at: new Date() });
+  let changed = false;
+  if (plan.application) {
+    // 운영자 정정은 앱 체크인이 아니라 checked_in_at을 비워 둔다. 그 사이 바뀐 신청은 건드리지 않는다
+    const { data: up } = await db().from("applications").update(plan.application).eq("id", ex.ref_id).eq("attendance_status", "SCHEDULED").select("id");
+    changed = !!up?.length;
+  }
+  // 그 사이 다른 화면에서 처리돼 바꾸지 못했으면 '이미 처리됨'으로 다시 계획한다
+  const final = plan.application && !changed ? noShowPlan({ exceptionId: ex.id, appId: ex.ref_id, attendance: "done", action, adminId, note, at: new Date() }) : plan;
+  await db().from("exceptions").update(final.exception).eq("id", ex.id).eq("status", "open");
+  for (const ev of final.events) await logStatus(ev);
+  if (final.applyPolicy && changed && app) {
+    const { applyNoShowPolicy } = await import("@/lib/noshow");
+    const { now } = await import("@/lib/clock");
+    await applyNoShowPolicy(app.user_id, ex.ref_id, actor, await now());
+  }
+  return { resolution: final.resolution, changed };
+}
+
+/** 노쇼 후보 여러 건을 한꺼번에 노쇼 확정 또는 참석으로 정정. 건마다 따로 처리 이력이 남는다 */
+export async function resolveNoShowBulk(form: FormData) {
+  const back = String(form.get("back") ?? "") || "/admin/exceptions";
+  const me = await requireAdminWrite(back);
+  const go = (k: "m" | "e", msg: string) => {
+    revalidatePath("/admin/exceptions");
+    revalidatePath("/admin");
+    revalidatePath("/admin/attendance");
+    redirect(`${back}${back.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(msg)}`);
+  };
+  const action = parseNoShowAction(form.get("action"));
+  if (!action) return go("e", "노쇼 확정과 참석 정정 중 하나를 골라 주세요");
+  const ids = form.getAll("ids").map(String).slice(0, 100);
+  if (!ids.length) return go("e", "처리할 노쇼 후보를 먼저 골라 주세요");
+  const note = String(form.get("note") ?? "").trim();
+  const { data: rows } = await db().from("exceptions").select("id,kind,ref_type,ref_id,status").in("id", ids);
+  const { targets, skipped } = bulkNoShowTargets(ids, rows ?? []);
+  let done = 0;
+  let unchanged = 0;
+  for (const ex of targets) {
+    const r = await settleNoShow(ex, action, me.id, note || (action === "noshow" ? "운영자 확인 (한꺼번에 처리)" : "운영자 확인, 참석으로 정정 (한꺼번에 처리)"));
+    if (r.changed) done++;
+    else unchanged++;
+  }
+  go(done || unchanged ? "m" : "e", bulkNoShowMessage(action, done, unchanged, skipped) || "처리한 건이 없어요");
 }
 
 /**
@@ -71,19 +127,7 @@ export async function resolveException(form: FormData) {
     await logStatus({ entityType: "user", entityId: ex.ref_id, field: "account_status", from: "restricted", to: ban ? "banned" : "warned", actor, reason: note || (ban ? "노쇼 반복으로 영구 제한" : "소명 확인, 제한 해제") });
     done = await close(id, me.id, ban ? "영구 제한" : "제한 해제");
   } else if (ex.kind === "no_show") {
-    const to = action === "attended" ? "ATTENDED" : "NO_SHOW";
-    // 운영자 정정은 앱 체크인이 아니라 checked_in_at을 비워 둔다. 이미 처리된 신청은 다시 바꾸지 않는다(노쇼 제재가 두 번 걸리지 않게)
-    const { data: changed } = await db().from("applications").update({ attendance_status: to }).eq("id", ex.ref_id).eq("attendance_status", "SCHEDULED").select("id");
-    if (changed?.length) await logStatus({ entityType: "application", entityId: ex.ref_id, field: "attendance_status", from: "SCHEDULED", to, actor, reason: note || "운영자 확인" });
-    done = await close(id, me.id, !changed?.length ? "이미 처리된 신청이라 상태는 바꾸지 않음" : to === "NO_SHOW" ? "노쇼 확정" : "참석으로 정정");
-    if (to === "NO_SHOW" && changed?.length) {
-      const { data: app } = await db().from("applications").select("user_id").eq("id", ex.ref_id).single();
-      if (app) {
-        const { applyNoShowPolicy } = await import("@/lib/noshow");
-        const { now } = await import("@/lib/clock");
-        await applyNoShowPolicy(app.user_id, ex.ref_id, actor, await now());
-      }
-    }
+    done = (await settleNoShow(ex, action === "attended" ? "attended" : "noshow", me.id, note)).resolution;
   } else if (ex.kind === "safety") {
     const { data: rep } = await db().from("safety_reports").select("reported_id").eq("id", ex.ref_id).single();
     const level = ["warning", "restricted", "banned"].includes(action) ? action : "none";

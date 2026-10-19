@@ -18,6 +18,9 @@ import { matchNowCheck } from "@/lib/admin-manual";
 import { ConfirmButton } from "../confirm-button";
 import { runNowAction } from "./actions";
 import { ExpandAll } from "./expand-all";
+import { computeMetrics } from "@/lib/metrics";
+import { loadMetricsInput } from "../metrics/load";
+import { failNote, monitorCounts, type MonitorCount } from "@/lib/match-monitor";
 
 export const dynamic = "force-dynamic";
 
@@ -57,10 +60,10 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
   }[];
   const { data: appsRaw } = await db()
     .from("applications")
-    .select("id,user_id,table_id,match_status,realloc_count,match_reason,areas,near_ok,application_slots(slot_id),users(name,profiles(birth_year,gender,mbti,my_traits,wanted_traits))")
+    .select("id,user_id,table_id,match_status,application_status,payment_status,resolution,realloc_count,match_reason,areas,near_ok,application_slots(slot_id),users(name,profiles(birth_year,gender,mbti,my_traits,wanted_traits))")
     .eq("round_id", round.id);
   const apps = (appsRaw ?? []) as unknown as {
-    id: string; user_id: string; table_id: string | null; match_status: string; realloc_count: number; match_reason: string | null; areas: string[] | null; near_ok: boolean | null;
+    id: string; user_id: string; table_id: string | null; match_status: string; application_status: string; payment_status: string; resolution: string | null; realloc_count: number; match_reason: string | null; areas: string[] | null; near_ok: boolean | null;
     application_slots: { slot_id: string }[];
     users: { name: string; profiles: { birth_year: number; gender: string; mbti: string | null; my_traits: string[] | null; wanted_traits: string[] | null } | null };
   }[];
@@ -71,7 +74,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
         db().from("blocks").select("blocker_id,blocked_id").in("blocker_id", uids),
         db().from("safety_reports").select("reporter_id,reported_id").in("reporter_id", uids),
         db().from("person_prefs").select("from_user,to_user").eq("pref", "avoid").in("from_user", uids),
-        db().from("status_events").select("entity_id,created_at").eq("entity_type", "application").eq("field", "match_status").eq("to_value", "ALTERNATIVE_OFFERED").in("entity_id", apps.map((a) => a.id)).order("created_at"),
+        db().from("status_events").select("entity_id,field,to_value,created_at").eq("entity_type", "application").in("field", ["match_status", "application_status"]).in("to_value", ["ALTERNATIVE_OFFERED", "NO_MATCH", "TRANSFERRED", "EXCEPTION", "CANCELED"]).in("entity_id", apps.filter((a) => !a.table_id).map((a) => a.id)).order("created_at"),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const rel = { block: new Set((blocks ?? []).map((b) => pairKey(b.blocker_id, b.blocked_id))), report: new Set((reps ?? []).map((b) => pairKey(b.reporter_id, b.reported_id))), avoid: new Set((avoids ?? []).map((b) => pairKey(b.from_user, b.to_user))) };
@@ -86,8 +89,9 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
       }
     return c;
   };
-  const failedAt = new Map<string, string>();
-  for (const e of failEv ?? []) failedAt.set(e.entity_id, e.created_at);
+  // 못 든 사람마다 상태 이력 (사유·시각을 빈칸 없이 채운다)
+  const evOf = new Map<string, { field: string; to_value: string; created_at: string }[]>();
+  for (const e of failEv ?? []) evOf.set(e.entity_id, [...(evOf.get(e.entity_id) ?? []), e]);
   // 참가자별 희망 상대 충족: 내가 원한 성향을 가진 사람이 같은 테이블에 있는지
   const wantedOf = (m: (typeof apps)[number], ms: typeof apps) => {
     const want = m.users.profiles?.wanted_traits ?? [];
@@ -99,6 +103,10 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
   const summary = (run?.summary ?? {}) as Record<string, unknown> & { log?: string[] };
 
   const st = (k: string) => Number((summary as Record<string, unknown>)[k] ?? 0);
+  // 확정·재배치·해제는 대시보드·아래 목록과 같은 기준으로 센다. 실행 기록과 다르면 물음표에 차이를 적는다
+  const reallocOk = run ? computeMetrics(await loadMetricsInput(), round.id).find((x) => x.key === "realloc_success")?.numerator ?? 0 : 0;
+  const cnt = monitorCounts({ summary, apps, tables, reallocOk });
+  const N = ({ c, unit }: { c: MonitorCount; unit: string }) => (c.diff ? <Term tip={c.diff}>{`${c.n}${unit}`}</Term> : <>{c.n}{unit}</>);
   const REASON_TONE = ["bg-accent-soft text-accent", "bg-leaf/10 text-leaf", "bg-[#f0ecfd] text-[#6a4fd6]"];
   // 검색: 걸린 테이블은 펼쳐서 보여 준다
   const foundN = q ? tables.filter((t) => tableHits(q, { names: apps.filter((a) => a.table_id === t.id).map((a) => a.users.name), reservationName: t.reservation_name, venueName: t.venues?.name ?? null, region: t.slots.region })).length : 0;
@@ -143,7 +151,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
               <span className="flex items-center gap-2 text-[15px] font-semibold text-accent">실행 요약 <Badge v={run.status === "done" ? ["완료", "leaf"] : run.status === "running" ? ["실행 중", "candle"] : ["실패", "danger"]} /></span>
               <span className="mt-0.5 block text-[14px] text-[#4c5368]">
                 {fmtDateTime(run.started_at)} 시작{run.finished_at ? ` · ${fmtDateTime(run.finished_at)} 끝` : ""} · <Term tip={TIP.매칭규칙버전}>매칭 규칙 버전</Term> {run.algorithm_version}
-                <span className="mt-0.5 block">대상 {run.candidate_count}명 → 확정 {st("confirmed")}명(테이블 {tables.length}개) · 재배치 {st("reallocated")}명 · 가까운 동네로 {st("widened")}명 · 테이블 병합 {st("merged")}번 · 해제 {st("dissolved")}번 · 실패 안내 {st("failed")}명{st("exceptions") ? ` · 정보 누락 ${st("exceptions")}건` : ""}</span>
+                <span className="mt-0.5 block">대상 {run.candidate_count}명 → 지금 확정 <N c={cnt.confirmed} unit="명" />(테이블 {tables.length}개) · 재배치로 확정 <N c={cnt.reallocated} unit="명" /> · 가까운 동네로 {st("widened")}명 · 테이블 병합 {st("merged")}번 · 해제 <N c={cnt.dissolved} unit="번" /> · 테이블에 못 든 사람 {failed.length}명{st("exceptions") ? ` · 정보 누락 ${st("exceptions")}건` : ""}</span>
               </span>
             </span>
             <span className="flex items-center gap-1 border-l border-line pl-4 text-[14px] font-semibold text-accent">처리 기록 보기 <ChevronDown size={18} className="transition group-open:rotate-180" /></span>
@@ -162,7 +170,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
       <section className="shadow-card mt-6 rounded-[20px] bg-card p-5" aria-labelledby="failed-title">
         <h2 id="failed-title" className="text-[19px] font-bold text-ink">테이블에 못 든 사람 <span className="text-[15px] font-medium text-muted">· {failed.length}명</span></h2>
         <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {failed.map((a) => (
+          {failed.map((a) => { const fn = failNote(a, evOf.get(a.id) ?? [], run?.finished_at); return (
             <li key={a.id} className={`min-w-0 rounded-2xl border p-4 ${hits(q, a.users.name) ? "border-accent ring-2 ring-accent/30" : "border-line"}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -171,10 +179,10 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                 </div>
                 <span className="shrink-0 whitespace-nowrap"><Badge v={label(MATCH, a.match_status)} /></span>
               </div>
-              <p className="mt-3 border-t border-line pt-3 text-[13px] leading-relaxed text-[#4c5368]"><span className="mr-2 text-muted">사유</span>{a.match_reason ?? "-"}</p>
-              <p className="mt-1 text-[12px] text-muted">재배치 시도 {a.realloc_count}번{failedAt.get(a.id) ? ` · 실패 ${fmtDateTime(failedAt.get(a.id)!)}` : ""}</p>
+              <p className="mt-3 border-t border-line pt-3 text-[13px] leading-relaxed text-[#4c5368]"><span className="mr-2 text-muted">사유</span>{fn.reason}</p>
+              <p className="mt-1 text-[12px] text-muted">재배치 시도 {a.realloc_count}번 · {fn.label} {fn.at ? fmtDateTime(fn.at) : "시각 기록 없음"}</p>
             </li>
-          ))}
+          ); })}
           {!failed.length && <li className="py-6 text-center text-[14px] text-muted sm:col-span-2 xl:col-span-3">모두 테이블에 앉았어요.</li>}
         </ul>
       </section>
