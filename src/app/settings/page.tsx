@@ -14,7 +14,7 @@ export default async function Settings() {
         <List>
           <PushToggle />
         </List>
-        <p className="px-1 text-[13px] leading-relaxed text-muted">테이블 확정, 하루 전 안내, 모임 시작 알림을 휴대폰으로 받아요. 알림함에는 항상 남아요.</p>
+        <p className="px-1 text-[13px] leading-relaxed text-muted">테이블 확정, 하루 전 안내, 모임 시작 알림을 휴대폰으로 받아요. 홈 위쪽 알림에도 항상 남아요.</p>
         <InstallCard />
       </div>
     </Screen>

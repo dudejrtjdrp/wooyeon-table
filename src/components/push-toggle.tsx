@@ -78,7 +78,7 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
 
   const desc: Record<State, string> = {
     loading: "",
-    unsupported: "이 브라우저에서는 알림을 받을 수 없어요. 알림함에서 확인해 주세요.",
+    unsupported: "이 브라우저에서는 알림을 받을 수 없어요. 홈 위쪽 알림에서 확인해 주세요.",
     "needs-install": "아이폰은 홈 화면에 앱을 추가한 뒤 알림을 켤 수 있어요.",
     denied: "알림이 꺼져 있어요. 휴대폰 설정에서 우연한 식탁 알림을 허용해 주세요.",
     off: "매칭 결과, 모임 하루 전 안내, 단체방 새 메시지를 휴대폰으로 받아요.",
