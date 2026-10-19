@@ -1,4 +1,5 @@
-import { PageHeader, Panel, btnLight, ctl } from "@/components/admin-ui";
+import { PageHeader, Panel, Term, btnLight, ctl } from "@/components/admin-ui";
+import { TIP } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
 import { type Metric, type MetricGroup, computeMetrics, fmtMinutes, metricValue } from "@/lib/metrics";
 import { db } from "@/lib/supabase";
@@ -25,7 +26,8 @@ export default async function Metrics({ searchParams }: { searchParams: Promise<
     <div>
       <PageHeader
         title="운영 지표"
-        desc="PRD에서 정한 핵심 지표 13개예요. 각 지표 아래에 무엇을 무엇으로 나눴는지 적어 두었어요. 시연용 테스트 참가자도 함께 세요."
+        desc="서비스 목표로 정한 핵심 지표 13개예요. 각 지표 아래에 무엇을 무엇으로 나눴는지 적어 두었어요. 시연용 테스트 참가자도 함께 세요."
+        how={["전체 누적이나 한 회차 고르기", <>먼저 &lsquo;운영 효율&rsquo;의 <Term tip={TIP.자동확정률}>자동 확정률</Term>·<Term tip={TIP.개입률}>운영자 개입률</Term> 보기</>, "숫자가 이상하면 카드 아래 '세는 법' 읽기"]}
         actions={
           <form className="flex flex-wrap items-center gap-2">
             <select name="r" defaultValue={round?.id ?? ""} className={ctl} aria-label="회차">

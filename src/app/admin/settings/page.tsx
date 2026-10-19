@@ -2,7 +2,8 @@ import { Lock } from "lucide-react";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Badge, Panel, btnDanger, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, Term, btnDanger, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { TIP } from "@/lib/admin-glossary";
 import { isAdminOff } from "@/lib/admin-accounts";
 import { weightsValue } from "@/lib/audit";
 import { currentWeightsValue } from "@/lib/audit-query";
@@ -47,8 +48,11 @@ export default async function Settings() {
 
   return (
     <div>
-      <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">매칭 기준</h1>
-      <p className="mt-1.5 text-[15px] text-muted">다음 매칭에 적용할 선호 점수를 조정해요. 바꾼 기록은 <Link href="/admin/audit?kind=setting" className="font-semibold text-accent underline underline-offset-4">변경 이력</Link>에서 보고 되돌릴 수 있어요.</p>
+      <PageHeader
+        title="매칭 기준·계정"
+        desc={<>다음 자동 매칭에 쓸 선호 점수를 조정해요. 바꾼 기록은 <Link href="/admin/audit?kind=setting" className="font-semibold text-accent underline underline-offset-4">변경 이력</Link>에서 보고 되돌릴 수 있어요.</>}
+        how={[<>항목별 <Term tip={TIP.가중치}>가중치</Term> 조정하기</>, <><Term tip={TIP.최소점수}>최소 점수</Term> 정하기</>, "저장하면 다음 자동 매칭부터 적용", ...(me.level === "full" ? ["아래에서 운영자 계정·권한 관리"] : [])]}
+      />
       <section className="mt-6 flex flex-wrap items-center gap-4 rounded-[20px] bg-accent-soft/60 px-6 py-5">
         <Lock size={30} className="text-accent" />
         <div className="flex-1">

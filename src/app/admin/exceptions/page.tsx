@@ -6,6 +6,8 @@ import { type MoveSuggestion, suggestMove } from "@/lib/admin-ops";
 import { won } from "@/lib/constants";
 import { fmtDateTime, fmtSlot } from "@/lib/format";
 import { db } from "@/lib/supabase";
+import { PageHeader, Term } from "@/components/admin-ui";
+import { TIP } from "@/lib/admin-glossary";
 import { ConfirmButton } from "../confirm-button";
 import { resolveException } from "./actions";
 
@@ -54,6 +56,9 @@ function adviceFor(e: { kind: string; ref_type: string; reason?: string | null }
   }
   return undefined;
 }
+
+// 처음 보면 모를 유형 이름에만 풀이를 붙인다
+const KIND_TIP: Record<string, string> = { condition_conflict: TIP.조건충돌, venue_shortage: TIP.식당부족, no_show: TIP.노쇼후보, data_missing: TIP.데이터누락 };
 
 const TONE: Record<string, string> = { safety: "ring-danger/40", payment: "ring-accent/30", refund: "ring-accent/30", venue_shortage: "ring-warn/40", no_show: "ring-warn/40" };
 const PILL: Record<string, string> = { safety: "bg-danger/10 text-danger", payment: "bg-accent-soft text-accent", refund: "bg-accent-soft text-accent", venue_shortage: "bg-warn-soft text-warn", no_show: "bg-warn-soft text-warn" };
@@ -127,8 +132,11 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
 
   return (
     <div>
-      <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">예외 처리함</h1>
-      <p className="mt-1.5 text-[15px] text-muted">자동으로 풀지 못한 일만 모았어요. 오래된 것부터 보여 줘요. 각 건에 누구·무슨 일·왜·먼저 해 볼 일이 있고, 버튼 하나로 끝나요.</p>
+      <PageHeader
+        title="예외 처리함"
+        desc={<>자동으로 풀지 못한 일(<Term tip={TIP.예외}>예외</Term>)만 모았어요. 오래된 것부터 보여 줘요. 정상 흐름은 여기에 올라오지 않아요.</>}
+        how={["위 유형 버튼으로 거르기", "'왜'와 '먼저 할 일' 읽기", "카드 아래 버튼 하나 누르기 (메모는 선택)", "처리한 건은 '처리한 것까지 보기'에서 다시 확인"]}
+      />
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Link href={qs()} className={`rounded-full px-4 py-2 text-[15px] font-semibold ${!k ? "bg-accent-soft text-accent" : "border border-line bg-card text-ink/80"}`}>전체 {rows?.length ?? 0}</Link>
         {[...counts.entries()].map(([kind, n]) => (
@@ -160,7 +168,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
           return (
             <li key={e.id} className={`shadow-card rounded-[20px] bg-card p-6 ring-1 ${e.status === "open" ? TONE[e.kind] ?? "ring-line" : "ring-line"}`}>
               <div className="flex flex-wrap items-center gap-3">
-                <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${PILL[e.kind] ?? "bg-danger/10 text-danger"}`}>{LABEL[e.kind] ?? "기타 예외"}</span>
+                <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${PILL[e.kind] ?? "bg-danger/10 text-danger"}`}>{KIND_TIP[e.kind] ? <Term tip={KIND_TIP[e.kind]}>{LABEL[e.kind]}</Term> : LABEL[e.kind] ?? "기타 예외"}</span>
                 {e.kind === "no_show" && isClaimed(e.reason) && <span className="rounded-full bg-accent-soft px-3 py-1 text-[14px] font-semibold text-accent">본인 참석 알림</span>}
                 <span className="text-[14px] text-muted">{fmtDateTime(e.created_at)} 올라옴{e.status === "open" ? ` · ${since(e.created_at, t)}` : ""}</span>
               </div>
@@ -193,7 +201,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                   <input type="hidden" name="id" value={e.id} />
                   <input type="hidden" name="back" value={back} />
                   <input name="note" aria-label="처리 메모" defaultValue={sug ? `조건 충돌 해소: ${e.reason}` : undefined} placeholder="처리 메모 (선택, 기록에 남아요)" className="h-10 min-w-48 flex-1 rounded-xl border border-line bg-field px-3.5 text-[14px] outline-none focus:border-accent" />
-                  {opsHref && <Link href={opsHref} className={`${light} flex items-center`}>긴급 수정 열기</Link>}
+                  {opsHref && <Link href={opsHref} title={TIP.긴급수정} className={`${light} flex items-center`}>긴급 수정 열기</Link>}
                   {e.kind === "no_show" && e.ref_type === "user" ? (
                     <>
                       <ConfirmButton name="action" value="ban" confirm={`${c.who ?? "이 참가자"}를 영구 제한해요. 앞으로 신청할 수 없어요. 계속할까요?`} className={danger}>영구 제한</ConfirmButton>

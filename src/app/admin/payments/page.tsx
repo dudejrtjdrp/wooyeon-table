@@ -1,6 +1,7 @@
 import { Download } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, Stat, btn, btnDanger, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Stat, Term, btn, btnDanger, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { TIP } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
 import { applicationLive, manualRefundCheck } from "@/lib/cancel-rules";
 import { LEGACY_PASS_LABEL, PASSES, isMembership, won } from "@/lib/constants";
@@ -31,7 +32,8 @@ export default async function Payments({ searchParams }: { searchParams: Promise
     <div>
       <PageHeader
         title="결제·환불"
-        desc={`결제, 자동 환불, 환불 실패, 이용권 사용 내역이에요. 결제는 토스페이먼츠${tossLive() ? "" : " 테스트 모드"}로 승인·취소돼요.`}
+        desc={<>결제, 자동 환불, 환불 실패, <Term tip={TIP.이용권}>이용권</Term> 사용 내역이에요. 결제는 토스페이먼츠{tossLive() ? "" : " 테스트 모드"}로 승인·취소돼요.</>}
+        how={["이름·회차·상태로 거르기", "환불 실패는 예외 처리함에서 다시 요청", "신청이 끝난 결제만 여기서 사유를 적고 직접 환불"]}
         actions={
           <a href={`/api/admin/payments${paymentSearch(f, 1)}`} className={btnLight} download>
             <Download size={16} />CSV 내려받기
@@ -113,7 +115,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                 </td>
                 <td className={`${td} tabular-nums`}>{won(p.amount)}</td>
                 <td className={td}><Badge v={label(PAYMENT, p.status)} /></td>
-                <td className={td}>{p.passes ? `${p.passes.remaining}/${p.passes.total_count}회${p.passes.expires_at ? `, ~${fmtDateTime(p.passes.expires_at).split(" ").slice(0, 2).join(" ")}` : ""}` : "-"}</td>
+                <td className={td}>{p.passes ? `${p.passes.total_count}회 중 ${p.passes.remaining}회 남음${p.passes.expires_at ? `, ${fmtDateTime(p.passes.expires_at).split(" ").slice(0, 2).join(" ")}까지` : ""}` : "-"}</td>
                 <td className={`${td} text-muted`}>{p.refunded_at ? fmtDateTime(p.refunded_at) : "-"}</td>
                 <td className={`${td} min-w-[220px]`}>
                   {me.level === "full" && manualRefundCheck({ status: p.status, provider: p.provider, amount: p.amount, hasApplication: p.applications.length > 0 }).ok ? (() => {

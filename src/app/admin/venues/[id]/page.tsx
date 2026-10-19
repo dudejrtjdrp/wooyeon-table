@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { reasonText } from "@/lib/admin-glossary";
 import { notFound } from "next/navigation";
 import { ImageOff } from "lucide-react";
 import { Badge, PageHeader, Panel, btnLight } from "@/components/admin-ui";
@@ -77,7 +78,7 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
               {(events ?? []).map((e) => (
                 <li key={e.id}>
                   <span className="text-muted">{fmtDateTime(e.created_at)} · {actorLabel(e.actor, adminName)}</span>
-                  {e.reason && <span className="block text-ink">{e.reason}</span>}
+                  {reasonText(e.reason) && <span className="block text-ink">{reasonText(e.reason)}</span>}
                   {e.from_value && ["edit", "import"].includes(e.field) && <span className="block break-words text-[12px] text-muted">{e.from_value} → {e.to_value}</span>}
                 </li>
               ))}

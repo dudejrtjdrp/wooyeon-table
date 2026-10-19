@@ -6,7 +6,7 @@ export { btn, btnDanger, btnInk, btnLight, btnPrimary, ctl, td, th } from "./adm
 /**
  * 화면 머리. how: 처음 온 운영자를 위한 '여기서 하는 일' 2~4단계(짧은 동사구). 제목 아래 한 줄 띠로 보인다
  */
-export function PageHeader({ title, desc, actions, how }: { title: string; desc?: string; actions?: ReactNode; how?: ReactNode[] }) {
+export function PageHeader({ title, desc, actions, how }: { title: string; desc?: ReactNode; actions?: ReactNode; how?: ReactNode[] }) {
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -41,9 +41,10 @@ export function HowTo({ steps }: { steps: ReactNode[] }) {
  * 처음 보면 모를 말: 점선 밑줄, 마우스를 올리거나(키보드로 가거나) 누르면 풀이가 뜬다. 화면 읽기에는 풀이까지 읽힌다
  * 예: <Term tip="같은 주에 여는 저녁 모임 묶음이에요">회차</Term>
  */
-export function Term({ children, tip }: { children: ReactNode; tip: string }) {
+export function Term({ children, tip, inLink }: { children: ReactNode; tip: string; inLink?: boolean }) {
+  // 링크 안에 들어가면 따로 포커스를 받지 않는다(링크 하나에 탭이 두 번 멈추지 않게). 마우스를 올리면 풀이는 그대로 뜬다
   return (
-    <span tabIndex={0} className="group/term relative inline-flex cursor-help items-baseline underline decoration-dotted decoration-faint underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+    <span tabIndex={inLink ? undefined : 0} className="group/term relative inline-flex cursor-help items-baseline underline decoration-dotted decoration-faint underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
       {children}
       <span role="tooltip" className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[260px] -translate-x-1/2 rounded-xl bg-ink px-3 py-2 text-left text-[12px] font-medium leading-relaxed text-white no-underline opacity-0 shadow-lg transition group-hover/term:visible group-hover/term:opacity-100 group-focus/term:visible group-focus/term:opacity-100">
         {tip}

@@ -45,7 +45,11 @@ export default async function Members({ searchParams }: { searchParams: Promise<
 
   return (
     <div>
-      <PageHeader title="회원 찾기" desc="회차와 상관없이 이름, 연락처 뒤 4자리, 로그인 ID로 찾아요. 연락처는 가려서 보여요." />
+      <PageHeader
+        title="회원 찾기"
+        desc="회차와 상관없이 이름, 연락처 뒤 4자리, 로그인 ID로 찾아요. 연락처는 가려서 보여요."
+        how={["이름이나 연락처 뒤 4자리 적고 '찾기'", "이름을 눌러 회원 상세 열기", "상세에서 이용권·멤버십·계정 상태 조치"]}
+      />
       <form className="mt-6 flex flex-wrap gap-2">
         <input name="q" defaultValue={raw ?? ""} placeholder="이름, 연락처 뒤 4자리, 로그인 ID" aria-label="회원 검색어" className={`${ctl} w-72`} autoFocus />
         <button className={btnLight}>찾기</button>

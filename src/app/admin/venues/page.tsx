@@ -1,6 +1,7 @@
 import { Download, ImageOff, Plus } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, Panel, btn, btnPrimary, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, Term, btn, btnPrimary, td, th } from "@/components/admin-ui";
+import { TIP } from "@/lib/admin-glossary";
 import { requireAdmin } from "@/lib/auth";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
@@ -28,12 +29,13 @@ export default async function Venues() {
     <div>
       <PageHeader
         title="식당 관리"
-        desc="제휴 식당 목록이에요. 테이블이 확정되면 이 목록에서 동네·시간·인원·평점·예약 채널을 보고 자동으로 배정해요. 식당 이름을 누르면 정보를 고치거나 배정을 끌 수 있어요."
+        desc="제휴 식당 목록이에요. 테이블이 확정되면 이 목록에서 동네·시간·인원·평점·예약 채널을 보고 자동으로 배정해요."
+        how={["'식당 추가'로 한 곳씩, 또는 오른쪽 엑셀로 여러 곳 넣기", "식당 이름을 눌러 정보 고치기·배정 끄기", "사진 없는 곳은 사진 올리기", <>일정별 <Term tip={TIP.식당재고}>식당 재고</Term>는 회차·식당 재고에서</>]}
         actions={!ro && <Link href="/admin/venues/new" className={btnPrimary}><Plus size={16} aria-hidden="true" />식당 추가</Link>}
       />
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Panel title={`제휴 식당 ${venues.length}곳 · ${regions.length}개 동네${noPhoto ? ` · 사진 없는 곳 ${noPhoto}` : ""}`}>
+        <Panel title={`제휴 식당 ${venues.length}곳 · ${regions.length}개 동네${noPhoto ? ` · 사진 없는 곳 ${noPhoto}곳` : ""}`}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-[14px]">
               <thead><tr>{["사진", "동네", "식당", "가격대", "평점", "예약", "상태", ""].map((h, i) => <th key={i} className={th}>{h}</th>)}</tr></thead>
@@ -54,7 +56,7 @@ export default async function Venues() {
                       <p className="text-[12px] text-muted">{[v.category, v.address].filter(Boolean).join(" · ")}</p>
                     </td>
                     <td className={`${td} whitespace-nowrap text-muted`}>{v.price_range ?? "-"}</td>
-                    <td className={`${td} whitespace-nowrap text-muted`}>{v.rating ? `${v.rating}${v.review_count ? ` (${v.review_count})` : ""}` : "-"}</td>
+                    <td className={`${td} whitespace-nowrap text-muted`}>{v.rating ? `${v.rating}${v.review_count ? ` (후기 ${v.review_count}개)` : ""}` : "-"}</td>
                     <td className={`${td} whitespace-nowrap text-muted`}>{v.booking_channel ? CHANNEL_LABEL[v.booking_channel as Channel] : "-"}</td>
                     <td className={td}><Badge v={v.active ? ["배정함", "leaf"] : ["쉬는 중", "muted"]} /></td>
                     <td className={td}>{!ro && <VenuePhotoButton venueId={v.id} has={Boolean(v.photo_url)} action={uploadVenuePhoto} />}</td>
