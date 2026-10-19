@@ -1,5 +1,6 @@
 "use server";
 
+import { eunNeun } from "@/lib/korean";
 import { redirect } from "next/navigation";
 import { requireMe } from "@/lib/auth";
 import { OPEN_REGIONS } from "@/lib/constants";
@@ -20,7 +21,7 @@ export async function saveWish(form: FormData) {
   if (!s && sido !== "그 밖") back("시·도를 골라 주세요");
   const area = pick && s?.areas.includes(pick) ? pick : typed || null;
   if (!area) back("동네를 고르거나 직접 적어 주세요");
-  if (area && OPEN_REGIONS.includes(area)) redirect(`/rounds?m=${encodeURIComponent(`${area}는 지금 신청할 수 있어요`)}`);
+  if (area && OPEN_REGIONS.includes(area)) redirect(`/rounds?m=${encodeURIComponent(`${eunNeun(area)} 지금 신청할 수 있어요`)}`);
   // 같은 동네를 두 번 남기면 하나만
   const { data: dup } = await db().from("region_demands").select("id").eq("user_id", me.id).eq("sido", sido).eq("area", area!).maybeSingle();
   if (!dup) {

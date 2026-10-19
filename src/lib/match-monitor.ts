@@ -48,7 +48,7 @@ export interface FailApp {
 /** 상태 이력 중 '못 든 사람' 시각을 고를 때 보는 줄 */
 export interface FailEvent { field: string; to_value: string; created_at: string }
 
-const PAY_NOTE: Record<string, string> = { REFUNDED: "환불 완료", REFUND_FAILED: "환불 실패", REFUND_PROCESSING: "환불 중", REFUND_REQUESTED: "환불 요청됨" };
+const PAY_NOTE: Record<string, string> = { REFUNDED: "환불 완료", REFUND_FAILED: "환불 실패", REFUND_PROCESSING: "환불 처리 중", REFUND_REQUESTED: "환불 요청됨" };
 
 /**
  * 못 든 사람 한 명의 사유와 시각. 사유 칸이 비어 있어도 상태로 늘 한 줄을 채운다.

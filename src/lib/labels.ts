@@ -9,7 +9,7 @@ export const PAYMENT: Record<string, [string, Tone]> = {
   FAILED: ["결제 실패", "danger"],
   REFUND_AVAILABLE: ["환불 가능", "candle"],
   REFUND_REQUESTED: ["환불 요청", "candle"],
-  REFUND_PROCESSING: ["환불 중", "candle"],
+  REFUND_PROCESSING: ["환불 처리 중", "candle"],
   REFUNDED: ["환불 완료", "muted"],
   REFUND_FAILED: ["환불 실패", "danger"],
 };

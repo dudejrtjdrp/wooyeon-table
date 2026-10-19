@@ -1,3 +1,4 @@
+import { meetingEnded } from "@/lib/meeting-time";
 import { AI_PHOTO_NOTE, isAiPhoto } from "@/lib/venue-photo-kind";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -57,7 +58,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const canCheckIn = mine?.attendance_status === "SCHEDULED" && n >= new Date(start.getTime() - 3600_000) && n <= end;
   // 주소를 누르면 지도 앱이 바로 열리게: 네이버 지도·카카오맵 (앱 없으면 웹 지도)
   const maps = t.venues ? mapLinks(t.venues.name, t.venues.address, t.venues.map_url) : null;
-  const done = t.status === "DONE";
+  const done = meetingEnded(t, n);
   // 갔는데 체크인을 못 한 사람이 끝난 뒤 48시간 안에 알릴 수 있게
   const missedCheckIn = canClaimAttended(mine?.attendance_status, end, n);
   // 이미 후기를 남겼으면 버튼을 '남긴 후기 고치기'로 (후기 화면은 이전 값을 채워 연다)
@@ -174,7 +175,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
           <h2 className="text-[18px] font-bold">찾아가는 길</h2>
           <div className="mt-3 rounded-[18px] bg-card p-4">
             <p className="text-[15px] font-semibold">{t.venues?.address ?? "식당이 정해지면 주소를 알려드릴게요"}</p>
-            {resv && <p className="mt-1 text-[13px] text-muted">{resv.status === "CONFIRMED" ? `${CHANNEL_LABEL[resv.channel as Channel]} 예약 확정${resv.external_ref ? ` · ${resv.external_ref}` : ""}${resv.mode === "mock" ? " (시연용 모의 예약이라 실제 식당에는 예약되지 않았어요)" : ""}` : "운영팀이 예약하고 있어요"}</p>}
+            {resv && <p className="mt-1 text-[13px] text-muted">{resv.status === "CONFIRMED" ? `${CHANNEL_LABEL[resv.channel as Channel].replace(/ 예약$/, "")} 예약 확정${resv.external_ref ? ` · ${resv.external_ref}` : ""}${resv.mode === "mock" ? " (시연용 모의 예약)" : ""}` : "운영팀이 예약하고 있어요"}</p>}
             {maps && <MapButtons links={maps} />}
             {(t.reservation_name || t.venues?.price_range) && (
               <dl className="mt-3 space-y-1.5 border-t border-line2 pt-3 text-[14px]">

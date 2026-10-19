@@ -13,3 +13,16 @@ describe("받침·이에요/예요", () => {
     expect(hasBatchim("")).toBe(false);
   });
 });
+
+describe("으로/로, 은/는", () => {
+  it("받침과 ㄹ 받침을 본다", async () => {
+    const { euro, eunNeun } = await import("./korean");
+    expect(euro("고르신 다른 일정")).toBe("고르신 다른 일정으로");
+    expect(euro("가까운 동네(홍대·합정·연남)")).toBe("가까운 동네(홍대·합정·연남)으로");
+    expect(euro("강남·역삼·선릉")).toBe("강남·역삼·선릉으로");
+    expect(euro("서울")).toBe("서울로");
+    expect(euro("다른 테이블")).toBe("다른 테이블로");
+    expect(eunNeun("홍대·합정·연남")).toBe("홍대·합정·연남은");
+    expect(eunNeun("잠실·송파")).toBe("잠실·송파는");
+  });
+});
