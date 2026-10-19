@@ -80,17 +80,8 @@ export function persona(user: { id: string; name: string }, profile: BotProfile 
   return { userId: user.id, name: user.name, first: firstName(user.name), tone, laugh, arrival, interests, job: profile?.job ?? null, warmth, seed };
 }
 
-/** 받침이 있으면 true (한글이 아니면 false) */
-export function hasBatchim(word: string): boolean {
-  const c = word.trim().slice(-1).charCodeAt(0);
-  if (c < 0xac00 || c > 0xd7a3) return false;
-  return (c - 0xac00) % 28 !== 0;
-}
-
-/** 서연 → 서연이에요, 지우 → 지우예요 */
-export function iyeyo(word: string): string {
-  return `${word}${hasBatchim(word) ? "이에요" : "예요"}`;
-}
+export { hasBatchim, iyeyo } from "../korean";
+import { hasBatchim } from "../korean";
 
 /** 이/가, 은/는, 을/를, 이랑/랑, 으로/로 */
 export function josa(word: string, pair: "이가" | "은는" | "을를" | "이랑" | "으로"): string {

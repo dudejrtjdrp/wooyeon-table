@@ -1,3 +1,4 @@
+import { isBot } from "@/lib/sim/persona-id";
 import Link from "next/link";
 import { Badge, Panel, btnLight } from "@/components/admin-ui";
 import { Required } from "@/components/ui";
@@ -93,10 +94,11 @@ export async function PersonSafety({ userId, back, canWrite }: { userId: string;
   const reports = (reps ?? []) as Report[];
   const ids = [...new Set([...relationIds(rel), ...pIds.users, ...reports.flatMap((r) => [r.reporter_id, r.reported_id])])].filter((x) => x !== userId);
   const [{ data: users }, { data: tbs }] = await Promise.all([
-    ids.length ? db().from("users").select("id,name").in("id", ids) : Promise.resolve({ data: [] }),
+    ids.length ? db().from("users").select("id,name,login_id,is_demo").in("id", ids) : Promise.resolve({ data: [] }),
     pIds.tables.length ? db().from("dining_tables").select("id,slots(starts_at,region),venues(name)").in("id", pIds.tables) : Promise.resolve({ data: [] }),
   ]);
-  const names = new Map((users ?? []).map((u) => [u.id, u.name]));
+  // 시연 봇이 남긴 선호는 진짜 회원 것으로 보이지 않게 이름 옆에 표시한다
+  const names = new Map((users ?? []).map((u) => [u.id, isBot(u) ? `${u.name} (시연 봇)` : u.name]));
   const tables = new Map(((tbs ?? []) as unknown as TableInfo[]).map((t) => [t.id, t]));
   const got = reports.filter((r) => r.reported_id === userId);
   const gave = reports.filter((r) => r.reporter_id === userId);

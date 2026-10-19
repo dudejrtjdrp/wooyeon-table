@@ -259,7 +259,16 @@ async function botReviews(tb: Table): Promise<number> {
  * 아직 이 회차에 신청하지 않은 봇을 먼저 쓰고, 모자라면 새로 만든다(시연 패널 '테스트 참가자 만들기'와 같은 모양).
  */
 export async function botsJoin(appId: string): Promise<number> {
-  if (!(await botsOn())) return 0;
+  const out = await botsJoinOnce(appId).catch(async (e) => { await releaseJoinLock(appId); throw e; });
+  // 잠금을 잡은 뒤 아무도 못 붙였으면 잠금을 풀어 다음 결제 알림 때 다시 시도할 수 있게 한다
+  if (out.locked && !out.joined) await releaseJoinLock(appId);
+  return out.joined;
+}
+
+const releaseJoinLock = (appId: string) => db().from("settings").delete().eq("key", `bots-join:${appId}`).then(() => undefined);
+
+async function botsJoinOnce(appId: string): Promise<{ joined: number; locked: boolean }> {
+  if (!(await botsOn())) return { joined: 0, locked: false };
   const { data: raw } = await db()
     .from("applications")
     .select("id,user_id,round_id,payment_status,application_status,users(login_id,is_demo,profiles(birth_year,gender,interests,price_range)),rounds(status),application_slots(slots(id,region,starts_at))")
@@ -272,15 +281,15 @@ export async function botsJoin(appId: string): Promise<number> {
     application_slots: { slots: { id: string; region: string; starts_at: string } | null }[];
   } | null;
   // 시연 계정(is_demo)이 결제했을 때만 붙는다. 실제 회원은 봇과 매칭되지 않는다
-  if (!app || !app.users.is_demo || isBot(app.users) || app.payment_status !== "PAID" || app.application_status === "CANCELED" || app.rounds?.status !== "open") return 0;
+  if (!app || !app.users.is_demo || isBot(app.users) || app.payment_status !== "PAID" || app.application_status === "CANCELED" || app.rounds?.status !== "open") return { joined: 0, locked: false };
   // 같은 결제 완료 알림이 두 번 와도(토스 콜백 중복 등) 한 번만 붙인다: settings 키를 먼저 잡는다
   const { error: lockErr } = await db().from("settings").insert({ key: `bots-join:${app.id}`, value: { at: new Date().toISOString() } });
-  if (lockErr) return 0;
+  if (lockErr) return { joined: 0, locked: false };
   const me = Array.isArray(app.users.profiles) ? app.users.profiles[0] : app.users.profiles;
-  if (!me) return 0;
+  if (!me) return { joined: 0, locked: true };
   const slots = app.application_slots.map((x) => x.slots).filter((s): s is NonNullable<typeof s> => Boolean(s)).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const slot = slots.find((s) => OPEN_REGIONS.includes(s.region)) ?? slots[0];
-  if (!slot) return 0;
+  if (!slot) return { joined: 0, locked: true };
 
   // 이 일정에 이미 결제하고 기다리는 사람 중 나이가 가까운 사람
   const { data: there } = await db()
@@ -296,7 +305,7 @@ export async function botsJoin(appId: string): Promise<number> {
     .filter((o): o is { p: Prof; slots: number } => Boolean(o.p))
     .map((o) => ({ birth_year: o.p.birth_year, gender: o.p.gender, slots: o.slots }));
   const need = botsNeeded(me.birth_year, others);
-  if (!need) return 0;
+  if (!need) return { joined: 0, locked: true };
   const genders: ("M" | "F")[] = [me.gender, ...others.filter((o) => o.slots === 1).map((o) => o.gender)];
 
   // 이 회차에 아직 신청하지 않은 봇
@@ -309,7 +318,7 @@ export async function botsJoin(appId: string): Promise<number> {
   const rel = await loadRelations([app.user_id, ...cands.map((c) => c.userId)]);
   const fresh = cands.filter((c) => { const k = pairKey(app.user_id, c.userId); return !rel.excluded.has(k) && !rel.met.has(k); });
   const picked = chooseBots(me, fresh, need, genders, app.id);
-  const ids = picked.map((c) => c.userId);
+  let ids = picked.map((c) => c.userId);
   for (const c of picked) genders.push(c.profile.gender);
 
   // 모자라면 새로 만든다
@@ -333,7 +342,7 @@ export async function botsJoin(appId: string): Promise<number> {
       ids.push(...rows.map((r) => r.id));
     }
   }
-  if (!ids.length) return 0;
+  if (!ids.length) return { joined: 0, locked: true };
 
   // 1회권 결제 완료로 신청 (시연 패널 테스트 참가자와 같은 모양)
   const expires = new Date(Date.now() + 60 * 86400_000).toISOString();
@@ -342,12 +351,15 @@ export async function botsJoin(appId: string): Promise<number> {
   const paidAt = new Date().toISOString();
   const { data: pays } = await db().from("payments").insert(ids.map((id) => ({ user_id: id, pass_id: passOf.get(id), amount: PASSES.single.amount, pass_type: "single", status: "PAID", paid_at: paidAt }))).select("id,user_id");
   const payOf = new Map((pays ?? []).map((x) => [x.user_id, x.id]));
+  // 결제 행이 없는 PAID 신청은 만들지 않는다
+  ids = ids.filter((id) => payOf.has(id));
+  if (!ids.length) return { joined: 0, locked: true };
   const { data: apps } = await db()
     .from("applications")
     .insert(ids.map((id) => ({ user_id: id, round_id: app.round_id, payment_id: payOf.get(id), application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: paidAt, areas: [slot.region], dates: [kstDay(slot.starts_at)], near_ok: false })))
     .select("id");
   await db().from("application_slots").insert((apps ?? []).map((a) => ({ application_id: a.id, slot_id: slot.id })));
   for (const a of apps ?? []) await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: "DRAFT", to: "SUBMITTED", actor: ACTOR, reason: `시연 봇이 같은 일정에 함께 신청 (${slot.region})` });
-  return apps?.length ?? 0;
+  return { joined: apps?.length ?? 0, locked: true };
 }
 

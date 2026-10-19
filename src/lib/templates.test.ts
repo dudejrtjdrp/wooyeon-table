@@ -59,7 +59,7 @@ describe("알림 템플릿 (G10)", () => {
 
   it("단체방 하루 전 공지: 식당이 없으면 빈 예약명 대신 테이블 화면을 안내한다", () => {
     const base = { ...SAMPLE_VARS, region: "홍대·합정·연남" };
-    expect(render("reminder_chat", { ...base, reservation_line: reservationLine("우연한식탁 2032") }).body).toContain("홍대 둥근식탁에서 만나요. 예약명은 '우연한식탁 2032'이에요.");
+    expect(render("reminder_chat", { ...base, reservation_line: reservationLine("우연한식탁 2032") }).body).toContain("홍대 둥근식탁에서 만나요. 예약명은 '우연한식탁 2032'예요.");
     const none = render("reminder_chat", { ...base, venue: "", reservation: "", reservation_line: reservationLine(null) }).body;
     expect(none).toContain("홍대·합정·연남에서 만나요. 식당과 예약명은 모임 정보에서 확인해 주세요.");
     expect(none).not.toContain("''");
