@@ -10,6 +10,9 @@ import type { ScoreDetail } from "@/lib/matching/types";
 import { DEFAULT_SETTINGS, pairKey } from "@/lib/matching/types";
 import { sidoOf } from "@/lib/regions";
 import { db } from "@/lib/supabase";
+import { matchNowCheck } from "@/lib/admin-manual";
+import { ConfirmButton } from "../confirm-button";
+import { runNowAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +36,8 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
     );
 
   const { data: run } = await db().from("match_runs").select("*").eq("round_id", round.id).maybeSingle();
+  // 매칭 시각 전 '지금 돌리기' (lib/admin-manual-rules.ts canRunMatchNow): 이미 돌았거나 닫힌 회차는 막고, 신청 마감 전이면 확인 문구에 먼저 알린다
+  const runNow = !run ? (await matchNowCheck(round.id)).check : null;
   // 생년 대신 연령대만 보여 준다(개인정보는 필요한 화면에서만). 8살 규칙 확인은 테이블 나이 차로 충분하다
   const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "numeric" }).format(await now()));
   const { data: tablesRaw } = await db()
@@ -106,9 +111,20 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
       </div>
 
       {!run ? (
-        <p className="shadow-card mt-6 rounded-[20px] bg-card p-10 text-center text-muted">
-          아직 매칭 전이에요. {fmtDateTime(round.match_at)}에 자동으로 실행돼요.
-        </p>
+        <div className="shadow-card mt-6 rounded-[20px] bg-card p-10 text-center">
+          <p className="text-muted">
+            {round.status === "closed" ? "닫힌 회차라 매칭이 돌지 않아요." : `아직 매칭 전이에요. ${fmtDateTime(round.match_at)}에 자동으로 실행돼요.`}
+          </p>
+          {runNow && round.status !== "closed" && me.level === "full" && (
+            runNow.ok ? (
+              <form action={runNowAction} className="mt-5">
+                <input type="hidden" name="r" value={round.id} />
+                <ConfirmButton confirm={runNow.confirm} className={btnPrimary}>지금 매칭 돌리기</ConfirmButton>
+                <p className="mt-2 text-[13px] text-muted">{runNow.early ? "아직 신청 마감 전이에요. 지금 돌리면 마감 전 신청자만 들어가요." : "실행 시각을 기다리지 않고 바로 돌려요."} 같은 회차는 한 번만 돌아요.</p>
+              </form>
+            ) : <p className="mt-3 text-[13px] text-muted">지금 돌릴 수 없어요: {runNow.reason}</p>
+          )}
+        </div>
       ) : (
         <details className="shadow-card group mt-6 rounded-[20px] bg-card">
           <summary className="flex cursor-pointer list-none flex-wrap items-center gap-4 p-5">
