@@ -49,7 +49,8 @@ export async function resolveException(form: FormData) {
       const { data: app } = await db().from("applications").select("user_id").eq("id", ex.ref_id).single();
       if (app) {
         const { applyNoShowPolicy } = await import("@/lib/noshow");
-        await applyNoShowPolicy(app.user_id, ex.ref_id, actor);
+        const { now } = await import("@/lib/clock");
+        await applyNoShowPolicy(app.user_id, ex.ref_id, actor, await now());
       }
     }
   } else if (ex.kind === "safety") {
