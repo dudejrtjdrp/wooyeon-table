@@ -32,8 +32,8 @@ export function headline(a: AppRow, t?: Date): { label: string; tone: "muted" | 
       if (a.attendance_status?.startsWith("CANCELED")) return { label: "참석 취소", tone: "muted", desc: "참석을 취소했어요." };
       return { label: "매칭 확정", tone: "leaf", desc: "테이블이 정해졌어요. 단체방에서 만나요." };
     case "ALTERNATIVE_OFFERED":
-      if (a.resolution === "wait") return { label: "자리 기다리는 중", tone: "candle", desc: "고른 일정에 자리가 나면 먼저 여쭤볼게요. 마감까지 자리가 없으면 이용권으로 보관해 드려요." };
-      return { label: "매칭 실패", tone: "candle", desc: "이번에는 테이블을 못 만들었어요. 빈자리에 앉거나, 다른 일정으로 옮기거나, 자리가 나길 기다리거나, 이용권 보관·환불 중에 골라 주세요." };
+      if (a.resolution === "wait") return { label: "자리 기다리는 중", tone: "candle", desc: "고른 일정에 자리가 나면 먼저 여쭤볼게요. 마감까지 자리가 없으면 다음 일정에 쓸 수 있게 정리해 드려요." };
+      return { label: "매칭 실패", tone: "candle", desc: "이번에는 테이블을 못 만들었어요. 다음 방법을 골라 주시면 그대로 처리해 드려요." };
     case "TRANSFERRED":
       return { label: "일정 이동", tone: "muted", desc: "다른 일정으로 옮겼어요." };
     case "NO_MATCH":

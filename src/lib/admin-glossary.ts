@@ -1,0 +1,94 @@
+// 운영자 화면에서 처음 보면 모를 말의 풀이. <Term tip={TIP.회차}>회차</Term> 처럼 처음 나오는 자리에 붙인다.
+// 데이터만 있어서 클라이언트 컴포넌트에서 가져가도 된다
+
+export const TIP = {
+  회차: "한 주 단위로 여는 모임 묶음이에요. 회차마다 신청 마감과 자동 매칭 시각이 있어요.",
+  일정: "회차 안의 날짜·시간·동네 한 칸이에요. 참가자는 일정을 골라 신청해요.",
+  재배치: "인원이나 점수가 모자라 확정되지 못한 테이블의 사람을 다른 테이블로 자동으로 옮기는 일이에요.",
+  대체일정: "매칭에 실패한 사람에게 권하는 다른 회차의 일정이에요. 옮기면 결제는 그대로예요.",
+  노쇼후보: "모임이 끝났는데 체크인 기록이 없는 사람이에요. 운영자가 확인해야 노쇼로 확정돼요.",
+  조건충돌: "나이 차·차단처럼 꼭 지켜야 하는 조건 때문에 자동으로 자리를 찾지 못한 경우예요.",
+  식당부족: "그 일정에 받을 수 있는 식당 테이블이 남지 않아 식당을 배정하지 못한 경우예요.",
+  데이터누락: "신청이나 매칭에 필요한 정보가 비어 자동으로 처리하지 못한 경우예요.",
+  자동확정률: "확정된 테이블 중 운영자가 손대지 않고 자동으로 확정된 비율이에요. 높을수록 좋아요.",
+  개입률: "제출된 신청 대비 운영자가 직접 처리한 예외 건의 비율이에요. 낮을수록 좋아요.",
+  운영시간: "예외가 올라온 뒤 처리될 때까지 걸린 시간의 합이에요. 길면 예외가 오래 방치됐다는 뜻이에요.",
+  가중치: "매칭 점수를 매길 때 항목마다 얼마나 중요하게 볼지 정한 값이에요. 클수록 그 항목이 점수에 크게 들어가요.",
+  최소점수: "테이블 점수가 이 값보다 낮으면 확정하지 않고 다시 꾸려요.",
+  매칭점수: "나이·성비·관심사 같은 항목을 가중치대로 더한 100점 만점 점수예요.",
+  긴급수정: "확정된 테이블에서 사람을 옮기거나, 테이블을 나누고 합치거나, 해제하는 운영자 조작이에요. 사유와 이력이 남아요.",
+  식당재고: "일정마다 식당이 받을 수 있는 테이블 수예요. 자동 배정은 이 수 안에서만 해요.",
+  빈자리제안: "확정된 테이블에 빈자리가 생기면 기다리던 사람에게 차례로 자리를 권하는 알림이에요.",
+  큐레이션: "테이블 사람들의 공통 관심사와 테이블 유형에 맞춰 대화 주제를 골라 주는 일이에요.",
+  아이스브레이킹: "처음 만난 사람끼리 어색함을 푸는 짧은 놀이나 질문이에요.",
+  테이블유형: "첫 참가 위주·재방문 위주, 인원(4인·5~6인), 평균 나이로 나눈 테이블 성격이에요.",
+  이용권: "결제하고 받은 참가 횟수예요. 매칭에 실패하면 보관했다가 다음 일정에 쓸 수 있어요.",
+  예외: "자동으로 풀지 못해 사람이 봐야 하는 일이에요. 예외 처리함에 모여요.",
+  매칭규칙버전: "그때 쓴 매칭 규칙의 이름표예요. 규칙을 고치면 바뀌어서, 어떤 규칙으로 꾸렸는지 나중에 확인할 수 있어요.",
+  단체방: "확정된 테이블 사람들만 들어가는 채팅방이에요. 모임 안내와 대화 주제가 자동으로 올라가요.",
+} as const;
+
+// 자동 메시지 문구에 넣을 수 있는 {값}. 화면에는 {round} 대신 이 풀이와 예시가 보인다
+export const TEMPLATE_VAR: Record<string, string> = {
+  round: "회차 이름",
+  areas: "고른 동네",
+  days: "고른 날짜",
+  cutoff: "환불 마감 시각",
+  deadline: "결제·선택 마감 시각",
+  amount: "금액",
+  match_at: "결과 안내 시각",
+  remaining: "남은 이용권 횟수",
+  date: "모임 날짜",
+  time: "모임 시간",
+  region: "모임 동네",
+  venue: "식당 이름",
+  venue_info: "예약명·지도 안내(식당이 아직이면 언제 알려 주는지)",
+  reservation: "예약명",
+  reservation_line: "예약명 안내 한 줄",
+  reason: "매칭이 안 된 이유",
+  alternatives: "옮길 수 있는 다른 일정",
+  recommendation: "그 사람에게 맞춘 다음 일정 추천",
+  count: "드린 이용권 횟수",
+  until: "쓸 수 있는 기한",
+  extra_days: "늘린 날 수",
+  headline: "공지 제목",
+  message: "공지 내용",
+};
+
+/** 단체방 자동 게시 종류(chat_messages.meta.type) */
+export const CHAT_POST: Record<string, string> = {
+  notice: "모임 안내",
+  reminder: "하루 전 안내",
+  content: "대화 주제",
+  bye: "끝인사",
+  announcement: "운영자 공지",
+};
+
+/** 매칭 처리 기록 속 확정 실패 사유 코드(constraints.ts validateTable) */
+export const VIOLATION: Record<string, string> = {
+  size: "인원 4~6명 아님",
+  slot: "고르지 않은 일정",
+  age: "나이 차 초과",
+  excluded: "차단·신고·비선호",
+  duplicate: "같은 사람 중복",
+};
+
+/** 이력 사유 칸. 자동 처리가 남긴 내부 기록({"key":…} 같은 JSON)은 그대로 보이지 않게, 실패 이유만 꺼내거나 숨긴다 */
+export function reasonText(reason: string | null | undefined): string | null {
+  if (!reason) return null;
+  if (!reason.trimStart().startsWith("{")) return reason;
+  try {
+    const o = JSON.parse(reason) as { error?: unknown; meta?: { type?: unknown } };
+    if (typeof o.error !== "string" || !o.error) return null;
+    // 어느 안내가 실패했는지도 함께 (예: 실패 이유: 시간 초과 (하루 전 안내))
+    const kind = typeof o.meta?.type === "string" ? CHAT_POST[o.meta.type] : undefined;
+    return `실패 이유: ${o.error}${kind ? ` (${kind})` : ""}`;
+  } catch {
+    return null;
+  }
+}
+
+/** 처리 기록 한 줄에 섞인 사유 코드를 한국어로: "(5명, 52점, age,excluded)" → "(5명, 52점, 나이 차 초과·차단·신고·비선호)" */
+export function humanizeMatchLog(line: string): string {
+  return line.replace(/\b(size|slot|age|excluded|duplicate)(?:,(size|slot|age|excluded|duplicate))*\b/g, (m) => m.split(",").map((k) => VIOLATION[k] ?? k).join("·"));
+}

@@ -168,7 +168,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
         </>
       )}
 
-      {me.hasProfile && !owned && !!upcoming.length && (
+      {/* 결제 대기·매칭 실패처럼 지금 할 일이 있는 동안에는 멤버십 홍보로 주 버튼과 경쟁하지 않는다 */}
+      {me.hasProfile && !owned && !!upcoming.length && !(active && (active.match_status === "ALTERNATIVE_OFFERED" || ["PENDING", "FAILED"].includes(active.payment_status))) && (
         <Link href="/rounds" className="mt-6 flex items-center justify-between gap-3 rounded-[18px] bg-accent-soft px-5 py-4 text-accent-text active:opacity-90">
           <span>
             <span className="block text-[13px] text-accent-text">한 달에 네 번 오면 1회권 {won(PASSES.single.amount * 4)}</span>
@@ -263,7 +264,7 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
   const at = confirmed ? 4 : paid ? 3 : 2;
   const dates = (a.dates ?? []).map((d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일`);
   const where = `${dates.length > 1 ? `${dates[0]} 또는 ${dates.slice(1).map((x) => x.replace(/^\d+월 /, "")).join(", ")}` : dates[0] ?? a.rounds.title} · ${areasLabel(a.areas ?? [])}`;
-  const cta = confirmed ? ["테이블 보기", `/tables/${a.table_id}`] : failed ? [a.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["신청 내용 보기", `/applications/${a.id}`];
+  const cta = confirmed ? ["모임 정보 보기", `/tables/${a.table_id}`] : failed ? [a.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["신청 내용 보기", `/applications/${a.id}`];
   const others = members.filter((_, i) => memberIds[i] !== meId);
   return (
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">

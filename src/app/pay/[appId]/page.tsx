@@ -42,8 +42,7 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
         <section className="mt-7 flex gap-4 rounded-[22px] bg-field p-5">
           <div className="min-w-0 flex-1">
             <p className="text-[19px] font-bold tracking-[-0.02em] text-ink">{app.rounds.title}</p>
-            <span className="mt-2 inline-flex rounded-full bg-accent-soft px-3 py-1 text-[13px] font-semibold text-accent">{passDef.label}</span>
-            <p className="mt-5 flex items-center gap-2 text-[14px] text-ink2"><Ticket size={18} className="text-muted" />이용권 · {passDef.label}</p>
+            <p className="mt-4 flex items-center gap-2 text-[14px] text-ink2"><Ticket size={18} className="text-muted" />이용권 · {passDef.label}</p>
             <p className="mt-2.5 flex items-start gap-2 text-[13px] leading-snug text-ink2"><Clock3 size={18} className="shrink-0 text-muted" />{fmtSlot(app.rounds.match_at)}에 자동으로 테이블을 꾸려 알려 드려요</p>
           </div>
         </section>

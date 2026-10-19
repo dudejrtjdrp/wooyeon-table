@@ -241,7 +241,7 @@ export async function afterConfirm(tableId: string) {
   const tpl = await loadTemplates();
   const { data: vn } = t.venue_id ? await db().from("venues").select("name").eq("id", t.venue_id).maybeSingle() : { data: null };
   // 문구는 보낼 때 최신 식당·예약명으로 다시 만든다(tick → freshReminder). 여기서는 자리만 잡아 둔다
-  const rm = render("reminder", { ...slotVars(t.slots.starts_at), region: t.slots.region, venue: vn?.name ?? "식당은 테이블 화면에서", reservation: t.reservation_name ?? "" }, tpl);
+  const rm = render("reminder", { ...slotVars(t.slots.starts_at), region: t.slots.region, venue: vn?.name ?? "식당은 모임 정보에서", reservation: t.reservation_name ?? "" }, tpl);
   for (const m of ms) {
     await notify({
       userId: m.user_id,
@@ -585,7 +585,7 @@ export async function freshReminder(notificationId: string, key: string, tpl: Aw
   const { data } = await db().from("dining_tables").select("id,status,reservation_name,slots(starts_at,region),venues(name)").eq("id", app.table_id).maybeSingle();
   const tb = data as unknown as { id: string; status: string; reservation_name: string | null; slots: { starts_at: string; region: string }; venues: { name: string } | null } | null;
   if (!tb || tb.status === "DISSOLVED") return null;
-  const m = render("reminder", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "식당은 테이블 화면에서", reservation: tb.reservation_name ?? "" }, tpl);
+  const m = render("reminder", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "식당은 모임 정보에서", reservation: tb.reservation_name ?? "" }, tpl);
   return { title: m.title, body: m.body, link: `/tables/${tb.id}` };
 }
 

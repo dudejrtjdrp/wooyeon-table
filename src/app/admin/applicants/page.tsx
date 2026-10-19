@@ -1,6 +1,7 @@
 import { Download } from "lucide-react";
 import Link from "next/link";
-import { Badge, PageHeader, btn, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Term, btn, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { TIP } from "@/lib/admin-glossary";
 import { ATTEND_NONE, type ApplicantHistory, HISTORY, MATCH_EXTRA, applicantFiltered, applicantSearch, parseApplicantFilter } from "@/lib/applicant-filter";
 import { type ApplicantRow, loadApplicants } from "@/lib/applicant-query";
 import { requireAdmin } from "@/lib/auth";
@@ -31,7 +32,8 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
     <div>
       <PageHeader
         title="신청자·결제"
-        desc="이름을 누르면 그 사람의 상태 이력, 받은 알림, 참가 기록을 한 화면에서 볼 수 있어요. 목록에는 연령대만 보이고, 연락처는 상세 화면에서 가려서 보여요."
+        desc={<>한 <Term tip={TIP.회차}>회차</Term>의 신청자를 봐요. 목록에는 연령대만 보이고, 연락처는 상세 화면에서 가려서 보여요.</>}
+        how={["회차와 조건을 고르고 '거르기'", "이름을 눌러 상태 이력·받은 알림·참가 기록 보기", "필요하면 거른 목록을 CSV로 내려받기"]}
         actions={round && <a href={`/api/admin/export${applicantSearch(here)}`} className={btnLight} download><Download size={18} />{filtered ? "거른 목록 CSV" : "CSV 내려받기"}</a>}
       />
       <form className="shadow-card mt-6 grid gap-3 rounded-[20px] bg-card p-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -109,13 +111,13 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
                   <td className={td}><Badge v={label(PAYMENT, a.payment_status)} /></td>
                   <td className={td}>
                     {a.application_status === "CANCELED" ? <Badge v={["신청 취소", "muted"]} /> : <Badge v={label(MATCH, a.match_status)} />}
-                    {a.realloc_count > 0 && <span className="ml-1.5 text-[12px] text-muted">재배치 {a.realloc_count}</span>}
-                    {a.resolution && <span className="ml-1.5 text-[12px] text-muted">{RESOLUTION[a.resolution] ?? a.resolution}</span>}
+                    {a.realloc_count > 0 && <span className="ml-1.5 text-[12px] text-muted">재배치 {a.realloc_count}번</span>}
+                    {a.resolution && RESOLUTION[a.resolution] && <span className="ml-1.5 text-[12px] text-muted">{RESOLUTION[a.resolution]}</span>}
                   </td>
                   <td className={td}>{a.attendance_status ? <Badge v={label(ATTEND, a.attendance_status)} /> : <span className="text-muted">-</span>}</td>
                   <td className={`${td} tabular-nums`}>
                     {h.attended ? `${h.attended}번` : <span className="text-muted">{h.noShows ? "0번" : "처음"}</span>}
-                    {h.noShows > 0 && <span className="ml-1.5"><Badge v={[`노쇼 ${h.noShows}`, "danger"]} /></span>}
+                    {h.noShows > 0 && <span className="ml-1.5"><Badge v={[`노쇼 ${h.noShows}번`, "danger"]} /></span>}
                   </td>
                   <td className={td}>{h.reports ? <Badge v={[`${h.reports}건`, "danger"]} /> : <span className="text-muted">-</span>}</td>
                   <td className={`${td} text-muted`}>{a.submitted_at ? fmtDateTime(a.submitted_at) : "-"}</td>

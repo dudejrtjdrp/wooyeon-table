@@ -29,7 +29,7 @@ describe("알림 템플릿 (G10)", () => {
     }
   });
 
-  it("확정 알림은 한 줄로 날짜·시각·동네·식당만 쓴다 (자세한 건 눌러서 테이블 화면에서)", () => {
+  it("확정 알림은 한 줄로 날짜·시각·동네·식당만 쓴다 (자세한 건 눌러서 모임 정보에서)", () => {
     const iso = "2026-11-06T10:30:00Z";
     expect(render("confirmed", { ...slotVars(iso), region: "홍대·합정·연남", venue: "홍대 둥근식탁" }).body).toBe("11월 6일(금) 저녁 7:30 · 홍대·합정·연남 홍대 둥근식탁");
     expect(render("confirmed", { ...slotVars(iso), region: "홍대·합정·연남", venue: "" }).body).toBe("11월 6일(금) 저녁 7:30 · 홍대·합정·연남");
@@ -51,9 +51,9 @@ describe("알림 템플릿 (G10)", () => {
     expect(render("feedback", SAMPLE_VARS).body).toContain("후기");
   });
 
-  it("하루 전 푸시에 시각·식당·예약명이 들어가고(INF-07), 식당이 없으면 테이블 화면으로 안내한다", () => {
+  it("하루 전 푸시에 시각·식당·예약명이 들어가고(INF-07), 식당이 없으면 모임 정보로 안내한다", () => {
     expect(render("reminder", SAMPLE_VARS).body).toBe("저녁 7:30 · 홍대 둥근식탁 · 예약명 '우연한식탁 2032'");
-    expect(render("reminder", { ...SAMPLE_VARS, venue: "식당은 테이블 화면에서", reservation: "" }).body).toBe("저녁 7:30 · 식당은 테이블 화면에서");
+    expect(render("reminder", { ...SAMPLE_VARS, venue: "식당은 모임 정보에서", reservation: "" }).body).toBe("저녁 7:30 · 식당은 모임 정보에서");
     expect(render("reminder", SAMPLE_VARS).title).toContain("당일 취소");
   });
 
@@ -61,7 +61,7 @@ describe("알림 템플릿 (G10)", () => {
     const base = { ...SAMPLE_VARS, region: "홍대·합정·연남" };
     expect(render("reminder_chat", { ...base, reservation_line: reservationLine("우연한식탁 2032") }).body).toContain("홍대 둥근식탁에서 만나요. 예약명은 '우연한식탁 2032'이에요.");
     const none = render("reminder_chat", { ...base, venue: "", reservation: "", reservation_line: reservationLine(null) }).body;
-    expect(none).toContain("홍대·합정·연남에서 만나요. 식당과 예약명은 테이블 화면에서 확인해 주세요.");
+    expect(none).toContain("홍대·합정·연남에서 만나요. 식당과 예약명은 모임 정보에서 확인해 주세요.");
     expect(none).not.toContain("''");
   });
 });

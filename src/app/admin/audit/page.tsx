@@ -1,6 +1,7 @@
 import { Download } from "lucide-react";
+import { reasonText } from "@/lib/admin-glossary";
 import Link from "next/link";
-import { PageHeader, btn, btnLight, ctl, td, th } from "@/components/admin-ui";
+import { PageHeader, Term, btn, btnLight, ctl, td, th } from "@/components/admin-ui";
 import { AUDIT_KINDS, AUDIT_PAGE_SIZE, auditChange, auditSearch, auditTarget, maskText, parseAuditFilter, parseTemplateValue, parseWeightsValue, templateValue } from "@/lib/audit";
 import { auditContext, currentWeightsValue, loadAudit, templateLabel } from "@/lib/audit-query";
 import { requireAdmin } from "@/lib/auth";
@@ -34,6 +35,7 @@ export default async function Audit({ searchParams }: { searchParams: Promise<Re
       <PageHeader
         title="변경 이력"
         desc="누가 언제 무엇을 바꿨는지 한곳에서 봐요. 운영자가 바꾼 것뿐 아니라 자동 처리와 참가자가 바꾼 것도 남아요."
+        how={["대상·누가·기간으로 거르기", "대상 이름을 눌러 그 화면으로 가기", "매칭 기준·자동 메시지 문구는 줄 안의 버튼으로 되돌리기"]}
         actions={
           <a href={`/api/admin/audit${auditSearch(f, 1)}`} className={btnLight} download>
             <Download size={16} />CSV 내려받기
@@ -105,7 +107,7 @@ export default async function Audit({ searchParams }: { searchParams: Promise<Re
                     <td className={`${td} whitespace-nowrap`}>{actorLabel(e.actor, adminNames)}</td>
                     <td className={td}>
                       <span className="block text-[12px] text-muted">{t.kind}</span>
-                      {t.href ? <Link href={t.href} className="font-semibold text-accent underline-offset-4 hover:underline">{t.name}</Link> : <span className="font-semibold text-ink">{t.name}</span>}
+                      {t.href ? <Link href={t.href} className="font-semibold text-accent underline-offset-4 hover:underline">{t.name}</Link> : <span className="font-semibold text-ink">{t.name.startsWith("#") ? <Term tip="이름이 없는 기록이라 기록 번호 앞 여섯 자리로 보여 줘요.">{t.name}</Term> : t.name}</span>}
                     </td>
                     <td className={`${td} max-w-[380px] break-words text-ink`}>
                       {maskText(auditChange(e, templateLabel))}
@@ -130,7 +132,7 @@ export default async function Audit({ searchParams }: { searchParams: Promise<Re
                         </div>
                       )}
                     </td>
-                    <td className={`${td} max-w-[280px] break-words text-muted`}>{e.reason ? maskText(e.reason) : "-"}</td>
+                    <td className={`${td} max-w-[280px] break-words text-muted`}>{reasonText(e.reason) ? maskText(reasonText(e.reason)!) : "-"}</td>
                   </tr>
                 );
               })}

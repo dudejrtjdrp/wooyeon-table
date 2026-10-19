@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { afterMeetingNote, canClaimAttended } from "@/lib/attendance-rules";
+import { now } from "@/lib/clock";
 import { redirect } from "next/navigation";
 import { ChevronDown, Lock } from "lucide-react";
 import { ConfirmSubmit, CountedTextarea, ErrorText, Optional, PageTitle, PrimaryButton, Required, Screen, SectionCard, StarRating, inputCls } from "@/components/ui";
@@ -11,8 +14,19 @@ export default async function Feedback({ params, searchParams }: { params: Promi
   const me = await requireMe();
   const { id } = await params;
   const { e } = await searchParams;
-  const { data: mine } = await db().from("applications").select("id").eq("table_id", id).eq("user_id", me.id).maybeSingle();
+  const { data: mine } = await db().from("applications").select("id,attendance_status").eq("table_id", id).eq("user_id", me.id).maybeSingle();
   if (!mine) redirect("/");
+  // 후기는 체크인한(참석한) 사람만 남길 수 있다: 폼을 다 채운 뒤 막히지 않게 먼저 알려 준다 (안내 문장은 신청 상세와 같다).
+  // 막는 건 후기 폼뿐이다. 아래 신고하기는 참석 여부와 상관없이 늘 열려 있어야 한다(단체방 '신고하기'가 여기로 온다)
+  const blocked = mine.attendance_status !== "ATTENDED";
+  let note: { text: string; contact: boolean } | null = null;
+  if (blocked) {
+    const { data: tb } = await db().from("dining_tables").select("status,slots(ends_at)").eq("id", id).maybeSingle();
+    const tt = tb as unknown as { status: string; slots: { ends_at: string } } | null;
+    const ended = tt?.status === "DONE";
+    const claimed = Boolean((await db().from("status_events").select("id").eq("entity_id", mine.id).eq("field", "attendance_claim").limit(1)).data?.length);
+    note = ended && tt ? afterMeetingNote({ attended: false, canClaim: canClaimAttended(mine.attendance_status, new Date(tt.slots.ends_at), await now()), claimed, status: mine.attendance_status }) : null;
+  }
   const { data: fb } = await db().from("feedbacks").select("*").eq("application_id", mine.id).maybeSingle();
   const { data: othersRaw } = await db().from("applications").select("user_id,users(name,profiles(job))").eq("table_id", id).neq("user_id", me.id);
   const others = (othersRaw ?? []) as unknown as { user_id: string; users: { name: string; profiles: { job: string | null } | null } }[];
@@ -23,6 +37,20 @@ export default async function Feedback({ params, searchParams }: { params: Promi
   const ta = "w-full resize-none rounded-[14px] border border-line bg-field px-4 pt-3.5 text-[16px] text-ink outline-none placeholder:text-faint focus:border-accent focus:bg-card";
   return (
     <Screen title="모임 후기" back={`/tables/${id}`}>
+      {blocked ? (
+        <>
+          <PageTitle className="mt-4" title="후기는 참석한 분만" accent="남길 수 있어요" sub={note ? note.text : "모임이 끝나면 체크인한 분이 후기를 남길 수 있어요."} />
+          <p className="mt-4 text-[13px] text-muted">불편한 일이 있었다면 참석 여부와 상관없이 아래에서 신고할 수 있어요.</p>
+          <div className="mt-6 flex flex-col gap-2">
+            {note?.contact ? (
+              <Link href="/help" className="flex h-[52px] items-center justify-center rounded-[14px] bg-accent text-[16px] font-extrabold text-white">문의하기</Link>
+            ) : (
+              <Link href={`/tables/${id}`} className="flex h-[52px] items-center justify-center rounded-[14px] bg-accent text-[16px] font-extrabold text-white">모임 정보 보기</Link>
+            )}
+          </div>
+        </>
+      ) : (
+      <>
       <PageTitle className="mt-4" title="함께한 저녁," accent="어떠셨나요?" sub="남겨 주신 점수와 선택은 다음 테이블을 꾸릴 때 바로 반영돼요." />
       <p className="mt-5 flex items-center gap-2.5 rounded-[14px] bg-field px-4 py-3.5 text-[14px] text-ink2"><Lock size={17} className="shrink-0 text-accent" />다른 참가자에게는 보이지 않아요.</p>
 
@@ -67,6 +95,8 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           <div className="mt-4"><PrimaryButton type="submit" pendingText="보내는 중">후기 보내기</PrimaryButton></div>
         </SectionCard>
       </form>
+      </>
+      )}
 
       <section id="report" className="mt-10 scroll-mt-16 border-t border-line pt-8">
         <h2 className="text-[20px] font-extrabold text-ink">불편한 일이 있었나요?</h2>

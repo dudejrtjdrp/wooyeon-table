@@ -29,8 +29,8 @@ export function WeightsForm({ keys, labels, initial, min, defaults, defaultMin, 
           <p className="mt-1 text-[14px] text-muted">매칭 때 각 항목을 얼마나 중요하게 볼지 정해요. 합이 100점이 되도록 맞추면 읽기 쉬워요.</p>
           <ul className="mt-4 divide-y divide-line">
             {keys.map((k) => (
-              <li key={k} className="flex items-center gap-5 py-4">
-                <div className="w-48 shrink-0">
+              <li key={k} className="flex flex-wrap items-center gap-x-5 gap-y-2 py-4 sm:flex-nowrap">
+                <div className="w-full sm:w-48 sm:shrink-0">
                   <p className="text-[17px] font-bold text-ink">{labels[k]}{badge}</p>
                   <p className="mt-0.5 text-[13px] text-muted">{DESC[k]} <span className="whitespace-nowrap">(기본 {defaults[k] ?? 0}점)</span></p>
                 </div>

@@ -438,12 +438,12 @@ function XIcon() {
   );
 }
 
-/** 선택 줄 (A2 패턴): 높이 58, radius 16, 고르면 연초록 배경 + 초록 원형 체크 */
+/** 선택 줄 (A2 패턴): 높이 58, radius 16. 안 고르면 빈 원, 고르면 연한 배경 + 채운 원형 체크 */
 export function ChoiceRow({ name, value, label, sub, type = "checkbox", defaultChecked, right }: { name: string; value: string; label: ReactNode; sub?: ReactNode; type?: "checkbox" | "radio"; defaultChecked?: boolean; right?: ReactNode }) {
   return (
     <label className="block cursor-pointer">
       <input type={type} name={name} value={value} defaultChecked={defaultChecked} className="peer sr-only" />
-      <span className="flex min-h-[58px] items-center gap-3 rounded-[16px] bg-row px-[18px] py-3 text-[16px] text-ink2 transition peer-checked:bg-accent-soft peer-checked:font-extrabold peer-checked:text-accent-text peer-focus-visible:ring-2 peer-focus-visible:ring-accent [&_.ck]:bg-dot peer-checked:[&_.ck]:bg-accent">
+      <span className="flex min-h-[58px] items-center gap-3 rounded-[16px] bg-row px-[18px] py-3 text-[16px] text-ink2 transition peer-checked:bg-accent-soft peer-checked:font-extrabold peer-checked:text-accent-text peer-focus-visible:ring-2 peer-focus-visible:ring-accent [&_.ck]:border-2 [&_.ck]:border-box [&_.ck]:bg-card [&_.ck_svg]:opacity-0 peer-checked:[&_.ck]:border-0 peer-checked:[&_.ck]:bg-accent peer-checked:[&_.ck_svg]:opacity-100">
         <span className="min-w-0 flex-1">
           <span className="block">{label}</span>
           {sub && <span className="mt-0.5 block text-[13px] font-normal text-muted">{sub}</span>}

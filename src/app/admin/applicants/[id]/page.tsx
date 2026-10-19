@@ -1,4 +1,5 @@
 import { CalendarDays, Check, ChevronRight, PartyPopper } from "lucide-react";
+import { reasonText } from "@/lib/admin-glossary";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -111,7 +112,7 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
                   <span className="text-muted">{actorLabel(e.actor, adminName)}</span>
                   <span className="text-ink">
                     {eventText(e)}
-                    {e.reason && <span className="block text-[12px] text-muted">{e.reason}</span>}
+                    {reasonText(e.reason) && <span className="block text-[12px] text-muted">{reasonText(e.reason)}</span>}
                   </span>
                 </li>
               ))}

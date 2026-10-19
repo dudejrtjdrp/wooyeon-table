@@ -59,6 +59,9 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const done = t.status === "DONE";
   // 갔는데 체크인을 못 한 사람이 끝난 뒤 48시간 안에 알릴 수 있게
   const missedCheckIn = canClaimAttended(mine?.attendance_status, end, n);
+  // 이미 후기를 남겼으면 버튼을 '남긴 후기 고치기'로 (후기 화면은 이전 값을 채워 연다)
+  const { data: fbMine } = mine && mine.attendance_status === "ATTENDED" && done ? await db().from("feedbacks").select("application_id").eq("application_id", mine.id).maybeSingle() : { data: null };
+  const reviewedMine = !!fbMine;
   const claimed = missedCheckIn
     ? Boolean((await db().from("status_events").select("id").eq("entity_id", mine!.id).eq("field", "attendance_claim").limit(1)).data?.length)
     : false;
@@ -75,7 +78,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const myFood = mine?.users.profiles?.food_restrictions;
   const twoDays = n >= refundCutoff(t.slots.starts_at);
 
-  const status = done ? "모임 끝" : t.status === "IN_PROGRESS" ? "모임 중" : "매칭 확정";
+  const status = done ? "지난 모임" : t.status === "IN_PROGRESS" ? "모임 중" : "매칭 확정";
   const others = mems.filter((m) => m.user_id !== me.id);
   const preview = others.slice(0, 2);
   const interestsOf = (m: (typeof mems)[number]) => (m.users.profiles?.interests ?? []).filter((x) => shared.includes(x)).slice(0, 2);
@@ -216,7 +219,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
               <PrimaryButton pendingText="체크인하는 중">도착했어요, 체크인</PrimaryButton>
             </form>
           ) : mine?.attendance_status === "ATTENDED" && done ? (
-            <LinkButton href={`/tables/${id}/feedback`}>오늘 모임 후기 남기기</LinkButton>
+            <LinkButton href={`/tables/${id}/feedback`}>{reviewedMine ? "남긴 후기 고치기" : "모임 후기 남기기"}</LinkButton>
           ) : missedCheckIn ? (
             <>
               <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
@@ -236,6 +239,13 @@ export default async function TablePage({ params, searchParams }: { params: Prom
           ) : (
             <>
               {!done && <p className="mb-2.5 text-center text-[12px] text-muted">당일 취소는 안 되고, 연락 없이 오지 않으면 노쇼로 기록돼요.</p>}
+              {/* 체크인 기록 없이 알릴 수 있는 기한(48시간)도 지난 경우: 왜 후기를 못 남기는지와 물을 곳 */}
+              {done && mine && mine.attendance_status !== "ATTENDED" && (
+                <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
+                  체크인 기록이 없어 후기를 남길 수 없어요. 참석했다면{" "}
+                  <Link href="/help" className="-my-3 inline-block py-3 font-bold text-accent underline underline-offset-4">문의하기</Link>로 알려 주세요.
+                </p>
+              )}
               <LinkButton href={`/tables/${id}/chat`}>{done ? "단체방 다시 보기" : "단체방 들어가기"}</LinkButton>
             </>
           )}

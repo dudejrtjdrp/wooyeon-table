@@ -12,7 +12,8 @@
   --faint: #6b5f55;      /* 흐린 글: 4.5:1 아래로 내리지 않음 */
   --line: #e2d8cb;       /* 구분선 */
   --line2: #efe7dc;
-  --dot: #d9cdbe;        /* 고르지 않은 체크 */
+  --dot: #d9cdbe;        /* 옅은 점·장식 */
+  --box: #8c7e70;        /* 고르지 않은 체크칸 테두리 (빈 칸, 바탕 3.5:1) */
   --ribbon: #e0532a;    /* 로고 리본(다홍): 첫 장면·앱 아이콘 */
   --accent: #b23d17;     /* 브랜드 주홍 (바탕 5.1:1, 흰 글자 5.8:1) */
   --accent2: #8e2f10;    /* 브랜드 보조(진한 주홍) */
@@ -56,6 +57,9 @@ body:has(.admin-theme) { background: #ffffff; }
   --color-accent: var(--accent);
   --color-accent2: var(--accent2);
   --color-accent-text: var(--accent-text);
+  /* 빠져 있어서 text-accent-ink가 검은 글자로 나오던 문제(주홍 버튼 위 대비 부족) */
+  --color-accent-ink: var(--accent-ink);
+  --color-box: var(--box);
   --color-on-accent: var(--on-accent);
   --color-leaf: var(--leaf);
   --color-card: var(--card);
@@ -131,3 +135,11 @@ html[data-splash="off"] #splash { display: none; }
   .splash { animation: splash-out .2s ease-in .6s forwards; }
   .wm-ribbon, .wm-pop, .wm-rise, .splash-tag { animation: none; opacity: 1; stroke-dashoffset: 0; }
 }
+
+/* 어드민: 그리드·플렉스 칸이 안의 넓은 표 때문에 늘어나 좁은 화면에서 가로로 밀리지 않게.
+   표는 각자 overflow-x-auto 상자 안에서만 옆으로 넘긴다 */
+.admin-main .grid > *,
+.admin-main .flex > section,
+.admin-main section { min-width: 0; }
+/* 가로 스크롤 상자를 기준 상자로: 안의 sr-only(absolute) 글자가 상자를 벗어나 문서 폭을 늘리지 않게 */
+.admin-main .overflow-x-auto { position: relative; }

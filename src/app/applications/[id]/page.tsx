@@ -9,6 +9,7 @@ import { fmtSlot } from "@/lib/format";
 import { headline } from "@/lib/status";
 import { db } from "@/lib/supabase";
 import { cancelRule, wasReallocatedTo } from "@/lib/attendance";
+import { afterMeetingNote, canClaimAttended } from "@/lib/attendance-rules";
 import { REFUND_POLICY, isMembership, won } from "@/lib/constants";
 import { Toast } from "@/components/ui";
 import { OfferBanner } from "@/components/offer-banner";
@@ -29,7 +30,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const { data } = await db()
     .from("applications")
     .select(
-      "id,user_id,application_status,payment_status,match_status,attendance_status,resolution,match_reason,realloc_count,table_id,submitted_at,payments(paid_at,amount,pass_type),dining_tables(slots(starts_at))," +
+      "id,user_id,application_status,payment_status,match_status,attendance_status,resolution,match_reason,realloc_count,table_id,submitted_at,payments(paid_at,amount,pass_type),dining_tables(slots(starts_at,ends_at))," +
         "rounds(id,title,match_at,apply_deadline),application_slots(slots(id,region,starts_at))",
     )
     .eq("id", id)
@@ -38,14 +39,23 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     id: string; user_id: string; application_status: string; payment_status: string; match_status: string;
     attendance_status: string | null; resolution: string | null; match_reason: string | null; realloc_count: number; table_id: string | null; submitted_at: string | null;
     payments: { paid_at: string | null; amount: number; pass_type: string } | null;
-    dining_tables: { slots: { starts_at: string } } | null;
+    dining_tables: { slots: { starts_at: string; ends_at: string } } | null;
     rounds: { id: string; title: string; match_at: string; apply_deadline: string };
     application_slots: { slots: Slot }[];
   } | null;
   if (!app || app.user_id !== me.id) redirect(`/?m=${encodeURIComponent("이 신청을 찾지 못했어요. 내 신청은 일정 탭에서 볼 수 있어요")}`);
 
   const t = await now();
-  const h = headline(app, t);
+  const h0 = headline(app, t);
+  // 끝난 모임(시작 3시간 뒤)인데 아직 참석 예정이면 단체방 탭·테이블 화면과 같은 이름 '지난 모임'으로
+  const endedAt = app.dining_tables ? new Date(app.dining_tables.slots.starts_at).getTime() + 3 * 3600_000 : null;
+  const ended = app.match_status === "CONFIRMED" && app.attendance_status === "SCHEDULED" && endedAt !== null && endedAt <= t.getTime();
+  // 체크인 없이 끝난 모임: 알릴 수 있는 기한·이미 알렸는지에 따라 할 수 있는 일만 안내 (모임 정보·후기 화면과 같은 문장)
+  const claimed = ended ? Boolean((await db().from("status_events").select("id").eq("entity_id", app.id).eq("field", "attendance_claim").limit(1)).data?.length) : false;
+  const afterNote = ended ? afterMeetingNote({ attended: false, canClaim: canClaimAttended(app.attendance_status, new Date(app.dining_tables!.slots.ends_at), t), claimed, status: app.attendance_status }) : null;
+  const h = ended && afterNote
+    ? { ...h0, label: "지난 모임", tone: "muted" as const, desc: afterNote.text }
+    : h0;
   const slots = app.application_slots.map((x) => x.slots).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const paid = !["PENDING", "FAILED"].includes(app.payment_status);
   const matched = app.match_status === "CONFIRMED";
@@ -54,10 +64,16 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const steps = [
     { label: "신청", done: true, when: app.submitted_at ? fmtSlot(app.submitted_at) : "", note: "신청이 완료됐어요." },
     { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : new Date(app.rounds.match_at) <= t ? "결제 전에 마감됐어요. 빠져나간 돈은 없어요." : "결제를 마쳐야 매칭에 들어가요." },
-    { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: "신청 인원을 모아 테이블을 꾸려요." },
-    { label: "테이블 확정 · 안내", done: matched, when: "", note: "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
-    { label: "모임", done: app.attendance_status === "ATTENDED", when: "", note: "정해진 식당에서 저녁을 함께 먹어요." },
+    { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: matchDone ? "신청 인원을 모아 테이블을 꾸렸어요." : "신청 인원을 모아 테이블을 꾸려요." },
+    { label: "테이블 확정 · 안내", done: matched, when: "", note: matched ? "식당과 함께 앉을 분들을 알려 드렸어요." : "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
+    { label: "모임", done: app.attendance_status === "ATTENDED" || ended, when: "", note: app.attendance_status === "ATTENDED" ? "함께 저녁을 먹었어요." : ended ? "모임이 끝났어요." : "정해진 식당에서 저녁을 함께 먹어요." },
   ];
+  // 매칭 실패면 '테이블 확정' 단계가 아직 올 것처럼 보이지 않게, 그 자리에서 실패와 다음 할 일을 말한다
+  if (app.match_status === "ALTERNATIVE_OFFERED") {
+    steps[3] = app.resolution === "wait"
+      ? { label: "자리 기다리는 중", done: false, when: "", note: "고른 일정에 자리가 나면 먼저 여쭤볼게요." }
+      : { label: "매칭 실패 · 다음 방법 고르기", done: false, when: "", note: "다른 일정으로 옮기거나 보관·환불을 골라 주세요." };
+  }
   // 취소된 신청은 진행 단계를 이어 보여 주지 않는다: 마친 단계까지 두고 '취소됨'으로 끝낸다
   const canceledApp = app.application_status === "CANCELED" || !!app.attendance_status?.startsWith("CANCELED");
   if (canceledApp) {
@@ -75,7 +91,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     : unpaid
     ? ["결제 이어서 하기", `/pay/${app.id}`]
     : matched && app.table_id
-      ? ["테이블과 단체방 보기", `/tables/${app.table_id}`]
+      ? ["모임 정보 보기", `/tables/${app.table_id}`]
       : app.match_status === "ALTERNATIVE_OFFERED"
         ? [app.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${app.id}/resolve`]
         : null;
@@ -103,10 +119,13 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         <div className="relative p-6">
           <Pill tone={h.tone}>{h.label}</Pill>
           <p className="mt-4 max-w-[62%] text-[22px] font-bold leading-[1.35] text-ink">{app.rounds.title}</p>
-          <p className="mt-3 text-[15px] leading-relaxed text-ink2">{payClosed ? "결제 전에 매칭 시각이 지나 이번 테이블에는 들어가지 못했어요. 빠져나간 돈은 없어요." : app.match_reason ?? h.desc}</p>
+          <p className="mt-3 max-w-[62%] text-[15px] leading-relaxed text-ink2">{payClosed ? "결제 전에 매칭 시각이 지나 이번 테이블에는 들어가지 못했어요. 빠져나간 돈은 없어요." : ended ? h.desc : app.match_reason ?? h.desc}</p>
           {money && <p className="mt-3 inline-flex rounded-full bg-paper px-3 py-1.5 text-[14px] font-bold text-ink">{money}</p>}
           {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH" || app.attendance_status?.startsWith("CANCELED")) && (
             <Link href="/rounds" className="mt-4 flex h-12 w-fit items-center rounded-[14px] bg-accent px-5 text-[15px] font-bold text-white">다른 일정 보기</Link>
+          )}
+          {afterNote?.contact && (
+            <Link href="/help" className="mt-2 inline-flex h-11 items-center text-[14px] font-semibold text-accent underline underline-offset-4">문의하기</Link>
           )}
           {/* 운영팀이 취소했거나 회차가 취소된 신청은 이유를 물을 곳을 바로 둔다 */}
           {app.match_reason && (app.application_status === "CANCELED" || app.attendance_status?.startsWith("CANCELED")) && (
@@ -179,9 +198,12 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         const remind = new Date(new Date(start).getTime() - 24 * 3600_000);
         return (
           <>
-            <p className="mt-3 rounded-[20px] bg-accent-soft px-4 py-3.5 text-[14px] text-accent">
-              다음 안내: {fmtSlot(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
-            </p>
+            {/* 하루 전 안내 시각이 지났으면 '다음 안내'를 보여 주지 않는다 */}
+            {remind > t && (
+              <p className="mt-3 rounded-[20px] bg-accent-soft px-4 py-3.5 text-[14px] text-accent">
+                다음 안내: {fmtSlot(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
+              </p>
+            )}
             {rule.kind !== "blocked" && (
               <div className="mt-6 text-center">
                 <ConfirmSheet

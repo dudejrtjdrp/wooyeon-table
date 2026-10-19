@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { reasonText } from "@/lib/admin-glossary";
 import { notFound } from "next/navigation";
 import { ImageOff } from "lucide-react";
 import { Badge, PageHeader, Panel, btnLight } from "@/components/admin-ui";
@@ -70,14 +71,14 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
               ))}
               {!rows.length && <li className="text-muted">잡힌 일정이 없어요.</li>}
             </ul>
-            <p className="mt-3 text-[13px] text-muted">테이블 수는 <Link href="/admin/rounds" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>에서 바꿔요.</p>
+            <p className="mt-3 text-[13px] text-muted">테이블 수는 <Link href="/admin/rounds?tab=stock" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>에서 바꿔요.</p>
           </Panel>
           <Panel title="처리 이력">
             <ul className="space-y-2 text-[13px]">
               {(events ?? []).map((e) => (
                 <li key={e.id}>
                   <span className="text-muted">{fmtDateTime(e.created_at)} · {actorLabel(e.actor, adminName)}</span>
-                  {e.reason && <span className="block text-ink">{e.reason}</span>}
+                  {reasonText(e.reason) && <span className="block text-ink">{reasonText(e.reason)}</span>}
                   {e.from_value && ["edit", "import"].includes(e.field) && <span className="block break-words text-[12px] text-muted">{e.from_value} → {e.to_value}</span>}
                 </li>
               ))}

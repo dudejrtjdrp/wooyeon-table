@@ -292,7 +292,7 @@ export function auditTarget(e: Pick<AuditEvent, "entity_type" | "entity_id" | "f
     case "content":
       return { kind: "대화 콘텐츠", name: short, href: "/admin/contents" };
     case "region_demand":
-      return { kind: "지역 수요", name: short, href: "/admin/demand" };
+      return { kind: "새 동네 요청", name: short, href: "/admin/demand" };
     case "exception":
       return { kind: "예외", name: short, href: "/admin/exceptions" };
     case "match_run":

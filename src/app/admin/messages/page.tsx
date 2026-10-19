@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Badge, PageHeader, Panel, Stat, btnLight, btnPrimary, ctl, td, th } from "@/components/admin-ui";
+import { Badge, PageHeader, Panel, Stat, Term, btnLight, btnPrimary, ctl, td, th } from "@/components/admin-ui";
+import { TEMPLATE_VAR } from "@/lib/admin-glossary";
 import { Required } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime, fmtSlot } from "@/lib/format";
@@ -176,7 +177,12 @@ export default async function Messages({ searchParams }: { searchParams: Promise
 
   return (
     <div>
-      <PageHeader title="자동 메시지" desc="자동으로 나가는 안내 문구를 고치고, 언제 누구에게 나갔는지 확인해요. 실패하면 세 번까지 다시 보내고, 그래도 안 되면 예외 처리함에 올라와요." actions={<Link href="/admin/audit?kind=template" className={btnLight}>문구 변경 이력·되돌리기</Link>} />
+      <PageHeader
+        title="자동 메시지"
+        desc="자동으로 나가는 안내 문구를 고치고, 언제 누구에게 나갔는지 확인해요. 실패하면 세 번까지 다시 보내고, 그래도 안 되면 예외 처리함에 올라와요."
+        how={["'실패' 숫자를 눌러 안 나간 알림 다시 보내기", "필요하면 회차·테이블·회원에게 공지 보내기", "아래 '문구 템플릿'에서 문구 고치고 미리보기 확인"]}
+        actions={<Link href="/admin/audit?kind=template" className={btnLight}>문구 변경 이력·되돌리기</Link>}
+      />
       <div className="mt-6 grid grid-cols-3 gap-3">
         <Stat label="보냄" value={nSent ?? 0} tone="leaf" />
         <Stat label="예약됨" value={nPending ?? 0} />
@@ -252,7 +258,8 @@ export default async function Messages({ searchParams }: { searchParams: Promise
         )}
       </div>
 
-      <h2 className="mb-3 mt-8 text-[17px] font-bold">문구 템플릿</h2>
+      <h2 className="mt-8 text-[17px] font-bold">문구 템플릿</h2>
+      <p className="mb-3 mt-1 text-[13px] text-muted">칸을 비워 두면 기본 문구(흐린 글씨)로 나가요. 문구에 <code className="rounded bg-field px-1">{"{round}"}</code>처럼 중괄호로 감싼 말을 넣으면 보낼 때 실제 값(이 경우 회차 이름)으로 바뀌어요. 칸마다 넣을 수 있는 말이 아래에 있어요.</p>
       <div className="grid gap-4 lg:grid-cols-2">
         {Object.entries(TEMPLATES).map(([key, d]) => {
           const o = tpl[key] ?? {};
@@ -264,7 +271,19 @@ export default async function Messages({ searchParams }: { searchParams: Promise
                 <input type="hidden" name="key" value={key} />
                 {d.title !== "" && <input name="title" readOnly={ro} defaultValue={o.title ?? ""} placeholder={d.title} className={`${ctl} w-full`} />}
                 <textarea name="body" readOnly={ro} defaultValue={o.body ?? ""} placeholder={d.body} rows={3} className="w-full rounded-xl border border-line bg-card px-3 py-2 text-[14px] outline-none focus:border-accent" />
-                {d.vars.length > 0 && <p className="text-[12px] text-muted">넣을 수 있는 값: {d.vars.map((v) => `{${v}}`).join(" ")}</p>}
+                {d.vars.length > 0 && (
+                  <div className="text-[12px] text-muted">
+                    <span className="mr-1">넣을 수 있는 값</span>
+                    <span className="inline-flex flex-wrap gap-1.5 align-middle">
+                      {d.vars.map((v) => (
+                        <span key={v} className="inline-flex items-center gap-1 rounded-full bg-field px-2 py-0.5">
+                          <span className="text-ink2">{TEMPLATE_VAR[v] ?? "값"}</span>
+                          <Term tip={`${TEMPLATE_VAR[v] ?? "값"} 자리예요${SAMPLE_VARS[v] ? `(예: ${SAMPLE_VARS[v]})` : ""}. 문구에 이 글자를 그대로 적어 주세요.`}><code className="text-[11px]">{`{${v}}`}</code></Term>
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                )}
                 <div className="rounded-xl bg-paper px-3 py-2 text-[13px]">
                   <p className="text-[11px] text-muted">미리보기 (예시 값으로 채움, 비워 두면 기본 문구)</p>
                   {preview.title && <p className="font-semibold">{preview.title}</p>}
