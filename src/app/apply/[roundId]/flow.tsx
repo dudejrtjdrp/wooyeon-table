@@ -248,7 +248,7 @@ export function ApplyFlow({
           <>
             <div className="px-6 pt-2">
               <h1 className="text-[26px] font-extrabold leading-[1.38]">갈 수 있는 날을<br />모두 골라주세요</h1>
-              <p className="mt-2.5 text-[15px] text-muted">동그라미 친 날만 테이블이 열려요.</p>
+              <p className="mt-2.5 text-[15px] text-muted">진하게 표시된 날만 테이블이 열려요.</p>
             </div>
             <div className="mx-4 mt-5 rounded-[20px] bg-field px-3 pb-3 pt-[18px]">
               <div className="flex items-center justify-between px-2 pb-3">
@@ -278,9 +278,11 @@ export function ApplyFlow({
                           aria-pressed={on}
                           aria-label={`${m}월 ${d}일${isOpen ? "" : ", 열린 테이블 없음"}`}
                           onClick={() => { setMsg(null); setDays((cur) => (cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key])); }}
-                          className={`flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-paper font-extrabold text-ink" : "font-medium text-muted/60"} ${today && !on ? "ring-[1.5px] ring-inset ring-ink" : ""}`}
+                          className={`relative flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-card font-extrabold text-ink ring-2 ring-inset ring-accent/50" : "font-medium text-muted/60"}`}
                         >
                           {d}
+                          {/* 오늘은 동그라미가 아니라 아래 작은 점으로 (열린 날 표시와 헷갈리지 않게) */}
+                          {today && <span aria-hidden="true" className={`absolute bottom-1 size-1 rounded-full ${on ? "bg-white" : "bg-ink"}`} />}
                         </button>
                       </div>,
                     );

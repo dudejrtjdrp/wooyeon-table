@@ -177,7 +177,8 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                     </div>
                   </div>
                   <div className="mt-5 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
-                    <table className="w-full text-[14px]">
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[520px] text-[14px]">
                       <thead><tr>{["이름 · 배치 사유", "연령대", "성별", "MBTI", "희망 일정·동네", "희망 상대", "재배치"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
                       <tbody className="divide-y divide-line">
                         {members.map((mb) => {
@@ -200,6 +201,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                         })}
                       </tbody>
                     </table>
+                    </div>
                     <ul className="space-y-3.5 self-center">
                       {Object.entries(d.parts).map(([k, v]) => {
                         const pct = Math.round(Number(v) * 100);

@@ -83,16 +83,19 @@ export default async function MyTables() {
 
       {/* 진행 중인 신청: 상태를 그대로 보여 주고, 매칭 실패면 '단체방이 열려요' 대신 다음 방법 고르기로 보낸다 */}
       {pending.length > 0 && !upcoming.length && (() => {
-        const a = pending[0];
+        // 여러 건이어도 매칭 실패가 있으면 그 건을 먼저 보여 주고 다음 방법 고르기로 보낸다
+        const isFailed = (x: (typeof pending)[number]) => x.match_status === "ALTERNATIVE_OFFERED" && x.resolution !== "wait";
+        const a = pending.find(isFailed) ?? pending[0];
         const h = headline(a, t);
-        const failed = a.match_status === "ALTERNATIVE_OFFERED" && a.resolution !== "wait";
+        const failed = isFailed(a);
+        const many = pending.length > 1 && !failed;
         return (
-          <Link href={pending.length > 1 ? "/rounds" : failed ? `/applications/${a.id}/resolve` : `/applications/${a.id}`} className="mt-5 flex min-h-[64px] items-center gap-3 rounded-[18px] bg-card px-5 py-3">
+          <Link href={failed ? `/applications/${a.id}/resolve` : many ? "/rounds" : `/applications/${a.id}`} className="mt-5 flex min-h-[64px] items-center gap-3 rounded-[18px] bg-card px-5 py-3">
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[16px] font-extrabold">{pending.length > 1 ? `진행 중인 신청 ${pending.length}건` : a.rounds.title}</span>
+              <span className="block truncate text-[16px] font-extrabold">{many ? `진행 중인 신청 ${pending.length}건` : a.rounds.title}</span>
               <span className="mt-0.5 block text-[13px] text-muted">{failed ? "다음 방법을 골라 주세요." : "테이블이 정해지면 여기서 단체방이 열려요."}</span>
             </span>
-            {pending.length === 1 && <Pill tone={h.tone}>{h.label}</Pill>}
+            {!many && <Pill tone={h.tone}>{h.label}</Pill>}
             <ChevronRight size={18} className="shrink-0 text-[#9a8c7e]" />
           </Link>
         );
@@ -106,13 +109,15 @@ export default async function MyTables() {
               const s = a.dining_tables!.slots!;
               const attended = a.attendance_status === "ATTENDED";
               const needReview = attended && !reviewed.has(a.id);
+              // 끝난 모임인데 아직 '참석 예정'으로 남아 있으면(체크인 확인 전) '매칭 확정' 대신 '지난 모임'
+              const label = a.attendance_status === "SCHEDULED" ? "지난 모임" : headline(a, t).label;
               return (
                 <RowItem
                   key={a.id}
                   href={needReview ? `/tables/${a.table_id}/feedback` : `/tables/${a.table_id}/chat`}
                   title={`${fmtDay(s.starts_at)} · ${s.region}`}
-                  sub={a.dining_tables?.venues?.name ?? headline(a, t).label}
-                  pill={needReview ? <Pill tone="accent">후기 남기기</Pill> : reviewed.has(a.id) ? <Pill tone="muted">후기 남김</Pill> : <Pill tone="muted">{headline(a, t).label}</Pill>}
+                  sub={a.dining_tables?.venues?.name ?? label}
+                  pill={needReview ? <Pill tone="accent">후기 남기기</Pill> : reviewed.has(a.id) ? <Pill tone="muted">후기 남김</Pill> : <Pill tone="muted">{label}</Pill>}
                 />
               );
             })}

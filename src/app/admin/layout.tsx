@@ -50,7 +50,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
           <AdminNav exCount={count ?? 0} mobile />
         </div>
-        <main className="mx-auto max-w-[1180px] px-5 py-8 md:px-9">
+        <main className="admin-main mx-auto max-w-[1180px] px-5 py-8 md:px-9">
           {level === "viewer" && (
             <p className="mb-5 rounded-xl bg-warn-soft px-4 py-2.5 text-[13px] font-medium text-warn">조회 전용 계정이에요. 화면은 모두 볼 수 있지만 환불·제한·긴급 수정·설정 변경은 할 수 없어요.</p>
           )}

@@ -42,14 +42,16 @@ export function HowTo({ steps }: { steps: ReactNode[] }) {
  * 예: <Term tip="같은 주에 여는 저녁 모임 묶음이에요">회차</Term>
  */
 export function Term({ children, tip, inLink }: { children: ReactNode; tip: string; inLink?: boolean }) {
+  // 풀이는 숨어 있을 때 자리를 차지하지 않게 display로 감춘다(좁은 화면에서 가로로 밀리지 않게).
   // 링크 안에 들어가면 따로 포커스를 받지 않는다(링크 하나에 탭이 두 번 멈추지 않게). 마우스를 올리면 풀이는 그대로 뜬다
   return (
     <span tabIndex={inLink ? undefined : 0} className="group/term relative inline-flex cursor-help items-baseline underline decoration-dotted decoration-faint underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
       {children}
-      <span role="tooltip" className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-max max-w-[260px] -translate-x-1/2 rounded-xl bg-ink px-3 py-2 text-left text-[12px] font-medium leading-relaxed text-white no-underline opacity-0 shadow-lg transition group-hover/term:visible group-hover/term:opacity-100 group-focus/term:visible group-focus/term:opacity-100">
+      <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 hidden w-max max-w-[min(260px,80vw)] rounded-xl bg-ink px-3 py-2 text-left text-[12px] font-medium leading-relaxed text-white no-underline shadow-lg group-hover/term:block group-focus/term:block">
         {tip}
       </span>
-      <span className="sr-only">: {tip}</span>
+      {/* 화면 읽기용 풀이. sr-only(absolute)는 표 안에서 스크롤 상자를 벗어나 문서 폭을 늘려서, 자리 없는 인라인으로 숨긴다 */}
+      <span className="inline-block h-px w-px overflow-hidden whitespace-nowrap [clip-path:inset(50%)]">: {tip}</span>
     </span>
   );
 }

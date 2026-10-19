@@ -59,7 +59,7 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
         <span className="min-w-0 flex-1 text-[13px] leading-[1.45] text-ink2">
           <b className="text-ink">{fmtClock(t.slots.starts_at)}{t.venues ? ` · ${t.venues.name}` : ""}</b>
           <br />
-          {t.status === "DONE" ? "모임이 끝났어요. 모임 정보에서 후기를 남길 수 있어요." : sameDay ? "오늘은 취소와 단체방 나가기가 안 돼요." : n >= refundCutoff(t.slots.starts_at) ? "환불 마감이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 전액 환불돼요."}
+          {t.status === "DONE" ? "모임이 끝났어요. 참석했다면 단체방 탭의 '후기 남기기'에서 후기를 남겨 주세요." : sameDay ? "오늘은 취소와 단체방 나가기가 안 돼요." : n >= refundCutoff(t.slots.starts_at) ? "환불 마감이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 전액 환불돼요."}
         </span>
         <span className="flex h-11 shrink-0 items-center text-[13px] font-bold text-accent">모임 정보</span>
       </Link>

@@ -135,3 +135,11 @@ html[data-splash="off"] #splash { display: none; }
   .splash { animation: splash-out .2s ease-in .6s forwards; }
   .wm-ribbon, .wm-pop, .wm-rise, .splash-tag { animation: none; opacity: 1; stroke-dashoffset: 0; }
 }
+
+/* 어드민: 그리드·플렉스 칸이 안의 넓은 표 때문에 늘어나 좁은 화면에서 가로로 밀리지 않게.
+   표는 각자 overflow-x-auto 상자 안에서만 옆으로 넘긴다 */
+.admin-main .grid > *,
+.admin-main .flex > section,
+.admin-main section { min-width: 0; }
+/* 가로 스크롤 상자를 기준 상자로: 안의 sr-only(absolute) 글자가 상자를 벗어나 문서 폭을 늘리지 않게 */
+.admin-main .overflow-x-auto { position: relative; }

@@ -11,6 +11,7 @@ import { dateKey, fmtDateTime, fmtDay, fmtSlot, fmtTime } from "@/lib/format";
 import { ROUND_TABS, TABLE_MAX, TABLE_MIN, buildBoard, parseRoundTab, roundsHref, tableRange, type RoundTab } from "@/lib/round-board";
 import { MAX_TABLES_LIMIT, canCancelRound, canDeleteSlot, checkRoundEdit, fromKstInput, toKstInput } from "@/lib/round-rules";
 import { db } from "@/lib/supabase";
+import { TIP as GLOSSARY_TIP } from "@/lib/admin-glossary";
 import { ConfirmButton } from "../confirm-button";
 import { addSlot, cancelRound, createRound, deleteSlot, setCapacity, setMaxTables, updateRound } from "./actions";
 
@@ -20,8 +21,8 @@ const ROUND_STATUS: Record<string, [string, "accent" | "leaf" | "muted" | "candl
 
 /** 처음 보면 모를 말 풀이. 머리·표·폼에서 같은 문장을 쓴다 */
 const TIP = {
-  round: "같은 주에 여는 저녁 모임 묶음이에요. 회차마다 신청 마감과 자동 매칭 시각이 하나씩 있어요.",
-  slot: "회차 안의 날짜 하나 × 동네 하나예요. 신청자는 갈 수 있는 일정을 고르고, 테이블은 일정마다 따로 짜요.",
+  round: GLOSSARY_TIP.회차,
+  slot: GLOSSARY_TIP.일정,
   deadline: "이 시각부터 새 신청과 환불이 막혀요. 비워 두면 모임 주 화요일 밤 12시로 잡혀요.",
   matchAt: "이 시각에 결제를 마친 신청자로 테이블을 짜고 식당을 잡아요. 운영자가 따로 누를 버튼은 없어요.",
   maxTables: `한 일정에 열 수 있는 테이블 수 상한이에요. 한 테이블은 ${TABLE_MIN}~${TABLE_MAX}명이라 4테이블이면 최대 ${4 * TABLE_MAX}명이 앉아요.`,
@@ -40,11 +41,15 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   // 회차 만들기에서 검증에 걸리면 넣었던 값을 그대로 채워 둔다
   let draft: Draft = {};
   try { draft = f ? (JSON.parse(f) as Draft) : {}; } catch { draft = {}; }
-  const { rounds: picker, round: cur } = await roundsAndCurrent(r);
+  const { rounds: picker, round: cur0 } = await roundsAndCurrent(r);
+  // 고치기 탭은 고칠 수 있는 회차(모집 중)를 먼저 연다. 주소로 고른 회차가 있으면 그대로
+  const cur = !r && tab === "edit" ? (picker.find((x) => x.status === "open") ?? cur0) : cur0;
   const { data: rounds } = await db().from("rounds").select("id,title,status,apply_deadline,match_at,slots(id,region,starts_at,ends_at,max_tables,application_slots(application_id))").order("match_at");
   // 식당·재고는 '식당 재고' 탭에서만 쓴다
   const stockTab = tab === "stock" && !!cur;
-  const { data: venues } = stockTab ? await db().from("venues").select("id,name,region,active").order("region") : { data: [] };
+  const { data: venues } = stockTab || tab === "new" ? await db().from("venues").select("id,name,region,active").order("region") : { data: [] };
+  // 새 회차 동네 고르기: 배정할 식당이 없는 동네는 표시해 둔다(고르면 식당 부족 예외가 난다)
+  const venueRegions = new Set((venues ?? []).filter((v) => v.active).map((v) => v.region));
   const { data: inv } = stockTab ? await db().from("venue_slots").select("venue_id,slot_id,tables_available,slots!inner(round_id)").eq("slots.round_id", cur.id) : { data: [] };
   const { data: used } = stockTab ? await db().from("dining_tables").select("venue_id,slot_id").eq("round_id", cur.id).neq("status", "DISSOLVED") : { data: [] };
   const curSlots = ((rounds ?? []).find((x) => x.id === cur?.id)?.slots ?? []).sort((a, b) => a.starts_at.localeCompare(b.starts_at) || a.region.localeCompare(b.region));
@@ -146,7 +151,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                           {s.areas.map((x) => (
                             <label key={x} className="cursor-pointer">
                               <input type="checkbox" name="regions" value={x} defaultChecked={(draft.regions ?? (DEFAULT_REGIONS as readonly string[])).includes(x)} className="peer sr-only" />
-                              <span className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-line text-[14px] text-ink transition peer-checked:border-accent peer-checked:bg-accent-soft/60 peer-checked:font-semibold peer-checked:text-accent [&>svg]:hidden peer-checked:[&>svg]:block"><Check size={16} strokeWidth={2.8} />{x}</span>
+                              <span className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-line text-[14px] text-ink transition peer-checked:border-accent peer-checked:bg-accent-soft/60 peer-checked:font-semibold peer-checked:text-accent [&>svg]:hidden peer-checked:[&>svg]:block"><Check size={16} strokeWidth={2.8} />{x}{!venueRegions.has(x) && <span className="text-[11px] font-normal text-danger">식당 없음</span>}</span>
                             </label>
                           ))}
                         </div>

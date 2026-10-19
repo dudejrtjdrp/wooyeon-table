@@ -185,9 +185,12 @@ export default async function ApplicationDetail({ params, searchParams }: { para
         const remind = new Date(new Date(start).getTime() - 24 * 3600_000);
         return (
           <>
-            <p className="mt-3 rounded-[20px] bg-accent-soft px-4 py-3.5 text-[14px] text-accent">
-              다음 안내: {fmtSlot(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
-            </p>
+            {/* 하루 전 안내 시각이 지났으면 '다음 안내'를 보여 주지 않는다 */}
+            {remind > t && (
+              <p className="mt-3 rounded-[20px] bg-accent-soft px-4 py-3.5 text-[14px] text-accent">
+                다음 안내: {fmtSlot(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
+              </p>
+            )}
             {rule.kind !== "blocked" && (
               <div className="mt-6 text-center">
                 <ConfirmSheet

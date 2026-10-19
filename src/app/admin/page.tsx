@@ -142,15 +142,10 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         {openTotal > 0 && <Link href="/admin/exceptions" className="text-[14px] font-semibold text-accent hover:underline">예외 처리함에서 오래된 것부터 보기 →</Link>}
       </div>
       {!openTotal ? (
-        // 0건이면 칸 9개를 늘어놓지 않고 한 줄로 말한다. 유형별 숫자(모두 0)와 목록 링크는 접어 둔다
+        // 0건이면 칸 9개를 크게 늘어놓지 않고 한 줄로 말한다. 유형별 숫자(모두 0)와 목록 링크는 작은 칩으로 늘 보인다(A2)
         <>
           <p className="mt-3 flex items-center gap-2 rounded-xl bg-leaf/10 px-4 py-3 text-[14px] font-semibold text-leaf"><Check size={18} strokeWidth={2.6} />지금 처리할 일 없어요. 자동으로 풀리지 않은 일이 생기면 여기에 숫자로 올라와요.</p>
-          <details className="group mt-2">
-            <summary className="flex cursor-pointer list-none items-center gap-1 px-1 text-[13px] font-semibold text-muted hover:text-ink">
-              유형별 보기 <ChevronDown size={16} className="transition group-open:rotate-180" />
-            </summary>
-            <ZeroTiles tiles={TILES} />
-          </details>
+          <ZeroTiles tiles={TILES} />
         </>
       ) : (
         <>

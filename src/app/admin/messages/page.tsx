@@ -278,7 +278,7 @@ export default async function Messages({ searchParams }: { searchParams: Promise
                       {d.vars.map((v) => (
                         <span key={v} className="inline-flex items-center gap-1 rounded-full bg-field px-2 py-0.5">
                           <span className="text-ink2">{TEMPLATE_VAR[v] ?? "값"}</span>
-                          <Term tip={`이 자리에 ${TEMPLATE_VAR[v] ?? "값"}${SAMPLE_VARS[v] ? `(예: ${SAMPLE_VARS[v]})` : ""}이 들어가요. 문구에 이 글자를 그대로 적어 주세요.`}><code className="text-[11px]">{`{${v}}`}</code></Term>
+                          <Term tip={`${TEMPLATE_VAR[v] ?? "값"} 자리예요${SAMPLE_VARS[v] ? `(예: ${SAMPLE_VARS[v]})` : ""}. 문구에 이 글자를 그대로 적어 주세요.`}><code className="text-[11px]">{`{${v}}`}</code></Term>
                         </span>
                       ))}
                     </span>

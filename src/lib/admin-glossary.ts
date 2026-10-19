@@ -78,8 +78,11 @@ export function reasonText(reason: string | null | undefined): string | null {
   if (!reason) return null;
   if (!reason.trimStart().startsWith("{")) return reason;
   try {
-    const o = JSON.parse(reason) as { error?: unknown };
-    return typeof o.error === "string" && o.error ? `실패 이유: ${o.error}` : null;
+    const o = JSON.parse(reason) as { error?: unknown; meta?: { type?: unknown } };
+    if (typeof o.error !== "string" || !o.error) return null;
+    // 어느 안내가 실패했는지도 함께 (예: 실패 이유: 시간 초과 (하루 전 안내))
+    const kind = typeof o.meta?.type === "string" ? CHAT_POST[o.meta.type] : undefined;
+    return `실패 이유: ${o.error}${kind ? ` (${kind})` : ""}`;
   } catch {
     return null;
   }

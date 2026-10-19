@@ -15,6 +15,7 @@ describe("reasonText", () => {
   it("내부 JSON 기록은 숨기거나 실패 이유만 보인다", () => {
     expect(reasonText('{"key":"notice:abc"}')).toBeNull();
     expect(reasonText('{"key":"notice:abc","error":"시간 초과"}')).toBe("실패 이유: 시간 초과");
+    expect(reasonText('{"key":"remind:t1","error":"시간 초과","meta":{"type":"reminder"}}')).toBe("실패 이유: 시간 초과 (하루 전 안내)");
     expect(reasonText("모임 시작 시각")).toBe("모임 시작 시각");
     expect(reasonText(null)).toBeNull();
   });
