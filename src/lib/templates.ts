@@ -21,7 +21,7 @@ export const TEMPLATES = {
   reminder_chat: { label: "하루 전 단체방 공지", when: "모임 24시간 전", channel: "단체방", title: "", body: "내일 {time}, {region} {venue}에서 만나요. {reservation_line}\n당일 취소와 단체방 나가기는 할 수 없어요. 늦을 것 같으면 이 방의 '늦을 것 같아요'로 미리 알려 주세요. 연락 없이 오지 않으면 노쇼로 기록돼요.", vars: ["time", "region", "venue", "reservation", "reservation_line"] },
   reallocating: { label: "자동 재배치 중", when: "확정된 테이블 인원이 4명 아래로 줄었을 때 남은 분들께", channel: "알림함(푸시 없음)", title: "다른 자리를 찾고 있어요", body: "정해지면 바로 알려 드릴게요", vars: ["date", "time", "region"] },
   reallocated: { label: "자동 재배치 완료", when: "인원이 모자란 테이블에서 다른 테이블로 옮겼을 때", channel: "푸시·알림함", title: "테이블이 바뀌었어요", body: "{date} {time} · {region}", vars: ["date", "time", "region"] },
-  venue_changed: { label: "식당 변경", when: "처음 식당 예약이 세 번 안 돼 같은 동네 다른 식당으로 바꿨을 때", channel: "푸시·알림함·단체방", title: "모임 식당이 바뀌었어요", body: "{date} {time} · {venue}", vars: ["date", "time", "venue"] },
+  venue_changed: { label: "식당 변경", when: "처음 식당 예약이 세 번 안 돼 같은 동네 다른 식당으로 바꿨을 때, 또는 운영자가 테이블 상세에서 식당을 바꿨을 때", channel: "푸시·알림함·단체방", title: "모임 식당이 바뀌었어요", body: "{date} {time} · {venue}", vars: ["date", "time", "venue"] },
   refund_requested: { label: "환불 요청 접수", when: "환불을 고르거나 환불 마감 전에 취소했을 때", channel: "알림함(푸시 없음)", title: "환불을 접수했어요", body: "{amount} · 끝나면 알려 드릴게요", vars: ["amount"] },
   refunded: { label: "환불 완료", when: "환불이 끝났을 때", channel: "푸시·알림함", title: "환불이 끝났어요", body: "{amount}을 돌려드렸어요", vars: ["amount"] },
   refund_retry: { label: "환불 다시 시도", when: "결제사에서 환불이 한 번 실패했을 때", channel: "알림함(푸시 없음)", title: "환불을 다시 시도하고 있어요", body: "{amount} · 따로 하실 일은 없어요", vars: ["amount"] },
