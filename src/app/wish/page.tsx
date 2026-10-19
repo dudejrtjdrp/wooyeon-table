@@ -11,7 +11,7 @@ import { removeWish, saveWish } from "./actions";
 export const dynamic = "force-dynamic";
 
 /** 지역 수요 조사: 지금은 서울 4곳만 열고, 나머지는 열리면 알려 달라고 남긴다 */
-export default async function Wish({ searchParams }: { searchParams: Promise<{ sido?: string; area?: string; e?: string; m?: string }> }) {
+export default async function Wish({ searchParams }: { searchParams: Promise<{ sido?: string; area?: string; e?: string; m?: string; from?: string }> }) {
   const me = await getMe();
   const sp = await searchParams;
   if (!me) redirect(`/login?next=${encodeURIComponent(`/wish${sp.area ? `?area=${encodeURIComponent(sp.area)}` : ""}`)}`);
@@ -22,7 +22,7 @@ export default async function Wish({ searchParams }: { searchParams: Promise<{ s
   const choices = (cur?.areas ?? []).filter((a) => !OPEN_REGIONS.includes(a));
 
   return (
-    <Screen title="원하는 동네 남기기" back="/rounds">
+    <Screen title="원하는 동네 남기기" back={sp.from === "home" ? "/" : "/rounds"}>
       <Toast msg={sp.m} />
       <div className="flex items-start gap-4 pt-4">
         <div className="flex-1">

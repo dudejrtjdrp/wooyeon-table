@@ -138,17 +138,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
           </section>
         </>
       ) : (
-        // 열린 일정이 없을 때: 기다리는 동안 할 수 있는 것(알림 켜기, 원하는 동네 남기기)만 보여 준다
+        // 열린 일정이 없을 때: 언제 어디서 보이는지와, 기다리는 동안 할 수 있는 것(원하는 동네 남기기)만 보여 준다
         <>
           <Greeting>{firstName}님,<br />지금은 열린 일정이 없어요</Greeting>
           <section className="animate-rise mt-4 rounded-[20px] bg-card px-5 pb-5 pt-7 text-center" aria-label="다음 일정 기다리기">
             <div className="flex justify-center"><RoundTable size={132} filled={1} label="빈 자리가 있는 원형 테이블" /></div>
             <h2 className="mt-5 text-[19px] font-bold text-ink">다음 식탁을 차리고 있어요</h2>
-            <p className="mt-1.5 text-[15px] leading-relaxed text-muted">새 일정이 열리면 바로 알려드릴게요.<br />알림을 켜 두면 놓치지 않아요.</p>
-            <div className="mt-5 text-left"><PushToggle variant="card" /></div>
-            <div className="mt-4 flex flex-col items-center gap-1">
-              <Link href="/wish" className="flex h-11 items-center text-[15px] font-semibold text-accent">가 보고 싶은 동네 남기기</Link>
-              {past && <Link href="/my-tables" className="flex h-11 items-center text-[14px] text-muted underline underline-offset-4">지난 식탁 보기</Link>}
+            <p className="mt-1.5 text-[15px] leading-relaxed text-muted">모집이 열리면 이 화면과 일정 탭에<br />바로 떠요.</p>
+            <div className="mt-4 flex justify-center">
+              <Link href="/wish?from=home" className="flex h-11 items-center text-[15px] font-semibold text-accent">가 보고 싶은 동네 남기기</Link>
             </div>
           </section>
         </>
