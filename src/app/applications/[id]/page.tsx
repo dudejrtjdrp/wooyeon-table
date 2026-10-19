@@ -58,6 +58,12 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     { label: "테이블 확정 · 안내", done: matched, when: "", note: "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
     { label: "모임", done: app.attendance_status === "ATTENDED", when: "", note: "정해진 식당에서 저녁을 함께 먹어요." },
   ];
+  // 취소된 신청은 진행 단계를 이어 보여 주지 않는다: 마친 단계까지 두고 '취소됨'으로 끝낸다
+  const canceledApp = app.application_status === "CANCELED" || !!app.attendance_status?.startsWith("CANCELED");
+  if (canceledApp) {
+    const upto = steps.findIndex((x) => !x.done);
+    steps.splice(upto === -1 ? steps.length : upto, steps.length, { label: "취소됨", done: true, when: "", note: "이 신청은 여기서 마무리됐어요." });
+  }
   const current = steps.findIndex((x) => !x.done);
   // 인원이 줄어 자동으로 다른 테이블로 옮겨진 사람은 거절하고 다른 방법을 고를 수 있다 (PRD: 이동·환불은 참가자 선택)
   const moved = matched && app.attendance_status === "SCHEDULED" && app.table_id ? await wasReallocatedTo(app.id, app.table_id) : false;
@@ -99,14 +105,14 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           <p className="mt-4 max-w-[62%] text-[22px] font-bold leading-[1.35] text-ink">{app.rounds.title}</p>
           <p className="mt-3 text-[15px] leading-relaxed text-ink2">{payClosed ? "결제 전에 매칭 시각이 지나 이번 테이블에는 들어가지 못했어요. 빠져나간 돈은 없어요." : app.match_reason ?? h.desc}</p>
           {money && <p className="mt-3 inline-flex rounded-full bg-paper px-3 py-1.5 text-[14px] font-bold text-ink">{money}</p>}
-          {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH") && (
+          {(app.application_status === "CANCELED" || app.match_status === "NO_MATCH" || app.attendance_status?.startsWith("CANCELED")) && (
             <Link href="/rounds" className="mt-4 flex h-12 w-fit items-center rounded-[14px] bg-accent px-5 text-[15px] font-bold text-white">다른 일정 보기</Link>
           )}
           {/* 운영팀이 취소했거나 회차가 취소된 신청은 이유를 물을 곳을 바로 둔다 */}
           {app.match_reason && (app.application_status === "CANCELED" || app.attendance_status?.startsWith("CANCELED")) && (
             <a
               href={`mailto:help@wooyeon-table.app?subject=${encodeURIComponent(`[우연한 식탁] ${app.rounds.title} 취소 문의`)}`}
-              className="mt-3 inline-block text-[14px] font-semibold text-accent underline underline-offset-4"
+              className="mt-2 inline-flex h-11 items-center text-[14px] font-semibold text-accent underline underline-offset-4"
             >
               취소 이유 문의하기
             </a>

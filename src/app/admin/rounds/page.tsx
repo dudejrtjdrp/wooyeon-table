@@ -58,7 +58,11 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   const { data: run } = selected ? await db().from("match_runs").select("id").eq("round_id", selected.id).maybeSingle() : { data: null };
   const cancelCheck = selected ? canCancelRound({ status: selected.status, hasMatchRun: !!run, matchAt: selected.match_at, now: t, canceled: canceled.has(selected.id) }) : null;
   // 취소하다 끊겨 아직 정리되지 않은 신청이 남은 회차
-  const leftover = selected && statusOf(selected) === "canceled" ? (roundApps ?? []).length : 0;
+  // (취소는 됐는데 환불 전에 끊겨 결제가 그대로인 신청도 포함)
+  const { count: unpaidBack } = selected && statusOf(selected) === "canceled"
+    ? await db().from("applications").select("id", { count: "exact", head: true }).eq("round_id", selected.id).eq("application_status", "CANCELED").eq("payment_status", "PAID")
+    : { count: 0 };
+  const leftover = selected && statusOf(selected) === "canceled" ? (roundApps ?? []).length + (unpaidBack ?? 0) : 0;
   // '이렇게 바뀌어요' 미리보기: 고친 값을 주소로 받아 바로 저장하지 않고 먼저 보여 준다 (E3)
   const preview =
     selected && sp.edit === "1"

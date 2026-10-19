@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Badge, PageHeader, Stat, btnDanger, btnLight, ctl, td, th } from "@/components/admin-ui";
 import { requireAdmin } from "@/lib/auth";
-import { manualRefundCheck } from "@/lib/cancel-rules";
+import { applicationLive, manualRefundCheck } from "@/lib/cancel-rules";
 import { LEGACY_PASS_LABEL, PASSES, isMembership, won } from "@/lib/constants";
 import { fmtDateTime } from "@/lib/format";
 import { PAYMENT, label } from "@/lib/labels";
@@ -95,7 +95,15 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                 <td className={`${td} min-w-[220px]`}>
                   {me.level === "full" && manualRefundCheck({ status: p.status, provider: p.provider, amount: p.amount, hasApplication: p.applications.length > 0 }).ok ? (() => {
                     const a = p.applications[0];
-                    const active = a.application_status !== "CANCELED" && (a.match_status === "WAITING" || (a.match_status === "CONFIRMED" && a.attendance_status === "SCHEDULED"));
+                    // 신청이 진행 중이면 돈만 돌려주지 않는다. 대리 취소하면 같은 규칙으로 환불도 함께 된다 (cancel-rules.ts)
+                    if (applicationLive({ applicationStatus: a.application_status, matchStatus: a.match_status, attendanceStatus: a.attendance_status }))
+                      return (
+                        <span className="text-[13px] text-muted">
+                          신청 진행 중 ·{" "}
+                          <Link href={`/admin/applicants/${a.id}`} className="font-semibold text-accent underline-offset-4 hover:underline">신청자 화면에서 대리 취소</Link>
+                          하면 환불도 함께 돼요
+                        </span>
+                      );
                     const member = isMembership(p.pass_type);
                     return (
                       <form action={manualRefund} className="flex items-center gap-2">
@@ -103,7 +111,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                         <input type="hidden" name="back" value={back} />
                         <input name="note" required minLength={4} placeholder="환불 사유" aria-label={`${p.users.name}님 환불 사유`} className={`${ctl} w-32`} />
                         <ConfirmButton
-                          confirm={`${p.users.name}님께 ${won(p.amount)}을 결제한 수단으로 전액 돌려드릴까요? 되돌릴 수 없어요.${member ? " 멤버십 기간도 바로 끝나요." : ""}${active ? " 신청은 그대로 남으니, 모임에서도 빼려면 신청자 화면에서 신청 취소를 해 주세요." : ""}`}
+                          confirm={`${p.users.name}님께 ${won(p.amount)}을 결제한 수단으로 전액 돌려드릴까요? 되돌릴 수 없어요.${member ? " 멤버십 기간도 바로 끝나요." : ""}`}
                           className={btnDanger}
                         >
                           환불

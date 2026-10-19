@@ -188,20 +188,24 @@ export async function cancelRound(form: FormData) {
     await logStatus({ entityType: "round", entityId: roundId, field: "canceled", from: "false", to: "true", actor, reason: why });
   }
 
-  const { data: apps } = await db().from("applications").select("id,user_id,application_status,payment_status,match_status").eq("round_id", roundId).neq("application_status", "CANCELED");
+  // 처리 대상: 아직 취소되지 않은 신청 + (이어서 정리할 때) 취소는 됐는데 환불 전에 끊겨 결제가 PAID로 남은 신청
+  // releaseUse는 결제가 PAID일 때만 움직이고 끝나면 PAID를 벗어나므로 두 번 불려도 한 번만 돌려준다
+  const { data: apps } = await db().from("applications").select("id,user_id,application_status,payment_status,match_status").eq("round_id", roundId).or("application_status.neq.CANCELED,payment_status.eq.PAID");
   const tpl = await loadTemplates();
   const m = render("round_canceled", { round: round.title }, tpl);
   let told = 0;
   for (const a of apps ?? []) {
     // 참가자 화면에 '본인이 취소한 것'처럼 보이지 않게 이유 한 줄을 남긴다 (match_reason은 신청 화면 본문)
-    const { data: done } = await db().from("applications").update({ application_status: "CANCELED", match_status: "NO_MATCH", match_reason: ROUND_CANCELED_REASON }).eq("id", a.id).neq("application_status", "CANCELED").select("id");
-    if (!done?.length) continue;
-    await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: a.application_status, to: "CANCELED", actor, reason: why });
-    if (a.match_status !== "NO_MATCH") await logStatus({ entityType: "application", entityId: a.id, field: "match_status", from: a.match_status, to: "NO_MATCH", actor, reason: why });
+    if (a.application_status !== "CANCELED") {
+      const { data: done } = await db().from("applications").update({ application_status: "CANCELED", match_status: "NO_MATCH", match_reason: ROUND_CANCELED_REASON }).eq("id", a.id).neq("application_status", "CANCELED").select("id");
+      if (!done?.length) continue;
+      await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: a.application_status, to: "CANCELED", actor, reason: why });
+      if (a.match_status !== "NO_MATCH") await logStatus({ entityType: "application", entityId: a.id, field: "match_status", from: a.match_status, to: "NO_MATCH", actor, reason: why });
+    } else if (!ok.resume) continue; // 처음 취소할 때 이미 취소돼 있던 신청(본인 취소 등)은 건드리지 않는다
     await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${a.id}:%`);
     // 1회권은 refundPayment로 원결제수단 환불. 결제사에서 안 되면 10분 간격 재시도 → 세 번째 실패에 예외 처리함으로 (lib/payments.ts)
     await releaseUse(a.id, actor, why);
-    if (a.application_status === "SUBMITTED") {
+    if (a.application_status === "SUBMITTED" || ok.resume) {
       await notify({ userId: a.user_id, template: "round_canceled", title: m.title, body: m.body, link: `/applications/${a.id}`, dedupeKey: `round_canceled:${a.id}` });
       told++;
     }
