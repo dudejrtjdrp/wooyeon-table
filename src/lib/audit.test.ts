@@ -66,6 +66,12 @@ describe("바뀐 내용 한 줄", () => {
       .toBe("매칭 기준 연령대 25 → 30 · 관심사 15 → 10 · 최소 점수 50 → 55");
   });
 
+  it("매칭 템플릿 추가·삭제도 이름과 값으로 (삭제는 새 값이 빈 글자)", () => {
+    const v = JSON.stringify({ name: "주말", desc: "", age: 30, gender: 20, mbti: 20, interests: 10, wanted: 10, fresh: 10, min: 50 });
+    expect(auditChange({ entity_type: "setting", field: "matching.presets", from_value: null, to_value: v })).toMatch(/^매칭 템플릿 '주말' 추가/);
+    expect(auditChange({ entity_type: "setting", field: "matching.presets", from_value: v, to_value: "" })).toBe("매칭 템플릿 '주말' 삭제");
+  });
+
   it("예전 줄(이전 값 없음)은 지금 값 전체를 보여 준다", () => {
     expect(auditChange({ entity_type: "setting", field: "matching.weights", from_value: null, to_value: before }))
       .toBe("매칭 기준 연령대 25 · 성비 22 · MBTI 18 · 관심사 15 · 희망 성향 12 · 새로운 사람 8 · 최소 점수 50");

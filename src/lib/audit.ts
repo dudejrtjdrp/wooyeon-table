@@ -1,5 +1,6 @@
 // 전체 변경 이력(/admin/audit)의 거르기·라벨. DB를 읽지 않는 순수 함수만 둔다 (audit.test.ts)
 import { actorLabel, eventText, fieldLabel } from "./labels";
+import { presetChange } from "./weights-presets";
 
 // ── 대상 종류 ─────────────────────────────────────────
 // status_events.entity_type 여러 개를 운영자가 아는 묶음으로. 템플릿은 setting 중 field가 template:으로 시작하는 줄이다
@@ -216,6 +217,7 @@ function pairsChange(from: string, to: string): string | null {
 /** "바뀐 칸 이전 값 → 새 값" 한 줄. templateLabel은 템플릿 키를 이름으로 (labels가 templates를 모르게 밖에서 받는다) */
 export function auditChange(e: Pick<AuditEvent, "entity_type" | "field" | "from_value" | "to_value">, templateLabel?: (key: string) => string | undefined): string {
   if (e.field === "matching.weights") return weightsChange(e.from_value, e.to_value);
+  if (e.field === "matching.presets") return presetChange(e.from_value, e.to_value || null);
   if (e.field.startsWith("template:")) {
     const k = e.field.slice(9);
     return templateChange(e.from_value, e.to_value, `자동 메시지 '${templateLabel?.(k) ?? k}'`);
