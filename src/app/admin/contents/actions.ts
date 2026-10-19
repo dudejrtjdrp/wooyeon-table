@@ -3,21 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminWrite } from "@/lib/auth";
+import { contentBack } from "@/lib/content-filter";
 import { TABLE_TYPES } from "@/lib/contents";
 import { logStatus } from "@/lib/events";
 import { db } from "@/lib/supabase";
 
 const tagsOf = (v: FormDataEntryValue | null) => [...new Set(String(v ?? "").split(/[,\n]/).map((x) => x.trim()).filter(Boolean))].slice(0, 8);
 const typesOf = (form: FormData) => form.getAll("table_types").map(String).filter((x) => (TABLE_TYPES as readonly string[]).includes(x));
-const back = (k: "m" | "e", msg: string, kind?: string) => redirect(`/admin/contents?${kind ? `k=${kind}&` : ""}${k}=${encodeURIComponent(msg)}`);
+// 돌아갈 때 화면의 검색·거르기(폼의 back 값)를 그대로 지킨다
+const back = (k: "m" | "e", msg: string, kind?: string, form?: FormData) => redirect(`/admin/contents${contentBack(form ? String(form.get("back") ?? "") : "", kind)}&${k}=${encodeURIComponent(msg)}`);
 
 export async function saveContent(form: FormData) {
   const admin = await requireAdminWrite("/admin/contents");
   const id = String(form.get("id") ?? "");
   const kind = String(form.get("kind")) === "icebreaker" ? "icebreaker" : "topic";
   const body = String(form.get("body") ?? "").trim();
-  if (body.length < 5) back("e", "내용을 5자 이상 적어 주세요", kind);
-  if (body.length > 200) back("e", "내용은 200자 안으로 적어 주세요", kind);
+  if (body.length < 5) back("e", "내용을 5자 이상 적어 주세요", kind, form);
+  if (body.length > 200) back("e", "내용은 200자 안으로 적어 주세요", kind, form);
   const row = {
     kind,
     body,
@@ -34,7 +36,7 @@ export async function saveContent(form: FormData) {
     if (data) await logStatus({ entityType: "content", entityId: data.id, field: "content", to: "created", actor: `admin:${admin.id}`, reason: body.slice(0, 40) });
   }
   revalidatePath("/admin/contents");
-  back("m", id ? "콘텐츠를 고쳤어요" : "콘텐츠를 등록했어요", kind);
+  back("m", id ? "콘텐츠를 고쳤어요" : "콘텐츠를 등록했어요", kind, form);
 }
 
 export async function toggleContent(form: FormData) {
@@ -44,7 +46,7 @@ export async function toggleContent(form: FormData) {
   const { data } = await db().from("conversation_contents").update({ active, updated_at: new Date().toISOString() }).eq("id", id).select("kind").single();
   await logStatus({ entityType: "content", entityId: id, field: "active", to: String(active), actor: `admin:${admin.id}`, reason: active ? "다시 노출" : "노출 중지" });
   revalidatePath("/admin/contents");
-  back("m", active ? "다시 노출해요" : "노출을 멈췄어요", data?.kind);
+  back("m", active ? "다시 노출해요" : "노출을 멈췄어요", data?.kind, form);
 }
 
 export async function saveRules(form: FormData) {
@@ -59,5 +61,5 @@ export async function saveRules(form: FormData) {
   await db().from("settings").upsert({ key: "content.rules", value });
   await logStatus({ entityType: "setting", entityId: admin.id, field: "content.rules", to: JSON.stringify(value), actor: `admin:${admin.id}`, reason: "콘텐츠 노출 규칙 수정" });
   revalidatePath("/admin/contents");
-  back("m", "노출 규칙을 저장했어요");
+  back("m", "노출 규칙을 저장했어요", undefined, form);
 }

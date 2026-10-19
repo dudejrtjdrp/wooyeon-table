@@ -7,7 +7,10 @@ import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime, fmtSlot } from "@/lib/format";
 import { actorLabel } from "@/lib/labels";
 import { db } from "@/lib/supabase";
-import { toggleVenue, uploadVenuePhoto } from "../actions";
+import { canDeleteVenue } from "@/lib/venue-list-rules";
+import { venueUsage } from "@/lib/venue-usage";
+import { ConfirmButton } from "../../confirm-button";
+import { deleteVenue, toggleVenue, uploadVenuePhoto } from "../actions";
 import { VenuePhotoButton } from "../photo-upload";
 import { VenueForm } from "../venue-form";
 
@@ -31,6 +34,9 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
   const adminName = new Map((admins ?? []).map((a) => [a.id, a.name]));
   const rows = ((inv ?? []) as unknown as { slot_id: string; tables_available: number; slots: { starts_at: string; region: string; rounds: { title: string; status: string } } }[])
     .sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at));
+  // 지우기: 배정·예약 기록이 하나도 없을 때만 (기록 보존). 일정별 재고는 함께 정리
+  const usage = await venueUsage(id).catch(() => null);
+  const del = usage ? canDeleteVenue(usage) : ({ ok: false, reason: "쓰인 기록을 확인하지 못해 지금은 지울 수 없어요. 잠시 뒤 새로고침해 주세요" } as const);
   const usedIn = (sid: string) => (used ?? []).filter((u) => u.slot_id === sid).length;
 
   return (
@@ -73,6 +79,21 @@ export default async function VenueDetail({ params }: { params: Promise<{ id: st
             </ul>
             <p className="mt-3 text-[13px] text-muted">테이블 수는 <Link href="/admin/rounds?tab=stock" className="font-semibold text-accent underline underline-offset-4">회차·식당 재고</Link>에서 바꿔요.</p>
           </Panel>
+          {!ro && (
+            <Panel title="식당 지우기">
+              {del.ok ? (
+                <>
+                  <p className="text-[13px] text-muted">아직 배정·예약 기록이 없는 식당이라 지울 수 있어요. 사진과 일정별 재고도 함께 지워지고, 되돌릴 수 없어요.</p>
+                  <form action={deleteVenue} className="mt-3">
+                    <input type="hidden" name="id" value={v.id} />
+                    <ConfirmButton confirm={`${v.region} '${v.name}'을(를) 지워요. 사진과 일정별 재고도 함께 지워지고 되돌릴 수 없어요. 계속할까요?`} className={`${btnLight} border-danger/40 text-danger hover:bg-danger/5`}>이 식당 지우기</ConfirmButton>
+                  </form>
+                </>
+              ) : (
+                <p className="text-[13px] text-muted">{del.reason}</p>
+              )}
+            </Panel>
+          )}
           <Panel title="처리 이력">
             <ul className="space-y-2 text-[13px]">
               {(events ?? []).map((e) => (

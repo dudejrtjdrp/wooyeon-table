@@ -7,9 +7,11 @@ import { won } from "@/lib/constants";
 import { fmtDateTime, fmtSlot } from "@/lib/format";
 import { db } from "@/lib/supabase";
 import { PageHeader, Term } from "@/components/admin-ui";
-import { TIP } from "@/lib/admin-glossary";
+import { TIP, reasonText } from "@/lib/admin-glossary";
 import { ConfirmButton } from "../confirm-button";
-import { resolveException } from "./actions";
+import { EXCEPTION_VIEWS, exceptionsHref, reopenElsewhere, openRank, parseExceptionView, reopenConfirm, sortOpenFirst, viewStatus } from "@/lib/exception-view";
+import { ADMIN_NOTE_MIN } from "@/lib/cancel-rules";
+import { reopenException, resolveException } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -78,19 +80,34 @@ function since(iso: string, t: Date) {
   return `${Math.floor(min / 1440)}일째`;
 }
 
-export default async function Exceptions({ searchParams }: { searchParams: Promise<{ all?: string; k?: string }> }) {
+/** 받침에 따라 을/를 (안지민님을, 이 참가자를) */
+const objectOf = (w: string) => { const c = w.charCodeAt(w.length - 1) - 0xac00; return `${w}${c >= 0 && c <= 11171 && c % 28 !== 0 ? "을" : "를"}`; };
+
+export default async function Exceptions({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await requireAdmin();
-  const { all, k } = await searchParams;
-  let q = db().from("exceptions").select("*").order("created_at", { ascending: !all }).limit(100);
-  if (!all) q = q.eq("status", "open");
+  const sp = await searchParams;
+  const view = parseExceptionView(sp);
+  const k = (Array.isArray(sp.k) ? sp.k[0] : sp.k) || undefined;
+  const st = viewStatus(view);
+  // 처리할 것은 오래된 순(오래 방치된 것부터), 처리한 것은 최근에 처리한 순
+  let q = db().from("exceptions").select("*").limit(100);
+  q = view === "open" ? q.order("created_at", { ascending: true }) : view === "done" ? q.order("resolved_at", { ascending: false, nullsFirst: false }) : q.order("created_at", { ascending: false });
+  if (st) q = q.eq("status", st);
   const [{ data: rows }, t] = await Promise.all([q, now()]);
+  // 다시 연 예외: 처리 이력에 resolved → open 이 남은 열린 건. 가장 최근 다시 연 이유를 카드에 보인다
+  const openIds = (rows ?? []).filter((e) => e.status === "open").map((e) => e.id);
+  const { data: reopenEv } = openIds.length
+    ? await db().from("status_events").select("entity_id,reason,actor,created_at").eq("entity_type", "exception").eq("field", "status").eq("from_value", "resolved").eq("to_value", "open").in("entity_id", openIds).order("created_at", { ascending: false })
+    : { data: [] };
+  const reopened = new Map<string, { reason: string | null; created_at: string }>();
+  for (const ev of reopenEv ?? []) if (!reopened.has(ev.entity_id)) reopened.set(ev.entity_id, ev);
   const counts = new Map<string, number>();
   for (const e of rows ?? []) counts.set(e.kind, (counts.get(e.kind) ?? 0) + 1);
   // 본인이 '참석했어요'라고 알린 노쇼 후보는 확인만 하면 끝나니 위로 올린다
   // 아직 열린 '본인 참석 알림' 노쇼 건을 맨 위로 (확인만 하면 끝나는 건)
-  const claimedFirst = (e: { status: string; kind: string; reason: string | null }) => Number(e.status === "open" && e.kind === "no_show" && isClaimed(e.reason));
-  const data = (k ? (rows ?? []).filter((e) => e.kind === k) : rows ?? []).sort((a, b) => claimedFirst(b) - claimedFirst(a));
-  const qs = (kind?: string) => { const p = new URLSearchParams(); if (all) p.set("all", "1"); if (kind) p.set("k", kind); const x = p.toString(); return `/admin/exceptions${x ? `?${x}` : ""}`; };
+  // 다시 연 건을 맨 위로, 그다음 본인 참석 알림 노쇼 건
+  const data = sortOpenFirst(k ? (rows ?? []).filter((e) => e.kind === k) : rows ?? [], (e) => openRank(e, reopened.has(e.id), e.kind === "no_show" && isClaimed(e.reason)));
+  const qs = (kind?: string) => exceptionsHref({ v: view, k: kind });
   const back = qs(k);
 
   // 각 건의 '누구·어디'를 한 번에 읽는다
@@ -134,30 +151,35 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
     <div>
       <PageHeader
         title="예외 처리함"
-        desc={<>자동으로 풀지 못한 일(<Term tip={TIP.예외}>예외</Term>)만 모았어요. 오래된 것부터 보여 줘요. 정상 흐름은 여기에 올라오지 않아요.</>}
-        how={["위 유형 버튼으로 거르기", "'왜'와 '먼저 할 일' 읽기", "카드 아래 버튼 하나 누르기 (메모는 선택)", "처리한 건은 '처리한 것까지 보기'에서 다시 확인"]}
+        desc={<>자동으로 풀지 못한 일(<Term tip={TIP.예외}>예외</Term>)만 모았어요. 처리할 것은 오래된 것부터 보여 줘요. 정상 흐름은 여기에 올라오지 않아요.</>}
+        how={["위 유형 버튼으로 거르기", "'왜'와 '먼저 할 일' 읽기", "카드 아래 버튼 하나 누르기 (메모는 선택)", "처리한 건은 '처리한 것'에서 확인·다시 열기"]}
       />
-      <div className="mt-6 flex flex-wrap items-center gap-2">
+      <nav aria-label="예외 보기" className="mt-6 flex gap-1 overflow-x-auto border-b border-line">
+        {EXCEPTION_VIEWS.map((x) => (
+          <Link key={x.key} href={exceptionsHref({ v: x.key, k })} aria-current={view === x.key ? "page" : undefined} className={`-mb-px shrink-0 border-b-2 px-4 py-3 text-[15px] ${view === x.key ? "border-accent font-bold text-accent" : "border-transparent font-semibold text-muted hover:text-ink"}`}>
+            {x.label}
+          </Link>
+        ))}
+      </nav>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <Link href={qs()} className={`rounded-full px-4 py-2 text-[15px] font-semibold ${!k ? "bg-accent-soft text-accent" : "border border-line bg-card text-ink/80"}`}>전체 {rows?.length ?? 0}</Link>
         {[...counts.entries()].map(([kind, n]) => (
           <Link key={kind} href={qs(kind)} className={`rounded-full px-4 py-2 text-[15px] ${k === kind ? "bg-accent-soft font-semibold text-accent" : "border border-line bg-card text-ink/80"}`}>{LABEL[kind] ?? "기타"} {n}</Link>
         ))}
-        <Link href={all ? (k ? `/admin/exceptions?k=${k}` : "/admin/exceptions") : `/admin/exceptions?all=1${k ? `&k=${k}` : ""}`} className="ml-auto flex items-center gap-2 text-[14px] text-muted">
-          <span className={`flex size-5 items-center justify-center rounded-md border-2 ${all ? "border-accent bg-accent text-white" : "border-line"}`}>{all ? "✓" : ""}</span>처리한 것까지 보기
-        </Link>
       </div>
 
       {!data.length && (
         <div className="shadow-card mt-6 rounded-[20px] bg-card p-10 text-center">
-          <p className="text-[17px] font-bold text-ink">{all ? "기록된 예외가 없어요" : "처리할 예외가 0건이에요"}</p>
-          <p className="mt-1.5 text-[14px] text-muted">정상 흐름은 모두 자동으로 처리됐어요. 결제 오류·식당 부족·신고처럼 사람이 봐야 하는 일이 생기면 여기에 올라와요.</p>
-          {!all && <Link href="/admin/exceptions?all=1" className="mt-4 inline-block text-[14px] font-semibold text-accent hover:underline">지난 처리 기록 보기</Link>}
+          <p className="text-[17px] font-bold text-ink">{view === "open" ? "처리할 예외가 0건이에요" : view === "done" ? "처리한 예외가 없어요" : "기록된 예외가 없어요"}</p>
+          <p className="mt-1.5 text-[14px] text-muted">{view === "done" ? "처리를 마친 예외는 여기에 모여요. 잘못 닫은 건은 여기서 다시 열 수 있어요." : "정상 흐름은 모두 자동으로 처리됐어요. 결제 오류·식당 부족·신고처럼 사람이 봐야 하는 일이 생기면 여기에 올라와요."}</p>
+          {view === "open" && <Link href={exceptionsHref({ v: "done" })} className="mt-4 inline-block text-[14px] font-semibold text-accent hover:underline">처리한 것 보기</Link>}
         </div>
       )}
 
       <ul className="mt-6 space-y-3">
         {data.map((e) => {
           const rep = e.kind === "safety" ? repMap.get(e.ref_id) : undefined;
+          const elsewhere = e.status === "resolved" ? reopenElsewhere(e.kind, e.ref_type, e.ref_id) : null;
           const c: Ctx = rep
             ? { who: `${rep.reported?.name}님 (신고한 사람 ${rep.reporter?.name}님)`, href: rep.table_id ? `/admin/tables/${rep.table_id}` : undefined, ops: rep.table_id ? `/admin/tables/${rep.table_id}` : undefined }
             : ctx.get(`${e.ref_type}:${e.ref_id}`) ?? {};
@@ -169,6 +191,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
             <li key={e.id} className={`shadow-card rounded-[20px] bg-card p-6 ring-1 ${e.status === "open" ? TONE[e.kind] ?? "ring-line" : "ring-line"}`}>
               <div className="flex flex-wrap items-center gap-3">
                 <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${PILL[e.kind] ?? "bg-danger/10 text-danger"}`}>{KIND_TIP[e.kind] ? <Term tip={KIND_TIP[e.kind]}>{LABEL[e.kind]}</Term> : LABEL[e.kind] ?? "기타 예외"}</span>
+                {e.status === "open" && reopened.has(e.id) && <span className="rounded-full bg-danger/10 px-3 py-1 text-[14px] font-semibold text-danger">다시 엶</span>}
                 {e.kind === "no_show" && isClaimed(e.reason) && <span className="rounded-full bg-accent-soft px-3 py-1 text-[14px] font-semibold text-accent">본인 참석 알림</span>}
                 <span className="text-[14px] text-muted">{fmtDateTime(e.created_at)} 올라옴{e.status === "open" ? ` · ${since(e.created_at, t)}` : ""}</span>
               </div>
@@ -183,6 +206,12 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                   {e.reason}
                   {rep && <span className="mt-0.5 block text-[13px] font-normal text-muted">신고 사유: {rep.reason}{rep.detail ? ` · "${rep.detail}"` : ""}</span>}
                 </dd>
+                {e.status === "open" && reopened.has(e.id) && (
+                  <>
+                    <dt className="text-[13px] font-semibold leading-6 text-muted">다시 연 이유</dt>
+                    <dd className="text-[14px] text-ink">{reasonText(reopened.get(e.id)!.reason) ?? "-"} <span className="text-[12px] text-muted">· {fmtDateTime(reopened.get(e.id)!.created_at)}</span></dd>
+                  </>
+                )}
                 {e.status === "open" && advice && (
                   <>
                     <dt className="text-[13px] font-semibold leading-6 text-muted">먼저 할 일</dt>
@@ -194,6 +223,19 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                 <p className="mt-3 rounded-xl bg-leaf/10 px-3.5 py-2 text-[13px] text-leaf">
                   처리됨 · {e.resolution ?? "처리 완료"} · {e.resolved_by ? `운영자 ${resolverName.get(e.resolved_by) ?? ""}` : "자동"}{e.resolved_at ? ` · ${fmtDateTime(e.resolved_at)}` : ""}
                 </p>
+              )}
+              {e.status === "resolved" && canAct && elsewhere && (
+                <p className="mt-3 text-[13px] text-muted">
+                  {elsewhere.reason}. <Link href={elsewhere.href} className="font-semibold text-accent-text underline underline-offset-4">{elsewhere.label}</Link>
+                </p>
+              )}
+              {e.status === "resolved" && canAct && !elsewhere && (
+                <form action={reopenException} className="mt-3 flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="id" value={e.id} />
+                  <input type="hidden" name="back" value={back} />
+                  <input name="note" required minLength={ADMIN_NOTE_MIN} maxLength={300} aria-label="다시 여는 이유 (필수)" placeholder={`다시 여는 이유 (필수, ${ADMIN_NOTE_MIN}자 이상)`} className="h-10 min-w-48 flex-1 rounded-xl border border-line bg-field px-3.5 text-[14px] outline-none focus:border-accent" />
+                  <ConfirmButton confirm={reopenConfirm(e.resolution)} className={light}>다시 열기</ConfirmButton>
+                </form>
               )}
               {e.status === "open" && !canAct && <p className="mt-4 text-[13px] text-muted">조회 전용 계정이라 처리할 수 없어요.</p>}
               {e.status === "open" && canAct && (
@@ -209,7 +251,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                     </>
                   ) : e.kind === "no_show" ? (
                     <>
-                      <ConfirmButton name="action" value="noshow" confirm={`${c.who ?? "이 참가자"}를 노쇼로 확정해요. 노쇼 횟수에 따라 경고나 신청 제한이 바로 걸려요. 계속할까요?`} className={primary}>노쇼 확정</ConfirmButton>
+                      <ConfirmButton name="action" value="noshow" confirm={`${objectOf(c.who ?? "이 참가자")} 노쇼로 확정해요. 노쇼 횟수에 따라 경고나 신청 제한이 바로 걸려요. 계속할까요?`} className={primary}>노쇼 확정</ConfirmButton>
                       <button name="action" value="attended" className={light}>참석으로 정정</button>
                     </>
                   ) : e.kind === "safety" ? (

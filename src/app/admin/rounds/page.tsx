@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Copy, Plus } from "lucide-react";
 import Link from "next/link";
 import { Badge, PageHeader, Panel, RoundPicker, Term, btnDanger, btnLight, btnPrimary, ctl, td, th } from "@/components/admin-ui";
 import { Optional, Required } from "@/components/ui";
@@ -11,6 +11,7 @@ import { dateKey, fmtDateTime, fmtDay, fmtSlot, fmtTime } from "@/lib/format";
 import { ROUND_TABS, TABLE_MAX, TABLE_MIN, buildBoard, parseRoundTab, roundsHref, tableRange, type RoundTab } from "@/lib/round-board";
 import { MAX_TABLES_LIMIT, canCancelRound, canDeleteSlot, checkRoundEdit, fromKstInput, toKstInput } from "@/lib/round-rules";
 import { db } from "@/lib/supabase";
+import { copyRoundDraft, copyRoundHref, type RoundDraft } from "@/lib/round-copy";
 import { TIP as GLOSSARY_TIP } from "@/lib/admin-glossary";
 import { ConfirmButton } from "../confirm-button";
 import { addSlot, cancelRound, createRound, deleteSlot, setCapacity, setMaxTables, updateRound } from "./actions";
@@ -30,7 +31,7 @@ const TIP = {
   short: `신청이 ${TABLE_MIN}명보다 적어 아직 한 테이블도 만들 수 없는 일정이에요.`,
 };
 
-type Draft = { title?: string; deadline?: string; match_at?: string; dates?: string[]; time?: string; duration?: string; regions?: string[]; max_tables?: string };
+type Draft = RoundDraft;
 
 export default async function Rounds({ searchParams }: { searchParams: Promise<{ r?: string; f?: string; tab?: string; edit?: string; title?: string; deadline?: string; match_at?: string }> }) {
   const me = await requireAdmin();
@@ -110,6 +111,10 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
   const help = "mt-1.5 block text-[12px] text-muted";
   const rid = cur?.id;
   // 고치기·식당 재고 탭에서 회차를 바꿔도 같은 탭에 머문다
+  // 회차 복제: 저장하지 않고 새 회차 탭을 이 회차 값(같은 요일, 열 수 있는 가장 가까운 주)으로 채워 연다
+  const { data: takenRows } = await db().from("slots").select("region,starts_at,rounds!inner(status)").gte("starts_at", t.toISOString()).neq("rounds.status", "closed");
+  const taken = (takenRows ?? []).map((x) => ({ region: x.region as string, starts_at: x.starts_at as string }));
+  const copyHref = (x: { title: string; slots: { region: string; starts_at: string; ends_at: string; max_tables: number }[] }) => copyRoundHref(copyRoundDraft(x, t, taken));
   const pickerIn = (k: RoundTab) => <RoundPicker rounds={picker} current={rid} extra={<input type="hidden" name="tab" value={k} />} />;
 
   return (
@@ -119,7 +124,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
         desc="다음 저녁의 일정과 식당을 준비해요."
         actions={!ro && tab !== "new" ? <Link href={roundsHref({ r: rid, tab: "new" })} className={btnPrimary}><Plus size={18} />새 회차 만들기</Link> : undefined}
         how={[
-          <><Term tip={TIP.round}>회차</Term> 만들기</>,
+          <><Term tip={TIP.round}>회차</Term> 만들기 (지난 회차 복제도 돼요)</>,
           <>마감까지 모집 현황 보기</>,
           <>마감 뒤 <Term tip={TIP.matchAt}>자동 매칭</Term> 결과 확인</>,
         ]}
@@ -134,9 +139,15 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
               <p className="text-[14px] text-muted">조회 전용 계정이라 회차를 만들거나 식당 재고를 바꿀 수 없어요. 전체 권한 운영자에게 부탁해 주세요.</p>
             ) : (
               <>
+                {draft.from && (
+                  <p className="mb-4 rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-[13px] text-ink" aria-live="polite">
+                    &lsquo;{draft.from}&rsquo;의 요일·시각·동네·최대 테이블을 채웠어요. 날짜는 같은 요일로, 마감이 안 지났고 이미 열린 회차와 겹치지 않는 가장 가까운 주로 잡았으니 확인하고 고쳐 주세요. 아직 저장한 건 없어요.
+                  </p>
+                )}
                 <p className="mb-5 text-[13px] text-muted">이름·날짜·동네만 채우면 마감과 매칭 시각은 운영 규칙대로 잡혀요. 만들면 날짜×동네마다 <Term tip={TIP.slot}>일정</Term>이 생기고, 그 동네 제휴 식당이 일정마다 2테이블씩 잡혀요.</p>
                 {/* 검증 뒤 돌아오면 f가 바뀌므로 폼을 새로 그려 넣었던 값을 다시 채운다(React가 제출 뒤 폼을 비우기 때문) */}
                 <form key={f ?? "new"} action={createRound} className="space-y-5 text-[14px]">
+                  {draft.from && <input type="hidden" name="from" value={draft.from} />}
                   <label className="block"><span className={lbl}>이름<Required /></span><input name="title" required defaultValue={draft.title} placeholder="11월 둘째 주 저녁" className={`${ctl} mt-2 w-full`} /><span className={help}>참가자에게 보이는 회차 이름이에요.</span></label>
                   <label className="block"><span className={lbl}>신청 마감<Optional /></span><input name="deadline" type="datetime-local" defaultValue={draft.deadline} className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 모임 주 화요일 밤 12시로 잡혀요. 이 시각부터 환불이 안 되고 매칭이 돌아요.</span></label>
                   <label className="block"><span className={lbl}>자동 매칭 실행<Optional /></span><input name="match_at" type="datetime-local" defaultValue={draft.match_at} className={`${ctl} mt-2 w-full`} /><span className={help}>비우면 마감과 같은 시각에 매칭이 진행돼요.</span></label>
@@ -199,6 +210,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                       <th className={th}>상태</th>
                       <th className={th}><Term tip={TIP.deadline}>신청 마감</Term></th>
                       <th className={th}><Term tip={TIP.matchAt}>자동 매칭</Term></th>
+                      {!ro && <th className={th}><span className="sr-only">복제</span></th>}
                       <th className={th}><span className="sr-only">고르기</span></th>
                     </tr></thead>
                     <tbody>
@@ -208,6 +220,7 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
                           <td className={td}><Badge v={ROUND_STATUS[statusOf(x)] ?? [x.status, "muted"]} /></td>
                           <td className={`${td} whitespace-nowrap tabular-nums text-muted`}>{fmtDateTime(x.apply_deadline)}</td>
                           <td className={`${td} whitespace-nowrap tabular-nums text-muted`}>{fmtDateTime(x.match_at)}</td>
+                          {!ro && <td className={`${td} text-right`}><Link href={copyHref(x)} title="이 회차 값으로 새 회차 만들기 (저장은 만들기를 눌러야 돼요)" className="inline-flex min-h-9 items-center gap-1 whitespace-nowrap text-[13px] font-semibold text-accent hover:underline"><Copy size={14} aria-hidden="true" />이 회차 복제</Link></td>}
                           <td className={`${td} text-right`}><Link href={roundsHref({ r: x.id })} aria-label={`${x.title} 선택`}>{x.id === rid ? <ChevronDown size={18} className="inline text-accent" /> : <ChevronRight size={18} className="inline text-muted" />}</Link></td>
                         </tr>
                       ))}
@@ -277,6 +290,12 @@ export default async function Rounds({ searchParams }: { searchParams: Promise<{
           {/* ── 고치기: 이름·마감·매칭 시각, 일정과 정원, 회차 취소 ── */}
           {tab === "edit" && selected && (
             <Panel title={`${selected.title} 고치기`} className="mt-6" action={pickerIn("edit")}>
+              {!ro && (
+                <p className="-mt-1 mb-4 text-[13px] text-muted">
+                  다음 주에도 같은 구성으로 열려면{" "}
+                  <Link href={copyHref(selected)} className="inline-flex items-center gap-1 font-semibold text-accent underline underline-offset-4"><Copy size={14} aria-hidden="true" />이 회차 복제</Link>를 눌러 주세요. 새 회차 칸이 채워진 채로 열리고, &lsquo;회차 만들기&rsquo;를 눌러야 저장돼요.
+                </p>
+              )}
               {ro ? (
                 <p className="text-[14px] text-muted">조회 전용 계정이라 회차를 고치거나 취소할 수 없어요. 전체 권한 운영자에게 부탁해 주세요.</p>
               ) : leftover > 0 ? (
