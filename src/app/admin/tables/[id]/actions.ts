@@ -14,7 +14,10 @@ export async function emergencyAction(form: FormData) {
   const back = (k: "m" | "e", msg: string) => redirect(`/admin/tables/${tableId}?${k === "e" ? keep : ""}${k}=${encodeURIComponent(msg)}#ops`);
   const bad = checkReason(raw);
   if (bad) back("e", bad.message);
-  const gate = emergencyGate(exId, form.get("no_ex") === "on", raw);
+  // 폼의 ex 값은 믿지 않고, 실제로 열려 있는 예외인지 다시 확인한다 (없으면 '예외 없이'로 본다)
+  const { db } = await import("@/lib/supabase");
+  const openEx = exId ? (await db().from("exceptions").select("id").eq("id", exId).eq("status", "open").maybeSingle()).data : null;
+  const gate = emergencyGate(openEx ? exId : null, form.get("no_ex") === "on", raw);
   if (!gate.ok) return back("e", gate.message);
   const reason = gate.reason;
 
