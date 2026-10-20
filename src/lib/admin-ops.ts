@@ -77,7 +77,7 @@ async function rescheduleFor(appId: string, userId: string, from: string, to: Tb
   await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/tables/${from}`);
   await db().from("notifications").delete().eq("dedupe_key", `remind:${appId}`).eq("status", "pending");
   const at = new Date(new Date(to.slots.starts_at).getTime() - 24 * 3600_000);
-  if (at > new Date()) {
+  if (at > (await now())) {
     // 운영자가 '자동 메시지'에서 고친 하루 전 안내 문구를 그대로 쓴다
     const msg = render("reminder", { date: fmtDate(to.slots.starts_at), time: fmtTime(to.slots.starts_at), region: to.slots.region, venue: to.venues?.name ?? "식당은 모임 정보에서", reservation: to.reservation_name ?? "" }, await loadTemplates());
     await notify({ userId, template: "reminder", title: msg.title, body: msg.body, link: `/tables/${to.id}`, dedupeKey: `remind:${appId}:${to.id}`, scheduledAt: at });
