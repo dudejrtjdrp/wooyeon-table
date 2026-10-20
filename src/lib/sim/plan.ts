@@ -1,6 +1,6 @@
 // 시연용 봇이 언제 무슨 말을 할지 정한다 (DB 없이 계산만). 실제로 올리는 건 bots.ts
 import { type Persona, arrivalMinutes, rand } from "./persona";
-import { type Ctx, ARRIVE_EARLY, ARRIVE_ON_TIME, BYE, DAY_MENU, DAY_PLAN, DAY_QA, GREET, GREET_MORE, LATE_ARRIVE, LATE_WARN, pick, replyTo, shape, topicReply } from "./scripts";
+import { type Ctx, type QaTopic, ARRIVE_EARLY, ARRIVE_ON_TIME, BYE, DAY_MENU, DAY_PLAN, DAY_QA, GREET, GREET_MORE, LATE_ARRIVE, LATE_WARN, pick, replyTo, shape, topicReply } from "./scripts";
 
 export type Phase = "hello" | "daybefore" | "arrive" | "topic" | "bye";
 /** hello는 확정 공지가 올라온 실제 시각 기준, 나머지는 모임 일정(시연 시계) 기준 */
@@ -20,6 +20,10 @@ export type PlanInput = {
   /** 모임 시작에 올라온 대화 주제 (없으면 주제 답도 없다) */
   topics: string[] | null;
   noShow: string | null;
+  /** 사람이 단체방에서 이미 물은 질문 주제. 봇은 같은 주제를 다시 묻지 않는다 */
+  askedTopics?: Set<QaTopic>;
+  /** 봇 질문이 이미 올라갔으면 그 문장 (답이 질문과 어긋나지 않게 같은 짝을 쓴다) */
+  postedQuestion?: string | null;
 };
 
 export const msgKey = (tableId: string, userId: string, phase: string, n: number | string) => `bot:${tableId}:${userId}:${phase}:${n}`;
@@ -58,10 +62,12 @@ export function planTable(i: PlanInput): PlanMsg[] {
   const asker = talkers[2] ?? talkers[0];
   const answerer = talkers.find((x) => x !== asker && x !== talkers[2]) ?? null;
   if (asker && answerer && answerer !== asker) {
-    const qa = DAY_QA[Math.floor(rand(asker.seed, `${t}:qa`) * DAY_QA.length)];
+    const qa = pickQa(rand(asker.seed, `${t}:qa`), i.askedTopics, i.postedQuestion);
+    if (qa) {
     const qAt = eve + between(asker.seed, `${t}:dq`, 24, 36) * MIN;
     add(asker, "daybefore", 2, qAt, qa.q);
     add(answerer, "daybefore", 2, qAt + between(answerer.seed, `${t}:da`, 1.5, 6) * MIN, shape(answerer, qa.a(answerer, i.ctx), `${t}:qa`));
+    }
   }
 
   // (c) 모임 시작 전후: 도착 소식, 늦는 사람은 미리 알리고 나중에 도착. 안 오는 사람(노쇼)은 말이 없다
@@ -87,6 +93,30 @@ export function planTable(i: PlanInput): PlanMsg[] {
   byes.forEach((p, k) => add(p, "bye", 1, i.endMs + (k === 0 ? between(p.seed, `${t}:b0`, 0, 0.6) : between(p.seed, `${t}:b`, 3 + k * 5, 10 + k * 10)) * MIN, pick(BYE, p, i.ctx, `${t}:bye`, used)));
 
   return out.sort((a, b) => a.due - b.due);
+}
+
+/**
+ * 하루 전 봇 질문 고르기. 이미 올라간 질문이 있으면 그 짝, 아니면 사람이 묻지 않은 주제 가운데 하나(r은 0~1).
+ * 사람이 모든 주제를 물었으면 null(묻지 않는다)
+ */
+export function pickQa(r: number, asked?: Set<QaTopic>, posted?: string | null): (typeof DAY_QA)[number] | null {
+  const same = posted ? DAY_QA.find((x) => x.q === posted) : undefined;
+  if (same) return same;
+  // 원래 고르던 질문이 겹치지 않으면 그대로 둔다 (다른 테이블 대사가 바뀌지 않게)
+  const first = DAY_QA[Math.floor(r * DAY_QA.length)];
+  if (!asked?.has(first.topic)) return first;
+  const pool = DAY_QA.filter((x) => !asked.has(x.topic));
+  return pool.length ? pool[Math.floor(r * pool.length)] : null;
+}
+
+/**
+ * 봇이 사람 말에 답하기 전에 먼저 해야 할 인사. 확정 인사(hello 1번)가 아직 안 올라갔고 인사할 때(모임 시작 전)면 그 메시지.
+ * 답장이 인사보다 먼저 나가 '드디어 확정됐네요, 안녕하세요'가 대화 중간에 끼던 문제를 막는다
+ */
+export function greetFirst(plan: PlanMsg[], posted: Set<string | null>, userId: string, demoNow: number, startMs: number, endMs: number): PlanMsg | null {
+  const hello = plan.find((m) => m.userId === userId && m.phase === "hello" && m.key.endsWith(":hello:1"));
+  if (!hello || posted.has(hello.key) || !phaseOpen("hello", demoNow, startMs, endMs)) return null;
+  return hello;
 }
 
 /** 단계마다 올릴 수 있는 시연 시각 범위. 지나면 그 단계 말은 건너뛴다 (늦게 켠 봇이 지난 얘기를 꺼내지 않게) */
@@ -119,7 +149,7 @@ export function spreadTimes(dues: number[], lower: number, upper: number): numbe
 }
 
 /** 사람 메시지 하나에 답할 봇 1~2명과 할 말. 인사·질문이면 둘, 아니면 대개 한 명 */
-export function planReplies(msgId: string, text: string, bots: Persona[], ctx: Ctx, used?: Set<string>): { userId: string; body: string; delayMs: number }[] {
+export function planReplies(msgId: string, text: string, bots: Persona[], ctx: Ctx, used?: Set<string>, greeting?: Set<string>): { userId: string; body: string; delayMs: number }[] {
   if (!bots.length) return [];
   const asks = /\?|안녕|반가|몇 ?시/.test(text);
   const n = Math.min(bots.length, asks || rand(msgId, "n") < 0.35 ? 2 : 1);
@@ -127,7 +157,8 @@ export function planReplies(msgId: string, text: string, bots: Persona[], ctx: C
   const who = [...bots].sort((a, b) => w[a.tone] + rand(a.seed, msgId) - (w[b.tone] + rand(b.seed, msgId))).slice(0, n);
   return who.map((p, k) => ({
     userId: p.userId,
-    body: replyTo(p, text, ctx, msgId, k, used),
+    // 이번에 확정 인사를 먼저 하는 봇은 답에서 인사를 또 하지 않는다
+    body: replyTo(p, text, ctx, msgId, k, used, greeting?.has(p.userId) ? ["greet"] : []),
     delayMs: Math.round(k === 0 ? between(p.seed, `${msgId}:d`, 6_000, 25_000) : between(p.seed, `${msgId}:d`, 30_000, 90_000)),
   }));
 }

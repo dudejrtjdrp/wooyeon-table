@@ -5,6 +5,11 @@ export const CHECKIN_NUDGE_AFTER = 20 * 60_000;
 /** 체크인을 깜빡한 사람이 '참석했어요'라고 알릴 수 있는 기간 (모임 끝난 뒤) */
 export const CLAIM_WINDOW = 48 * 3600_000;
 
+/** 체크인을 열어 두는 시간: 시작 이만큼 전부터 끝날 때까지 (FDB-01) */
+export const CHECKIN_OPEN_BEFORE = 60 * 60_000;
+/** 지금 체크인할 수 있는 시간인지 (모임 정보·홈·체크인 처리가 같은 기준) */
+export const checkInOpen = (start: Date, end: Date, t: Date) => t.getTime() >= start.getTime() - CHECKIN_OPEN_BEFORE && t.getTime() <= end.getTime();
+
 export const shouldNudgeCheckIn = (start: Date, end: Date, t: Date) => t.getTime() >= start.getTime() + CHECKIN_NUDGE_AFTER && t < end;
 export const canClaimAttended = (status: string | null | undefined, end: Date, t: Date) =>
   status === "SCHEDULED" && t > end && t.getTime() <= end.getTime() + CLAIM_WINDOW;

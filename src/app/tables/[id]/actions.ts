@@ -6,7 +6,7 @@ import { pushToUsers } from "@/lib/push";
 import { redirect } from "next/navigation";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
-import { CLAIM_MARK, canClaimAttended } from "@/lib/attendance-rules";
+import { CLAIM_MARK, canClaimAttended, checkInOpen } from "@/lib/attendance-rules";
 import { logStatus } from "@/lib/events";
 import { fmtDateTime } from "@/lib/format";
 import { ensureRoom } from "@/lib/pipeline";
@@ -68,17 +68,17 @@ export async function lateNotice(form: FormData) {
   redirect(`/tables/${tableId}/chat?m=${encodeURIComponent("늦는다고 알렸어요")}`);
 }
 
-/** 앱 체크인으로 참석 기록 (FDB-01). 시작 1시간 전부터 끝날 때까지 가능 */
+/** 앱 체크인으로 참석 기록 (FDB-01). 시작 1시간 전부터 끝날 때까지 가능. 홈 카드에서도 같은 처리를 쓴다(from=home) */
 export async function checkIn(form: FormData) {
   const me = await requireMe();
   const tableId = String(form.get("table_id"));
+  const fromHome = form.get("from") === "home";
   const m = await membership(tableId, me.id);
   if (!m) redirect("/");
   const { data: t } = await db().from("dining_tables").select("slots(starts_at,ends_at)").eq("id", tableId).single();
   const s = (t as unknown as { slots: { starts_at: string; ends_at: string } }).slots;
   const n = await now();
-  const open = new Date(new Date(s.starts_at).getTime() - 60 * 60 * 1000);
-  if (n < open || n > new Date(s.ends_at)) {
+  if (!checkInOpen(new Date(s.starts_at), new Date(s.ends_at), n)) {
     redirect(`/tables/${tableId}?e=${encodeURIComponent("체크인은 모임 1시간 전부터 끝날 때까지 할 수 있어요")}`);
   }
   const { data: up } = await db()
@@ -91,6 +91,8 @@ export async function checkIn(form: FormData) {
     await logStatus({ entityType: "application", entityId: m!.id, field: "attendance_status", from: "SCHEDULED", to: "ATTENDED", actor: `user:${me.id}`, reason: "앱 체크인" });
   }
   revalidatePath(`/tables/${tableId}`);
+  revalidatePath("/");
+  if (fromHome) redirect(`/?m=${encodeURIComponent("체크인했어요. 즐거운 저녁 되세요")}`);
 }
 
 /**

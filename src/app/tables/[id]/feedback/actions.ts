@@ -3,12 +3,8 @@
 import { redirect } from "next/navigation";
 import { requireMe } from "@/lib/auth";
 import { logStatus } from "@/lib/events";
+import { SCORES_MISSING_MSG, parseFeedbackScores } from "@/lib/feedback-rules";
 import { db } from "@/lib/supabase";
-
-const score = (v: FormDataEntryValue | null) => {
-  const n = Number(v);
-  return n >= 1 && n <= 5 ? n : null;
-};
 
 export async function submitFeedback(form: FormData) {
   const me = await requireMe();
@@ -23,15 +19,19 @@ export async function submitFeedback(form: FormData) {
   // 후기는 이 테이블에 실제로 참석한(체크인한) 사람만 남긴다. 다음 매칭 입력이 되니 오지 않은 사람의 점수는 받지 않는다
   if (app.attendance_status !== "ATTENDED") redirect(`/tables/${tableId}?e=${encodeURIComponent("체크인한 모임에만 후기를 남길 수 있어요")}`);
 
+  // 별점 다섯 개는 모두 골라야 한다(빈 후기가 다음 매칭 입력이 되지 않게). 고른 값은 주소에 남겨 다시 채운다
+  const parsed = parseFeedbackScores((k) => form.get(k));
+  if (!parsed.ok) {
+    const q = new URLSearchParams({ e: SCORES_MISSING_MSG, miss: parsed.missing.join(",") });
+    for (const [k, v] of Object.entries(parsed.given)) q.set(`s_${k}`, String(v));
+    redirect(`/tables/${tableId}/feedback?${q.toString()}#scores`);
+  }
+
   await db().from("feedbacks").upsert({
     application_id: app.id,
     user_id: me.id,
     table_id: tableId,
-    mood_score: score(form.get("mood")),
-    talk_score: score(form.get("talk")),
-    venue_score: score(form.get("venue")),
-    rejoin_intent: score(form.get("rejoin")),
-    recommend_intent: score(form.get("recommend")),
+    ...parsed.scores,
     comment: String(form.get("comment") ?? "").trim() || null,
   });
 
