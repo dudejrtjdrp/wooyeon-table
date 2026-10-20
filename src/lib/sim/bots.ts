@@ -7,6 +7,8 @@ import bcrypt from "bcryptjs";
 import { OPEN_REGIONS, PASSES } from "../constants";
 import { logStatus } from "../events";
 import { kstDay } from "../regions";
+import { now } from "../clock";
+import { passExpiresAt } from "../pass-expiry";
 import { db } from "../supabase";
 import { type JoinProfile, botsNeeded, chooseBots, makeBot, nextGender } from "./join";
 import { arrivalMinutes, persona } from "./persona";
@@ -357,10 +359,12 @@ async function botsJoinOnce(appId: string): Promise<{ joined: number; locked: bo
   if (!ids.length) return { joined: 0, locked: true };
 
   // 1회권 결제 완료로 신청 (시연 패널 테스트 참가자와 같은 모양)
-  const expires = new Date(Date.now() + 60 * 86400_000).toISOString();
+  // 결제·신청 시각과 이용권 기간은 시연용 시계로 적는다
+  const t = await now();
+  const expires = passExpiresAt(0, t).toISOString();
   const { data: passes } = await db().from("passes").insert(ids.map((id) => ({ user_id: id, pass_type: "single", total_count: PASSES.single.count, remaining: Math.max(0, PASSES.single.count - 1), expires_at: expires }))).select("id,user_id");
   const passOf = new Map((passes ?? []).map((x) => [x.user_id, x.id]));
-  const paidAt = new Date().toISOString();
+  const paidAt = t.toISOString();
   const { data: pays } = await db().from("payments").insert(ids.map((id) => ({ user_id: id, pass_id: passOf.get(id), amount: PASSES.single.amount, pass_type: "single", status: "PAID", paid_at: paidAt }))).select("id,user_id");
   const payOf = new Map((pays ?? []).map((x) => [x.user_id, x.id]));
   // 결제 행이 없는 PAID 신청은 만들지 않는다

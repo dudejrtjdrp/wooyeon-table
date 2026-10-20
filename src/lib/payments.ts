@@ -2,6 +2,7 @@
 import { PASSES, type PassType, won } from "./constants";
 import { logStatus } from "./events";
 import { now } from "./clock";
+import { passExpiresAt } from "./pass-expiry";
 import { fmtSlot } from "./format";
 import { notify } from "./notify";
 import { db } from "./supabase";
@@ -31,12 +32,14 @@ export async function markPaid(appId: string, userId: string, meta: PaidMeta): P
     payments: { id: string; status: string; pass_type: PassType; amount: number };
   } | null;
   if (!app || app.user_id !== userId) return false;
+  // 결제 시각·이용권 기간은 시연용 시계로 적는다(신청 시각과 순서가 뒤집히지 않게)
+  const t = await now();
 
   const { data: updated } = await db()
     .from("payments")
     .update({
       status: "PAID",
-      paid_at: new Date().toISOString(),
+      paid_at: t.toISOString(),
       provider: meta.provider,
       method: meta.method ?? null,
       pg_payment_key: meta.pgPaymentKey ?? null,
@@ -51,9 +54,7 @@ export async function markPaid(appId: string, userId: string, meta: PaidMeta): P
 
   const passDef = PASSES[app.payments.pass_type] ?? PASSES.single;
   // 멤버십은 산 날부터 N개월, 횟수 없음. 1회권은 이번 신청에 바로 1회를 쓴다(유효 60일)
-  const expires = new Date();
-  if (passDef.months) expires.setMonth(expires.getMonth() + passDef.months);
-  else expires.setDate(expires.getDate() + 60);
+  const expires = passExpiresAt(passDef.months, t);
   const { data: pass } = await db()
     .from("passes")
     .insert({
@@ -71,7 +72,7 @@ export async function markPaid(appId: string, userId: string, meta: PaidMeta): P
   await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
   await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: app.payment_status, to: "PAID", actor: `user:${userId}`, reason: meta.reason });
   // 다시 결제해 끝났으면 이 결제에 걸려 있던 결제 오류 예외는 자동으로 닫는다
-  await db().from("exceptions").update({ status: "resolved", resolution: "참가자가 다시 결제해 해결(자동)", resolved_at: new Date().toISOString() }).like("dedupe_key", `payment:${app.payment_id}:%`).eq("status", "open");
+  await db().from("exceptions").update({ status: "resolved", resolution: "참가자가 다시 결제해 해결(자동)", resolved_at: t.toISOString() }).like("dedupe_key", `payment:${app.payment_id}:%`).eq("status", "open");
   await notify({
     userId,
     template: "paid",
