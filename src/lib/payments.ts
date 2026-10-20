@@ -1,7 +1,7 @@
 // 결제 승인과 환불을 한곳에서 처리한다. 모의 결제와 토스페이먼츠 결제가 같은 길로 들어온다.
 import { PASSES, type PassType, won } from "./constants";
 import { logStatus } from "./events";
-import { now } from "./clock";
+import { now, realNowIso } from "./clock";
 import { passExpiresAt } from "./pass-expiry";
 import { fmtSlot } from "./format";
 import { notify } from "./notify";
@@ -72,7 +72,7 @@ export async function markPaid(appId: string, userId: string, meta: PaidMeta): P
   await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
   await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: app.payment_status, to: "PAID", actor: `user:${userId}`, reason: meta.reason });
   // 다시 결제해 끝났으면 이 결제에 걸려 있던 결제 오류 예외는 자동으로 닫는다
-  await db().from("exceptions").update({ status: "resolved", resolution: "참가자가 다시 결제해 해결(자동)", resolved_at: t.toISOString() }).like("dedupe_key", `payment:${app.payment_id}:%`).eq("status", "open");
+  await db().from("exceptions").update({ status: "resolved", resolution: "참가자가 다시 결제해 해결(자동)", resolved_at: realNowIso() }).like("dedupe_key", `payment:${app.payment_id}:%`).eq("status", "open");
   await notify({
     userId,
     template: "paid",
@@ -164,7 +164,7 @@ export async function refundPayment(paymentId: string, appId: string, actor: str
     reason: `${reason}: 원결제수단 전액 환불 ${amount}${p.provider === "toss" ? " (토스페이먼츠 취소 완료)" : " (모의)"}`,
   });
   // 운영자에게 넘어가 있던 환불 실패 건이면 닫는다
-  await db().from("exceptions").update({ status: "resolved", resolution: "환불 다시 시도 성공", resolved_at: (await now()).toISOString() }).eq("dedupe_key", `refund:${paymentId}`).eq("status", "open");
+  await db().from("exceptions").update({ status: "resolved", resolution: "환불 다시 시도 성공", resolved_at: realNowIso() }).eq("dedupe_key", `refund:${paymentId}`).eq("status", "open");
   if (notifyUser || app?.payment_status === "REFUND_FAILED") await tell("refunded", `refunded:${appId}`);
   return { ok: true, message: `결제하신 수단으로 ${amount}을 전액 돌려드렸어요.` };
 }

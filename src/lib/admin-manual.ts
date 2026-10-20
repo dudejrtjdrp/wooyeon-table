@@ -2,7 +2,7 @@
 // 판단은 admin-manual-rules.ts(순수 함수)에 있고, 여기서는 읽고 쓰고 기록만 한다.
 // 식당 바꾸기는 예약이 안 돼 자동으로 바꿀 때(pipeline.ts reassignVenue)와 같은 순서로 예약·단체방·알림을 다시 맞춘다.
 import { type AttendOp, ATTEND_OP_LABEL, attendanceChange, canRunMatchNow, canSwapVenue, runResultText, swapCandidates, type SwapCandidate, type SwapOption } from "./admin-manual-rules";
-import { now } from "./clock";
+import { now, realNowIso } from "./clock";
 import { postSystem } from "./delivery";
 import { logStatus } from "./events";
 import { notify } from "./notify";
@@ -129,7 +129,7 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
   if (after?.status === "CONFIRMED") {
     // 식당이 정해지고 예약까지 됐으니 이 테이블의 식당 부족·예약 실패 예외는 닫는다
     const at = clock.toISOString();
-    const { data: closed } = await db().from("exceptions").update({ status: "resolved", resolution: `운영자 식당 변경: ${pick.name}`, resolved_by: adminId, resolved_at: at }).in("dedupe_key", [`reservation:${tableId}`, `venue:${tableId}`]).eq("status", "open").select("id");
+    const { data: closed } = await db().from("exceptions").update({ status: "resolved", resolution: `운영자 식당 변경: ${pick.name}`, resolved_by: adminId, resolved_at: realNowIso() }).in("dedupe_key", [`reservation:${tableId}`, `venue:${tableId}`]).eq("status", "open").select("id");
     for (const x of closed ?? []) await logStatus({ entityType: "exception", entityId: x.id, field: "status", from: "open", to: "resolved", actor, reason: `운영자 식당 변경: ${pick.name}` });
   }
   // 이전 식당 예약은 취소 연동이 없어, 확정돼 있었으면 예외 처리함에 '이전 예약 취소'로 남긴다(안 그러면 그 식당에 노쇼 예약이 생긴다)
@@ -185,7 +185,7 @@ export async function setAttendance(appId: string, op: AttendOp, note: string, a
   }
 
   const resolution = op === "checkin" ? "참석 관리에서 체크인 처리" : "참석 관리에서 노쇼 확정";
-  const { data: closed } = await db().from("exceptions").update({ status: "resolved", resolution, resolved_by: adminId, resolved_at: at }).eq("dedupe_key", key).eq("status", "open").select("id");
+  const { data: closed } = await db().from("exceptions").update({ status: "resolved", resolution, resolved_by: adminId, resolved_at: realNowIso() }).eq("dedupe_key", key).eq("status", "open").select("id");
   for (const x of closed ?? []) await logStatus({ entityType: "exception", entityId: x.id, field: "status", from: "open", to: "resolved", actor, reason: resolution });
 
   if (op === "checkin") return { ok: true, message: `${a.users.name}님을 체크인 처리했어요${a.dining_tables.status === "DONE" ? ". 후기 요청은 다음 자동 실행 때 나가요" : ""}` };

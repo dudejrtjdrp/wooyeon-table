@@ -1,5 +1,6 @@
 import { contentMessage } from "./content-preview";
 import { now } from "./clock";
+import { justConfirmed, runCutoffs } from "./recovery-rules";
 import { REFUND_POLICY } from "./constants";
 import { logStatus } from "./events";
 import { fmtSlot } from "./format";
@@ -537,7 +538,7 @@ async function askFeedback(appId: string, userId: string, tableId: string, t: Da
 /** 후기 요청 안전망이 거슬러 보는 기간. 시연용 가정(팀이 정한 값) */
 export const FEEDBACK_SAFETY_NET_DAYS = 7;
 /** 막 확정된 테이블은 러너가 안내 중일 수 있어 이만큼은 다시 하지 않는다. 시연용 가정(팀이 정한 값) */
-export const RESUME_GRACE_MS = 2 * 60_000;
+export { RESUME_GRACE_MS } from "./recovery-rules";
 
 /** 끝난 지 7일 안 된 모임에서 참석했는데 후기도, 후기 요청도 없는 사람에게 요청을 보낸다 */
 async function feedbackSafetyNet(t: Date, tpl: Awaited<ReturnType<typeof loadTemplates>>): Promise<number> {
@@ -601,11 +602,10 @@ async function resumeAfterConfirm(t: Date): Promise<number> {
   if (!tables?.length) return 0;
   const { data: notices } = await db().from("chat_messages").select("dedupe_key").in("dedupe_key", tables.map((x) => `notice:${x.id}`));
   const has = new Set((notices ?? []).map((m) => m.dedupe_key));
-  // 막 확정돼 러너가 아직 안내 중인 테이블은 건너뛴다(2분)
-  const fresh = Date.now() - RESUME_GRACE_MS;
+  // 막 확정돼 러너가 아직 안내 중인 테이블은 건너뛴다(2분). confirmed_at은 시연 시계로 찍히니 같은 시계로 잰다
   let n = 0;
   for (const x of tables) {
-    if (has.has(`notice:${x.id}`) || (x.confirmed_at && Date.parse(x.confirmed_at) > fresh)) continue;
+    if (has.has(`notice:${x.id}`) || justConfirmed(x.confirmed_at, t)) continue;
     try {
       await afterConfirm(x.id);
       await logStatus({ entityType: "dining_table", entityId: x.id, field: "after_confirm", to: "RESUMED", actor: "system", reason: "첫 공지가 없어 확정 뒤 안내를 다시 함" });
@@ -622,7 +622,7 @@ async function resumeAfterConfirm(t: Date): Promise<number> {
 }
 
 /** 실행 중으로 이만큼 넘게 남아 있으면 멈춘 것으로 본다 (서버 함수 제한 시간 60초보다 넉넉히). 시연용 가정(팀이 정한 값) */
-export const STUCK_RUN_MS = 10 * 60_000;
+export { STUCK_RUN_MS } from "./recovery-rules";
 
 /**
  * 멈춘 매칭 복구 (MAT-01·MAT-13).
@@ -632,9 +632,8 @@ export const STUCK_RUN_MS = 10 * 60_000;
  */
 export async function recoverMatchRuns(t: Date): Promise<{ retried: number; escalated: number }> {
   const res = { retried: 0, escalated: 0 };
-  // started_at은 실제 시각으로 찍히니 실제 시각으로 잰다. 일주일 넘은 실행은 이미 사람이 봤다고 보고 건드리지 않는다
-  const stuckBefore = new Date(Date.now() - STUCK_RUN_MS).toISOString();
-  const recent = new Date(Date.now() - 7 * 86400_000).toISOString();
+  // started_at은 시연 시계(now())로 찍히니 같은 시계(t)로 잰다. 일주일 넘은 실행은 이미 사람이 봤다고 보고 건드리지 않는다
+  const { stuckBefore, recent } = runCutoffs(t);
   const cols = "id,round_id,status,started_at,summary,rounds(title,slots(starts_at))";
   const [{ data: failed }, { data: stuck }] = await Promise.all([
     db().from("match_runs").select(cols).eq("status", "failed").gt("started_at", recent).limit(20),
@@ -644,7 +643,7 @@ export async function recoverMatchRuns(t: Date): Promise<{ retried: number; esca
     const { data: open } = await db().from("exceptions").select("id").eq("dedupe_key", `match_run:${raw.id}`).maybeSingle();
     if (open) continue; // 이미 운영자에게 넘긴 실행
     if (raw.status === "running") {
-      const { data: up } = await db().from("match_runs").update({ status: "failed", summary: { ...(raw.summary ?? {}), error: "10분 넘게 끝나지 않아 멈춘 것으로 봄" }, finished_at: new Date().toISOString() }).eq("id", raw.id).eq("status", "running").select("id");
+      const { data: up } = await db().from("match_runs").update({ status: "failed", summary: { ...(raw.summary ?? {}), error: "10분 넘게 끝나지 않아 멈춘 것으로 봄" }, finished_at: t.toISOString() }).eq("id", raw.id).eq("status", "running").select("id");
       if (!up?.length) continue;
     }
     const title = raw.rounds?.title ?? "회차";

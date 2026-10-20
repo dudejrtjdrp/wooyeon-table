@@ -64,7 +64,8 @@ vi.mock("./supabase", () => ({ db: () => ({ from: q }) }));
 vi.mock("./toss", () => ({ cancelToss: (...a: unknown[]) => cancelToss(...a) }));
 // 시연용 가상 시각: 실제 시각보다 2주 뒤
 const DEMO_NOW = new Date(Date.now() + 14 * 86400_000);
-vi.mock("./clock", () => ({ now: async () => DEMO_NOW }));
+const REAL_NOW = "2026-10-20T12:00:00.000Z";
+vi.mock("./clock", () => ({ now: async () => DEMO_NOW, realNowIso: () => REAL_NOW }));
 vi.mock("./notify", () => ({ notify: async (n: { template: string; dedupeKey?: string }) => void sent.push(n) }));
 
 const { markPaid, retryRefunds, REFUND_MAX_TRIES, REFUND_RETRY_GAP_MS } = await import("./payments");
@@ -133,7 +134,7 @@ describe("환불 실패 자동 재시도 (D7)", () => {
 });
 
 describe("결제 승인 시각은 시연용 시계로 (markPaid)", () => {
-  it("paid_at·이용권 만료·예외 해결 시각이 now() 기준이라 신청 시각보다 앞서지 않는다", async () => {
+  it("paid_at·이용권 만료는 now() 기준이라 신청 시각보다 앞서지 않고, 예외 해결 시각은 실제 시각(감사 기록)", async () => {
     const submitted = new Date(DEMO_NOW.getTime() - 60_000).toISOString();
     tables.applications = [{ id: "a2", user_id: "u2", payment_id: "p2", payment_status: "PENDING", submitted_at: submitted, rounds: { title: "회차", match_at: new Date(DEMO_NOW.getTime() + 86400_000).toISOString() }, payments: { id: "p2", status: "PENDING", pass_type: "single", amount: 9900 } }];
     tables.payments = [{ id: "p2", status: "PENDING", amount: 9900, pass_type: "single" }];
@@ -144,7 +145,7 @@ describe("결제 승인 시각은 시연용 시계로 (markPaid)", () => {
     expect(String(pay.paid_at) >= submitted).toBe(true);
     const pass = tables.passes[0];
     expect(new Date(String(pass.expires_at)).getTime() - DEMO_NOW.getTime()).toBe(60 * 86400_000);
-    expect(tables.exceptions[0]).toMatchObject({ status: "resolved", resolved_at: DEMO_NOW.toISOString() });
+    expect(tables.exceptions[0]).toMatchObject({ status: "resolved", resolved_at: REAL_NOW });
     // 두 번 눌러도 한 번만
     expect(await markPaid("a2", "u2", { provider: "mock", reason: "모의 결제 승인" })).toBe(false);
   });

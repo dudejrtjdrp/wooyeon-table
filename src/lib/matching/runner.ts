@@ -326,7 +326,7 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
 
     return { runId: run.id, alreadyRan: false, summary };
   } catch (e) {
-    await db().from("match_runs").update({ status: "failed", summary: { error: String(e) }, finished_at: (await now()).toISOString() }).eq("id", run.id);
+    await db().from("match_runs").update({ status: "failed", summary: { error: String(e) }, finished_at: await now().then((d) => d.toISOString(), () => new Date().toISOString()) }).eq("id", run.id);
     throw e;
   }
 }

@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminWrite } from "@/lib/auth";
-import { now } from "@/lib/clock";
+import { now, realNowIso } from "@/lib/clock";
 import { INTERESTS, MBTIS, OPEN_REGIONS, PASSES, PRICE_RANGES, TRAITS, isMembership } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
@@ -183,7 +183,7 @@ export async function autoAttend(form: FormData) {
       await db().from("applications").update({ attendance_status: "ATTENDED", checked_in_at: at }).eq("id", a.id);
       await logStatus({ entityType: "application", entityId: a.id, field: "attendance_status", from: "SCHEDULED", to: "ATTENDED", actor: "admin:demo", reason: "시연용 자동 체크인" });
       // 모임이 이미 끝나 노쇼 후보로 올라갔다면 함께 정리한다
-      await db().from("exceptions").update({ status: "resolved", resolution: "시연용 체크인으로 참석 처리", resolved_at: at }).eq("dedupe_key", `noshow:${a.id}`);
+      await db().from("exceptions").update({ status: "resolved", resolution: "시연용 체크인으로 참석 처리", resolved_at: realNowIso() }).eq("dedupe_key", `noshow:${a.id}`);
     }
     await db().from("feedbacks").upsert({
       application_id: a.id, user_id: a.user_id, table_id: a.table_id,

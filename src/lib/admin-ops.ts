@@ -3,6 +3,7 @@
 // 이 수정으로 풀린 예외(같은 신청·테이블에 걸린 조건 충돌·식당 부족·예약 실패 등)는 함께 닫는다.
 import { type Member, fillOrReflow, tableMembers } from "./attendance";
 import { extendMembershipFor, releaseUse } from "./billing";
+import { now } from "./clock";
 import { logStatus } from "./events";
 import { fmtDate, fmtSlot, fmtTime } from "./format";
 import { canJoin } from "./matching/constraints";
@@ -227,7 +228,7 @@ export async function splitTable(tableId: string, appIds: string[], reason: stri
   if (out.length < settings.minSize || stay < settings.minSize) return { ok: false, message: `나눈 뒤 두 테이블 모두 ${settings.minSize}명 이상이어야 해요 (지금 ${stay}명 / ${out.length}명)` };
   const { data: nt } = await db()
     .from("dining_tables")
-    .insert({ round_id: tb.round_id, slot_id: tb.slot_id, match_run_id: tb.match_run_id, status: "CONFIRMED", confirmed_at: new Date().toISOString(), explanation: { reasons: ["운영팀이 조정한 테이블"], origin: "admin_split" } })
+    .insert({ round_id: tb.round_id, slot_id: tb.slot_id, match_run_id: tb.match_run_id, status: "CONFIRMED", confirmed_at: (await now()).toISOString(), explanation: { reasons: ["운영팀이 조정한 테이블"], origin: "admin_split" } })
     .select("id")
     .single();
   const newTb = (await table(nt!.id))!;
