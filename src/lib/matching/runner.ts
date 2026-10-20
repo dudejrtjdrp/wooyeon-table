@@ -111,16 +111,18 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
   if (!rnd || rnd.status === "closed") return { runId: "", alreadyRan: true, summary: { skipped: rnd ? "closed" : "missing" } };
 
   // 1. 실행 기록을 먼저 잡는다. 이미 있으면 중복 실행이므로 멈춘다
+  // 시연 시계를 쓰는 환경에서도 실행 시각이 회차 날짜와 어긋나지 않게 시연 시계 기준으로 남긴다
+  const startedIso = (await now()).toISOString();
   let { data: run, error: runErr } = await db()
     .from("match_runs")
-    .insert({ round_id: roundId, algorithm_version: ALGORITHM_VERSION, status: "running" })
+    .insert({ round_id: roundId, algorithm_version: ALGORITHM_VERSION, status: "running", started_at: startedIso })
     .select("id")
     .single();
   if ((runErr || !run) && opts.resumeFailed) {
     // 실패한 기록을 다시 '실행 중'으로 바꾼 한 곳만 이어서 돈다 (동시에 두 번 돌지 않게)
     const { data: claimed } = await db()
       .from("match_runs")
-      .update({ status: "running", algorithm_version: ALGORITHM_VERSION, started_at: new Date().toISOString(), finished_at: null })
+      .update({ status: "running", algorithm_version: ALGORITHM_VERSION, started_at: startedIso, finished_at: null })
       .eq("round_id", roundId)
       .eq("status", "failed")
       .select("id");
@@ -145,7 +147,7 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
     if (!started?.length) {
       // 기록을 지우지 않고 '취소로 건너뜀'으로 남긴다 (MatchRun 기록)
       const summary = { skipped: "canceled", reason: "실행을 시작하는 사이 회차가 취소돼 매칭하지 않았어요" };
-      await db().from("match_runs").update({ status: "done", finished_at: new Date().toISOString(), summary }).eq("id", run.id).eq("status", "running");
+      await db().from("match_runs").update({ status: "done", finished_at: (await now()).toISOString(), summary }).eq("id", run.id).eq("status", "running");
       return { runId: run.id, alreadyRan: true, summary };
     }
 
@@ -222,11 +224,11 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
     const ev = (entityId: string, field: string, from: string | null, to: string, reason: string) =>
       events.push({ entity_type: "application", entity_id: entityId, field, from_value: from, to_value: to, actor, reason, match_run_id: run.id });
     const nt = (userId: string, template: string, title: string, body: string, link: string, dedupeKey: string) =>
-      notes.push({ user_id: userId, template, title, body, link, dedupe_key: dedupeKey, status: "sent", sent_at: new Date().toISOString(), scheduled_at: new Date().toISOString() });
+      notes.push({ user_id: userId, template, title, body, link, dedupe_key: dedupeKey, status: "sent", sent_at: runAt.toISOString(), scheduled_at: runAt.toISOString() });
 
     const tpl = await loadTemplates();
     // 4. 확정 테이블 저장
-    const confirmedAt = new Date().toISOString();
+    const confirmedAt = (await now()).toISOString();
     const tableIds: string[] = [];
     for (const t of result.tables) {
       const { data: table } = await db()
@@ -306,7 +308,7 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
     }
 
     const summary = { ...result.summary, exceptions: exceptions.length, log: result.log, criteria: settings };
-    await db().from("match_runs").update({ status: "done", candidate_count: candidates.length, summary, finished_at: new Date().toISOString() }).eq("id", run.id);
+    await db().from("match_runs").update({ status: "done", candidate_count: candidates.length, summary, finished_at: (await now()).toISOString() }).eq("id", run.id);
     await db().from("rounds").update({ status: "matched" }).eq("id", roundId);
 
     // 6. 확정 뒤 자동 안내 (식당 배정, 단체방, 공지, 리마인드 예약)
@@ -324,7 +326,7 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
 
     return { runId: run.id, alreadyRan: false, summary };
   } catch (e) {
-    await db().from("match_runs").update({ status: "failed", summary: { error: String(e) }, finished_at: new Date().toISOString() }).eq("id", run.id);
+    await db().from("match_runs").update({ status: "failed", summary: { error: String(e) }, finished_at: (await now()).toISOString() }).eq("id", run.id);
     throw e;
   }
 }
