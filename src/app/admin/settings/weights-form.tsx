@@ -6,7 +6,7 @@ import { btnLight, btnPrimary } from "@/components/admin-classes";
 import { AdminModal } from "@/components/admin-modal";
 import { Term } from "@/components/term";
 import { TIP } from "@/lib/admin-glossary";
-import type { Weights } from "@/lib/matching/types";
+import { DEFAULT_SETTINGS, type Weights } from "@/lib/matching/types";
 import { type PastTable, previewSentence, previewTables } from "@/lib/weights-preview";
 import { type Preset, WEIGHT_DESC, WEIGHT_KEYS, WEIGHT_LABEL, type WeightKey, matchPreset, priorityError, sameCriteria, shares, toHundred, weightSum } from "@/lib/weights-presets";
 import { AddPresetForm, EditPresetForm } from "./preset-forms";
@@ -103,18 +103,19 @@ export function WeightsForm({ initial, min, defaults, defaultMin, readOnly, acti
           </div>
           {!readOnly && (
             <AdminModal
-              label="지금 값을 템플릿으로"
+              label="새 템플릿 추가"
               icon={<Plus size={16} aria-hidden="true" />}
-              title="지금 값을 템플릿으로 남기기"
-              desc="아래 화면에 있는 항목 점수와 최소 점수(저장 전이어도)를 이름 붙여 남겨요. 다음에 골라서 바로 쓸 수 있어요."
+              title="새 템플릿 만들기"
+              desc="이름을 붙이고 항목 점수와 최소 점수를 여기서 맞춰요. 기본값에서 시작하고, 숫자를 바꾸면 100점 나눔이 바로 보여요."
               triggerClassName={btnLight}
+              resetOnClose
             >
-              <AddPresetForm weights={w} minScore={minScore} />
+              <AddPresetForm start={DEFAULT_SETTINGS.weights as unknown as Record<string, number>} startMin={DEFAULT_SETTINGS.minScore} />
             </AdminModal>
           )}
         </div>
         {presets.length === 0 ? (
-          <p className="mt-4 rounded-xl bg-field px-4 py-5 text-center text-[14px] text-muted">템플릿이 없어요. 숫자를 맞춘 뒤 &lsquo;지금 값을 템플릿으로&rsquo;를 눌러 만들어 두세요.</p>
+          <p className="mt-4 rounded-xl bg-field px-4 py-5 text-center text-[14px] text-muted">템플릿이 없어요. &lsquo;새 템플릿 추가&rsquo;를 눌러 이름과 숫자를 정해 만들어 두세요.</p>
         ) : (
           <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {presets.map((p) => {

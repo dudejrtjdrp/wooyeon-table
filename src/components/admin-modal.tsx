@@ -23,6 +23,7 @@ export function AdminModal({
   icon,
   hash,
   wide,
+  resetOnClose,
 }: {
   label: ReactNode;
   title: string;
@@ -32,6 +33,8 @@ export function AdminModal({
   icon?: ReactNode;
   hash?: string;
   wide?: boolean;
+  /** 닫으면 안의 입력을 처음 값으로 되돌린다 (새로 만들기 모달처럼 늘 처음부터 시작해야 할 때) */
+  resetOnClose?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const opener = useRef<HTMLElement | null>(null);
@@ -39,6 +42,7 @@ export function AdminModal({
   const titleId = useId();
   const descId = useId();
   const [open, setOpen] = useState(false);
+  const [gen, setGen] = useState(0);
   const path = usePathname();
   const sp = useSearchParams();
   const where = `${path}?${sp.toString()}`;
@@ -82,6 +86,7 @@ export function AdminModal({
         aria-describedby={desc ? descId : undefined}
         onClose={() => {
           setOpen(false);
+          if (resetOnClose) setGen((g) => g + 1);
           // 연 버튼으로 초점을 돌려준다
           // 바깥을 눌러 닫을 때 브라우저가 초점을 body로 옮기는 것보다 늦게 돌려준다
           const el = opener.current?.isConnected ? opener.current : trigger.current;
@@ -115,7 +120,7 @@ export function AdminModal({
             </button>
           </div>
           <div data-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[max(20px,env(safe-area-inset-bottom))] sm:px-6">
-            {children}
+            <div key={gen} className="contents">{children}</div>
           </div>
         </div>
       </dialog>
