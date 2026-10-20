@@ -59,7 +59,7 @@ describe("시연 중인지", () => {
   it("시계를 옮겼거나 시연 계정이면 시연 중", () => {
     expect(isDemoMode({ offsetSeconds: 0 })).toBe(false);
     expect(isDemoMode({ offsetSeconds: null, demoUser: false })).toBe(false);
-    expect(isDemoMode({ offsetSeconds: 3600 })).toBe(true);
+    expect(isDemoMode({ offsetSeconds: 3600 })).toBe(false); // 시계만 옮겨서는 안 보인다(비로그인·실제 회원)
     expect(isDemoMode({ offsetSeconds: 0, demoUser: true })).toBe(true);
   });
 });

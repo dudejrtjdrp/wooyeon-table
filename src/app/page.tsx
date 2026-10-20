@@ -304,7 +304,7 @@ const SEAT_TONES = ["#c9b8a4", "#a8b59b", "#d8b27a", "#9fa9b5", "#c4a29a"];
 
 /** E10 매칭 대기 / 확정 카드: 식탁 그림 색면 + 사람 + 진행 막대 */
 function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date; members: string[]; memberIds: string[]; meId: string }) {
-  const h = headline(a);
+  const h = headline(a, t);
   const slot = a.dining_tables?.slots;
   const confirmed = a.match_status === "CONFIRMED" && slot && a.table_id;
   const paid = !["PENDING", "FAILED"].includes(a.payment_status);
@@ -321,7 +321,7 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
       <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 분위기 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
         <span className="inline-flex h-7 items-center rounded-full bg-ink px-3 text-[13px] font-semibold text-paper">
-          {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
+          {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed || h.label === "결과 정리 중" ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
         </span>
       </Hero>
       <div className="px-5 pt-4">
