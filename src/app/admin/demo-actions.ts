@@ -9,7 +9,7 @@ import { INTERESTS, MBTIS, OPEN_REGIONS, PASSES, PRICE_RANGES, TRAITS, isMembers
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
 import { tick } from "@/lib/pipeline";
-import { adminBackUrl, fillNeeds, isDemoHuman } from "@/lib/demo-panel";
+import { adminBackUrl, fillNeeds, isDemoHuman, roundAccepting } from "@/lib/demo-panel";
 import { passExpiresAt } from "@/lib/pass-expiry";
 import { loadRelations } from "@/lib/matching/runner";
 import { pairKey } from "@/lib/matching/types";
@@ -55,6 +55,9 @@ export async function seedParticipants(form: FormData) {
   await requireAdminWrite();
   const roundId = String(form.get("round_id"));
   const n = Math.min(60, Math.max(4, Number(form.get("count") ?? 36)));
+  // 마감이 지났거나 매칭이 시작된 회차에 결제 완료 신청을 넣으면 매칭 대상이 못 돼 '결제 완료'와 '확정' 숫자가 어긋난다
+  const { data: rd } = await db().from("rounds").select("status,apply_deadline").eq("id", roundId).maybeSingle();
+  if (!roundAccepting(rd, await now())) back("신청 마감이 지났거나 매칭이 시작된 회차예요. 모집 중인 회차를 고르거나 ④ 다음 회차로 넘어가 주세요", form);
   // 시연 신청은 운영 지역 4곳(홍대·잠실·강남·을지로) 일정에만 넣는다
   const { data: allSlots } = await db().from("slots").select("id,region,starts_at").eq("round_id", roundId).order("starts_at");
   const slots = (allSlots ?? []).filter((s) => OPEN_REGIONS.includes(s.region));

@@ -95,6 +95,16 @@ export async function siblingTables(tableId: string) {
   return out.sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at));
 }
 
+/**
+ * 긴급 수정은 예외 상황에서만 (MAT-14). 예외함 카드(ex)에서 들어왔으면 그대로,
+ * 아니면 운영자가 '예외 상황이 맞다'고 한 번 더 확인해야 하고, 이력 사유에 [예외 없이]를 붙여 남긴다
+ */
+export function emergencyGate(exceptionId: string | null, acknowledged: boolean, reason: string): { ok: true; reason: string } | { ok: false; message: string } {
+  if (exceptionId) return { ok: true, reason };
+  if (!acknowledged) return { ok: false, message: "예외함에서 들어온 수정이 아니에요. 예외 상황이 맞다면 확인란에 체크해 주세요" };
+  return { ok: true, reason: `[예외 없이] ${reason}` };
+}
+
 /** 참가자 한 명을 다른 테이블로 옮긴다 */
 export async function moveMember(appId: string, targetId: string, reason: string, adminId: string, allowOtherSlot: boolean, exceptionId?: string | null): Promise<Result> {
   const bad = checkReason(reason);

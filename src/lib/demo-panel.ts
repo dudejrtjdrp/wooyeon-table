@@ -48,3 +48,8 @@ export function fillNeeds(apps: { slots: string[] }[], min = MIN_TABLE): Map<str
 export function demoHeaderLine(roundLabel: string, t: Date, offsetSeconds: number, fmt: (d: Date) => string): string {
   return `적용 회차: ${roundLabel} · ${offsetSeconds ? `시연용 가상 시각 ${fmt(t)}` : `실제 시각 ${fmt(t)}`}`;
 }
+
+/** 아직 신청을 받는 회차인가: 모집 중이고 (시연 시계 기준) 신청 마감 전. 마감 뒤에 결제한 신청은 매칭 대상이 못 돼 대시보드 숫자가 어긋난다 */
+export function roundAccepting(round: { status: string; apply_deadline: string } | null | undefined, t: Date): boolean {
+  return !!round && round.status === "open" && Date.parse(round.apply_deadline) > t.getTime();
+}

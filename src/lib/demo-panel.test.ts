@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adminBackUrl, demoHeaderLine, fillNeeds, isDemoHuman, pickDashboardRound } from "./demo-panel";
+import { adminBackUrl, demoHeaderLine, fillNeeds, isDemoHuman, pickDashboardRound, roundAccepting } from "./demo-panel";
 import { passExpiresAt } from "./pass-expiry";
 
 describe("시연 패널 돌아가는 주소", () => {
@@ -79,4 +79,11 @@ describe("패널 머리줄", () => {
     expect(demoHeaderLine("11월 첫째 주 저녁 (11월 6일(금))", new Date("2026-11-04T00:00:00Z"), 3600, fmt)).toBe("적용 회차: 11월 첫째 주 저녁 (11월 6일(금)) · 시연용 가상 시각 2026-11-04");
     expect(demoHeaderLine("A", new Date("2026-11-04T00:00:00Z"), 0, fmt)).toBe("적용 회차: A · 실제 시각 2026-11-04");
   });
+});
+
+describe("신청을 받는 회차 (roundAccepting)", () => {
+  const t = new Date("2026-12-02T00:05:00+09:00");
+  it("모집 중이고 마감 전이면 받는다", () => expect(roundAccepting({ status: "open", apply_deadline: "2026-12-02T23:59:00+09:00" }, t)).toBe(true));
+  it("모집 중이어도 마감이 지났으면 안 받는다", () => expect(roundAccepting({ status: "open", apply_deadline: "2026-12-02T00:00:00+09:00" }, t)).toBe(false));
+  it("매칭이 시작된 회차는 안 받는다", () => expect(roundAccepting({ status: "matched", apply_deadline: "2026-12-09T00:00:00+09:00" }, t)).toBe(false));
 });

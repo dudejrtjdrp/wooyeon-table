@@ -8,6 +8,7 @@ import { OPEN_REGIONS, PASSES } from "../constants";
 import { logStatus } from "../events";
 import { kstDay } from "../regions";
 import { now } from "../clock";
+import { roundAccepting } from "../demo-panel";
 import { passExpiresAt } from "../pass-expiry";
 import { db } from "../supabase";
 import { type JoinProfile, botsNeeded, chooseBots, makeBot, nextGender } from "./join";
@@ -312,17 +313,17 @@ async function botsJoinOnce(appId: string): Promise<{ joined: number; locked: bo
   if (!(await botsOn())) return { joined: 0, locked: false };
   const { data: raw } = await db()
     .from("applications")
-    .select("id,user_id,round_id,payment_status,application_status,users(login_id,is_demo,profiles(birth_year,gender,interests,price_range)),rounds(status),application_slots(slots(id,region,starts_at))")
+    .select("id,user_id,round_id,payment_status,application_status,users(login_id,is_demo,profiles(birth_year,gender,interests,price_range)),rounds(status,apply_deadline),application_slots(slots(id,region,starts_at))")
     .eq("id", appId)
     .maybeSingle();
   const app = raw as unknown as {
     id: string; user_id: string; round_id: string; payment_status: string; application_status: string;
     users: { login_id: string; is_demo: boolean; profiles: JoinProfile | JoinProfile[] | null };
-    rounds: { status: string } | null;
+    rounds: { status: string; apply_deadline: string } | null;
     application_slots: { slots: { id: string; region: string; starts_at: string } | null }[];
   } | null;
   // 시연 계정(is_demo)이 결제했을 때만 붙는다. 실제 회원은 봇과 매칭되지 않는다
-  if (!app || !app.users.is_demo || isBot(app.users) || app.payment_status !== "PAID" || app.application_status === "CANCELED" || app.rounds?.status !== "open") return { joined: 0, locked: false };
+  if (!app || !app.users.is_demo || isBot(app.users) || app.payment_status !== "PAID" || app.application_status === "CANCELED" || !roundAccepting(app.rounds, await now())) return { joined: 0, locked: false };
   // 같은 결제 완료 알림이 두 번 와도(토스 콜백 중복 등) 한 번만 붙인다: settings 키를 먼저 잡는다
   const { error: lockErr } = await db().from("settings").insert({ key: `bots-join:${app.id}`, value: { at: new Date().toISOString() } });
   if (lockErr) return { joined: 0, locked: false };
