@@ -281,6 +281,26 @@ export async function toggleBots(form: FormData) {
   back(on ? "시연 봇을 켰어요" : "시연 봇을 껐어요");
 }
 
+/**
+ * 예전 시연 메시지 문구 다듬기: 받침에 안 맞게 나간 '이에요/예요'를 고친다(단체방·알림함).
+ * 조사 함수가 들어가기 전에 쌓인 시연 데이터 정리용. 고친 건수를 이력에 남긴다. 여러 번 눌러도 결과가 같다
+ */
+export async function fixOldCopula() {
+  const me = await requireAdminWrite();
+  const { fixCopula } = await import("@/lib/korean");
+  let fixed = 0;
+  for (const table of ["chat_messages", "notifications"] as const) {
+    const { data } = await db().from(table).select("id,body").or("body.like.%이에요%,body.like.%예요%").limit(5000);
+    const changed = (data ?? []).map((r) => ({ id: r.id as string, body: fixCopula(String(r.body)) })).filter((r, i) => r.body !== (data ?? [])[i].body);
+    for (const r of changed) {
+      const { error } = await db().from(table).update({ body: r.body }).eq("id", r.id);
+      if (!error) fixed++;
+    }
+  }
+  if (fixed) await logStatus({ entityType: "setting", entityId: me.id, field: "demo.copula_fix", from: null, to: String(fixed), actor: `admin:${me.id}`, reason: `예전 시연 메시지의 '이에요/예요' ${fixed}건 고침` });
+  back(fixed ? `예전 메시지 ${fixed}건의 '이에요/예요'를 받침에 맞게 고쳤어요` : "고칠 메시지가 없어요");
+}
+
 /** 지금 시각 기준으로 밀린 작업(마감 매칭, 알림, 단체방 게시)을 바로 처리한다 */
 export async function runTick() {
   await requireAdminWrite();

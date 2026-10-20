@@ -14,7 +14,7 @@ import { computeMetrics, metricValue } from "@/lib/metrics";
 import { maybeTick } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "./confirm-button";
-import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants, toggleBots } from "./demo-actions";
+import { autoAttend, fixOldCopula, moveClock, reapply, resetRound, runTick, seedParticipants, toggleBots } from "./demo-actions";
 import { botsOn } from "@/lib/sim/bots";
 import { loadMetricsInput } from "./metrics/load";
 import { roundLabel } from "@/lib/round-label";
@@ -296,6 +296,12 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               <p className="flex items-center gap-2 text-[14px] font-semibold">시연 봇 <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${bots ? "bg-leaf-soft text-leaf" : "bg-field text-muted"}`}>{bots ? "켜짐" : "꺼짐"}</span></p>
               <p className="mt-1 text-[12px] text-muted">참가자가 결제하면 그 일정이 4명이 되도록 테스트 참가자가 같이 신청해요. 확정되면 단체방에서 성격대로 인사·대화하고, 사람이 쓴 말에 한두 명이 답해요. 모임 날엔 체크인(가끔 한 명은 안 와요)과 후기까지 남겨요.</p>
               <button className="mt-3 h-10 w-full rounded-xl border border-line bg-card text-[14px] font-semibold hover:border-accent">{bots ? "끄기" : "켜기"}</button>
+            </form>
+
+            <form action={fixOldCopula} className="shadow-card rounded-[20px] bg-card p-4">
+              <p className="text-[14px] font-semibold">예전 메시지 문구 다듬기</p>
+              <p className="mt-1 text-[12px] text-muted">조사 처리가 들어가기 전에 나간 단체방·알림 문장에서 &lsquo;B5FA&rsquo;이에요 같은 &lsquo;이에요/예요&rsquo;를 받침에 맞게 고쳐요. 여러 번 눌러도 같아요.</p>
+              <button className="mt-3 h-10 w-full rounded-xl border border-line bg-card text-[14px] font-semibold hover:border-accent">다듬기</button>
             </form>
 
             {nextRound && (
