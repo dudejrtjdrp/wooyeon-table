@@ -7,7 +7,7 @@ const tables: Record<string, Row[]> = {};
 function q(name: string) {
   const rows = (tables[name] ??= []);
   const filters: ((r: Row) => boolean)[] = [];
-  let op: "select" | "insert" | "upsert" | "update" = "select";
+  let op: "select" | "insert" | "upsert" | "update" | "delete" = "select";
   let payload: Row | null = null;
   let opts: { onConflict?: string; ignoreDuplicates?: boolean } = {};
   let sort: { k: string; asc: boolean } | null = null;
@@ -18,6 +18,8 @@ function q(name: string) {
     insert: (r: Row) => ((op = "insert"), (payload = r), api),
     upsert: (r: Row, o: typeof opts) => ((op = "upsert"), (payload = r), (opts = o ?? {}), api),
     update: (r: Row) => ((op = "update"), (payload = r), api),
+    delete: () => ((op = "delete"), api),
+    like: (k: string, v: string) => (filters.push((r) => new RegExp(`^${v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*")}$`).test(String(r[k] ?? ""))), api),
     eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), api),
     in: (k: string, v: unknown[]) => (filters.push((r) => v.includes(r[k])), api),
     not: (k: string, _op: "is", v: unknown) => (filters.push((r) => (r[k] ?? null) !== v), api),
@@ -38,6 +40,10 @@ function q(name: string) {
       return { data: [row], error: null };
     }
     const hit = rows.filter((r) => filters.every((f) => f(r)));
+    if (op === "delete") {
+      for (const r of hit) rows.splice(rows.indexOf(r), 1);
+      return { data: hit, error: null };
+    }
     if (op === "update") {
       hit.forEach((r) => Object.assign(r, payload));
       return { data: hit, error: null };
@@ -56,9 +62,13 @@ const cancelToss = vi.fn();
 const sent: { template: string; dedupeKey?: string }[] = [];
 vi.mock("./supabase", () => ({ db: () => ({ from: q }) }));
 vi.mock("./toss", () => ({ cancelToss: (...a: unknown[]) => cancelToss(...a) }));
+// 시연용 가상 시각: 실제 시각보다 2주 뒤
+const DEMO_NOW = new Date(Date.now() + 14 * 86400_000);
+const REAL_NOW = "2026-10-20T12:00:00.000Z";
+vi.mock("./clock", () => ({ now: async () => DEMO_NOW, realNowIso: () => REAL_NOW }));
 vi.mock("./notify", () => ({ notify: async (n: { template: string; dedupeKey?: string }) => void sent.push(n) }));
 
-const { retryRefunds, REFUND_MAX_TRIES, REFUND_RETRY_GAP_MS } = await import("./payments");
+const { markPaid, retryRefunds, REFUND_MAX_TRIES, REFUND_RETRY_GAP_MS } = await import("./payments");
 
 const APP = "app-1";
 const PAY = "pay-1";
@@ -120,5 +130,23 @@ describe("환불 실패 자동 재시도 (D7)", () => {
     expect(tables.applications[0].payment_status).toBe("REFUNDED");
     expect(cancelToss.mock.calls[0][2]).toBe(`refund-${PAY}`);
     expect(sent.map((n) => n.template)).toEqual(["refunded"]);
+  });
+});
+
+describe("결제 승인 시각은 시연용 시계로 (markPaid)", () => {
+  it("paid_at·이용권 만료는 now() 기준이라 신청 시각보다 앞서지 않고, 예외 해결 시각은 실제 시각(감사 기록)", async () => {
+    const submitted = new Date(DEMO_NOW.getTime() - 60_000).toISOString();
+    tables.applications = [{ id: "a2", user_id: "u2", payment_id: "p2", payment_status: "PENDING", submitted_at: submitted, rounds: { title: "회차", match_at: new Date(DEMO_NOW.getTime() + 86400_000).toISOString() }, payments: { id: "p2", status: "PENDING", pass_type: "single", amount: 9900 } }];
+    tables.payments = [{ id: "p2", status: "PENDING", amount: 9900, pass_type: "single" }];
+    tables.exceptions = [{ id: "x1", status: "open", dedupe_key: "payment:p2:declined" }];
+    expect(await markPaid("a2", "u2", { provider: "mock", reason: "모의 결제 승인" })).toBe(true);
+    const pay = tables.payments[0];
+    expect(pay.paid_at).toBe(DEMO_NOW.toISOString());
+    expect(String(pay.paid_at) >= submitted).toBe(true);
+    const pass = tables.passes[0];
+    expect(new Date(String(pass.expires_at)).getTime() - DEMO_NOW.getTime()).toBe(60 * 86400_000);
+    expect(tables.exceptions[0]).toMatchObject({ status: "resolved", resolved_at: REAL_NOW });
+    // 두 번 눌러도 한 번만
+    expect(await markPaid("a2", "u2", { provider: "mock", reason: "모의 결제 승인" })).toBe(false);
   });
 });

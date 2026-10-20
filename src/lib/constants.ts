@@ -50,6 +50,9 @@ export const isMembership = (t: string | null | undefined) => t === "m1" || t ==
 export const MEMBERSHIP_EXTEND_DAYS = 7;
 export type PassType = keyof typeof PASSES;
 
+/** 테스트 결제창이 실패했을 때 시연을 이어 가는 길 (결제 화면 아래 시연용 버튼). 실서비스 키면 안 보인다 */
+export const PAY_DEMO_HINT = "시연 중이면 아래 '결제창 없이 바로 결제 완료(시연용)'를 눌러 주세요";
+
 export const REFUND_POLICY = [
   "모임 주 화요일 밤 12시까지는 전액 환불돼요. 이때 매칭도 함께 마감돼요.",
   "그 뒤로는 환불이 안 돼요. 멤버십은 신청할 때 횟수를 차감하지 않아서, 신청을 취소해도 기간 안에 다른 일정에 바로 신청할 수 있어요.",

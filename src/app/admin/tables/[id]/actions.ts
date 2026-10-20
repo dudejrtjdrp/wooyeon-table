@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { checkReason, dissolveTable, mergeInto, moveMember, removeMember, splitTable } from "@/lib/admin-ops";
+import { checkReason, dissolveTable, emergencyGate, mergeInto, moveMember, removeMember, splitTable } from "@/lib/admin-ops";
 import { requireAdminWrite } from "@/lib/auth";
 
 export async function emergencyAction(form: FormData) {
@@ -10,10 +10,16 @@ export async function emergencyAction(form: FormData) {
   const keep = exId ? `ex=${exId}&` : "";
   const me = await requireAdminWrite(`/admin/tables/${tableId}${exId ? `?ex=${exId}` : ""}#ops`);
   const op = String(form.get("op"));
-  const reason = String(form.get("reason") ?? "").trim();
+  const raw = String(form.get("reason") ?? "").trim();
   const back = (k: "m" | "e", msg: string) => redirect(`/admin/tables/${tableId}?${k === "e" ? keep : ""}${k}=${encodeURIComponent(msg)}#ops`);
-  const bad = checkReason(reason);
+  const bad = checkReason(raw);
   if (bad) back("e", bad.message);
+  // 폼의 ex 값은 믿지 않고, 실제로 열려 있는 예외인지 다시 확인한다 (없으면 '예외 없이'로 본다)
+  const { db } = await import("@/lib/supabase");
+  const openEx = exId ? (await db().from("exceptions").select("id").eq("id", exId).eq("status", "open").maybeSingle()).data : null;
+  const gate = emergencyGate(openEx ? exId : null, form.get("no_ex") === "on", raw);
+  if (!gate.ok) return back("e", gate.message);
+  const reason = gate.reason;
 
   let r: { ok: boolean; message: string };
   if (op === "move") r = await moveMember(String(form.get("app_id")), String(form.get("target_id")), reason, me.id, form.get("allow_slot") === "on", exId);

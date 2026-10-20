@@ -3,6 +3,7 @@ import { CalendarDays, ChevronRight } from "lucide-react";
 import { EmptyState, LinkButton, List, Pill, SectionTitle, TabScreen } from "@/components/ui";
 import { getMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
+import { demoMode } from "@/lib/demo-mode";
 import { dateKey, dday, ddayLabel, fmtSlot } from "@/lib/format";
 import { sidoOf } from "@/lib/regions";
 import { PASSES, won } from "@/lib/constants";
@@ -24,7 +25,7 @@ export default async function Rounds() {
   // 안내 문구의 동네 수는 실제로 열린 일정에서 센다 (문구와 목록이 어긋나지 않게)
   const openRegions = new Set((rounds ?? []).flatMap((r) => (r.slots ?? []).map((s) => s.region)));
   const { data: mineRaw } = me
-    ? await db().from("applications").select("id,round_id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at)").eq("user_id", me.id).order("created_at", { ascending: false })
+    ? await db().from("applications").select("id,round_id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at,status)").eq("user_id", me.id).order("created_at", { ascending: false })
     : { data: [] };
   const mine = (mineRaw ?? []) as unknown as (Parameters<typeof headline>[0] & { id: string; round_id: string; application_status: string; match_status: string; attendance_status: string | null; rounds: { title: string; match_at: string } })[];
   const applied = new Map(mine.filter((a) => a.application_status !== "CANCELED").map((a) => [a.round_id, a.id]));
@@ -36,10 +37,22 @@ export default async function Rounds() {
   const shownRounds = new Set((rounds ?? []).map((r) => r.id));
   const pendingRest = pending.filter((a) => !shownRounds.has(a.round_id));
   const byId = new Map(mine.map((a) => [a.id, a]));
+  // 열린 회차가 없을 때만 시연 계정인지 본다 (로그인 전 방문자·실제 회원에게는 안 보임)
+  const demo = !rounds?.length && (await demoMode(me?.id));
 
   return (
     <TabScreen title="일정" sub="동네와 날짜를 여러 개 고를수록 테이블이 잘 꾸려져요.">
       {!rounds?.length && <EmptyState icon={<CalendarDays size={40} className="text-faint" />} title="지금은 모집 중인 일정이 없어요" body="새 일정이 열리면 알림으로 알려드릴게요." />}
+      {!rounds?.length && demo && (
+        // 심사·시연용 안내. 실제 회원에게는 보이지 않는다
+        <div className="-mt-6 rounded-[16px] border border-dashed border-warn/50 bg-warn-soft px-4 py-3.5 text-[14px] leading-relaxed text-[#6b5410]">
+          <p>시연 중이면 운영자 화면에서 회차를 만들거나, 시연 패널에서 실제 시각으로 돌아가 보세요.</p>
+          <p className="mt-1 flex flex-wrap gap-x-4 font-bold">
+            <Link href="/admin/rounds?tab=new" className="inline-flex h-11 items-center underline underline-offset-4">회차 만들기</Link>
+            <Link href="/admin?demo=1#demo" className="inline-flex h-11 items-center underline underline-offset-4">시연 패널 열기</Link>
+          </p>
+        </div>
+      )}
       <div className="mt-5 flex flex-col gap-2.5">
         {rounds?.map((r, i) => {
           const slots = [...(r.slots ?? [])].sort((a, b) => a.starts_at.localeCompare(b.starts_at));

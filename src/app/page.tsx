@@ -7,7 +7,10 @@ import { AuthChooser } from "@/components/auth-chooser";
 import { PushToggle } from "@/components/push-toggle";
 import { OfferBanner } from "@/components/offer-banner";
 import { RoundTable } from "@/components/brand";
-import { Card, LinkButton, SectionTitle, TabScreen, Toast } from "@/components/ui";
+import { Card, LinkButton, PrimaryButton, SectionTitle, TabScreen, Toast } from "@/components/ui";
+import { checkInOpen } from "@/lib/attendance-rules";
+import { afterMeetingCard } from "@/lib/feedback-rules";
+import { checkIn } from "./tables/[id]/actions";
 import { getMe } from "@/lib/auth";
 import { usablePass } from "@/lib/billing";
 import { now } from "@/lib/clock";
@@ -46,7 +49,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at,status),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
     .eq("user_id", me.id)
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .limit(10);
@@ -58,11 +61,28 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   // 모임이 끝난 테이블은 체크인을 안 했어도 진행 중으로 보지 않는다 (지난 모임 카드가 'D-day'로 계속 남던 문제)
   // 테이블 화면과 같은 기준: 끝난 시각이 지났거나 테이블이 '모임 끝'(DONE)이면 지난 모임
   const ended = (a: ActiveRow) => meetingEnded(a.dining_tables, t);
-  const ongoing = live.filter((a) => !["ATTENDED", "NO_SHOW"].includes(a.attendance_status ?? "") && !ended(a));
+  // 체크인한 뒤에도 모임이 끝날 때까지는 홈 카드에 남긴다(체크인하자마자 '열린 일정이 없어요'로 바뀌지 않게)
+  const ongoing = live.filter((a) => a.attendance_status !== "NO_SHOW" && !ended(a));
   const active = ongoing[0] ?? null;
   const next = me.hasProfile && !active ? await nextPick(me.id) : null;
   // 체크인을 못 한 채 끝난 모임도 지난 식탁에 남긴다: 테이블 화면에서 '참석했는데 체크인을 못 했어요'로 알릴 수 있게
-  const past = list.find((a) => a.table_id && a.dining_tables?.slots && (a.attendance_status === "ATTENDED" || ended(a)));
+  const past = list.find((a) => a.id !== active?.id && a.table_id && a.dining_tables?.slots && (a.attendance_status === "ATTENDED" || ended(a)));
+
+  // 끝난 모임 중 후기를 아직 안 남긴 것(또는 체크인을 못 해 알려야 하는 것)을 홈 맨 위에 하나 띄운다. 조건은 후기 요청(pipeline askFeedback)·후기 화면과 같다
+  const endedMine = list
+    .filter((a) => a.table_id && a.match_status === "CONFIRMED" && a.dining_tables?.slots && ended(a) && ["ATTENDED", "SCHEDULED"].includes(a.attendance_status ?? ""))
+    .sort((x, y) => y.dining_tables!.slots!.ends_at.localeCompare(x.dining_tables!.slots!.ends_at));
+  const [{ data: fbDone }, { data: claims }] = endedMine.length
+    ? await Promise.all([
+        db().from("feedbacks").select("application_id").in("application_id", endedMine.map((a) => a.id)),
+        db().from("status_events").select("entity_id").in("entity_id", endedMine.map((a) => a.id)).eq("field", "attendance_claim"),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const reviewed = new Set((fbDone ?? []).map((f) => f.application_id as string));
+  const claimedSet = new Set((claims ?? []).map((c) => c.entity_id as string));
+  const afterCard = endedMine
+    .map((a) => ({ a, kind: afterMeetingCard({ attendance: a.attendance_status, ended: true, endsAt: new Date(a.dining_tables!.slots!.ends_at), reviewed: reviewed.has(a.id), claimed: claimedSet.has(a.id), t }) }))
+    .find((x) => x.kind);
 
   // 확정된 테이블이면 같이 앉는 사람 수와 이름 첫 글자를 보여 준다
   const members = active?.match_status === "CONFIRMED" && active.table_id
@@ -93,6 +113,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   return (
     <TabScreen>
       <Toast msg={m} />
+      {afterCard && <AfterMeetingCard a={afterCard.a} kind={afterCard.kind!} />}
       {me.hasProfile && <div className="pt-2"><OfferBanner userId={me.id} /></div>}
 
       {!me.hasProfile ? (
@@ -221,6 +242,30 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   );
 }
 
+/** 끝난 모임 안내: 후기 남기기 또는 체크인 못 한 걸 알리기 */
+function AfterMeetingCard({ a, kind }: { a: ActiveRow; kind: "review" | "claim" }) {
+  const slot = a.dining_tables!.slots!;
+  const where = a.dining_tables?.venues?.name ?? slot.region;
+  return (
+    <section className="animate-rise mt-3 rounded-[20px] bg-card p-5" aria-label={kind === "review" ? "후기 남기기" : "참석 알리기"}>
+      <p className="text-[13px] font-semibold text-muted">{fmtDay(slot.starts_at)} · {where}</p>
+      {kind === "review" ? (
+        <>
+          <h2 className="mt-1 text-[19px] font-bold leading-snug text-ink">함께한 저녁, 어떠셨어요?</h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-muted">별점 다섯 개면 끝나요. 남겨 주신 후기는 다음 테이블을 꾸릴 때 바로 반영돼요.</p>
+          <LinkButton href={`/tables/${a.table_id}/feedback`} className="mt-4">후기 남기기</LinkButton>
+        </>
+      ) : (
+        <>
+          <h2 className="mt-1 text-[19px] font-bold leading-snug text-ink">체크인 기록이 없어요</h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-muted">참석했다면 모임 정보에서 알려 주세요. 운영팀이 확인하면 참석으로 바뀌고 후기를 남길 수 있어요.</p>
+          <LinkButton href={`/tables/${a.table_id}`} className="mt-4">모임 정보에서 알리기</LinkButton>
+        </>
+      )}
+    </section>
+  );
+}
+
 function Greeting({ children }: { children: React.ReactNode }) {
   return <h1 className="mt-3 px-1 text-[22px] font-bold leading-[1.4] text-ink">{children}</h1>;
 }
@@ -259,7 +304,7 @@ const SEAT_TONES = ["#c9b8a4", "#a8b59b", "#d8b27a", "#9fa9b5", "#c4a29a"];
 
 /** E10 매칭 대기 / 확정 카드: 식탁 그림 색면 + 사람 + 진행 막대 */
 function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date; members: string[]; memberIds: string[]; meId: string }) {
-  const h = headline(a);
+  const h = headline(a, t);
   const slot = a.dining_tables?.slots;
   const confirmed = a.match_status === "CONFIRMED" && slot && a.table_id;
   const paid = !["PENDING", "FAILED"].includes(a.payment_status);
@@ -270,11 +315,13 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
   const where = `${dates.length > 1 ? `${dates[0]} 또는 ${dates.slice(1).map((x) => x.replace(/^\d+월 /, "")).join(", ")}` : dates[0] ?? a.rounds.title} · ${areasLabel(a.areas ?? [])}`;
   const cta = confirmed ? ["모임 정보 보기", `/tables/${a.table_id}`] : failed ? [a.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["신청 내용 보기", `/applications/${a.id}`];
   const others = members.filter((_, i) => memberIds[i] !== meId);
+  const canCheckIn = Boolean(confirmed) && a.attendance_status === "SCHEDULED" && checkInOpen(new Date(slot!.starts_at), new Date(slot!.ends_at), t);
+  const checkedIn = Boolean(confirmed) && a.attendance_status === "ATTENDED";
   return (
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
       <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 분위기 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
         <span className="inline-flex h-7 items-center rounded-full bg-ink px-3 text-[13px] font-semibold text-paper">
-          {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
+          {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed || h.label === "결과 정리 중" || h.label === "확인 중" ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
         </span>
       </Hero>
       <div className="px-5 pt-4">
@@ -300,8 +347,23 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
           {STEPS.map((s, i) => <li key={s} aria-current={i + 1 === at ? "step" : undefined} className={`flex-1 ${i + 1 === at ? `font-bold ${waiting ? "text-warn" : failed ? "text-danger" : "text-accent"}` : ""}`}>{i + 1 === at ? h.label : s}</li>)}
         </ol>
         {!confirmed && <p className="mt-3 text-[14px] leading-relaxed text-muted">{h.desc}</p>}
-        <LinkButton href={cta[1]} tone={confirmed ? "ink" : failed || !paid ? "accent" : "light"} className="mt-4">{cta[0]}</LinkButton>
-        {confirmed && <Link href={`/applications/${a.id}`} className="mt-1 flex h-11 items-center justify-center text-[14px] text-muted underline underline-offset-4">결제·환불 규정</Link>}
+        {canCheckIn ? (
+          // 모임 1시간 전부터 끝날 때까지: 홈에서 바로 체크인 (모임 정보 화면과 같은 처리)
+          <>
+            <form action={checkIn} className="mt-4">
+              <input type="hidden" name="table_id" value={a.table_id!} />
+              <input type="hidden" name="from" value="home" />
+              <PrimaryButton pendingText="체크인하는 중">도착했어요, 체크인</PrimaryButton>
+            </form>
+            <Link href={cta[1]} className="mt-1 flex h-11 items-center justify-center text-[14px] font-semibold text-accent">모임 정보 보기</Link>
+          </>
+        ) : (
+          <>
+            {checkedIn && <p className="mt-3 rounded-[12px] bg-accent-soft px-4 py-2.5 text-[14px] font-semibold text-accent-text">체크인했어요. 즐거운 저녁 되세요</p>}
+            <LinkButton href={cta[1]} tone={confirmed ? "ink" : failed || !paid ? "accent" : "light"} className="mt-4">{cta[0]}</LinkButton>
+          </>
+        )}
+        {confirmed && !canCheckIn && <Link href={`/applications/${a.id}`} className="mt-1 flex h-11 items-center justify-center text-[14px] text-muted underline underline-offset-4">결제·환불 규정</Link>}
       </div>
     </section>
   );

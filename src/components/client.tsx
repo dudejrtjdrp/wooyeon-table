@@ -3,7 +3,7 @@
 import { CalendarDays, ChevronLeft, Eye, EyeOff, Home, MessageSquare, Star, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type MouseEvent, type ReactNode, useEffect, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 const Spinner = () => (
@@ -218,19 +218,48 @@ export function PasswordInput({ className = "", ...rest }: React.InputHTMLAttrib
 }
 
 /** 별점 (1~5). 값은 숨은 입력으로 보낸다 */
-export function StarRating({ name, label, value }: { name: string; label: string; value?: number | null }) {
+/**
+ * 별점 1~5. required면 고르지 않은 채 보내려 할 때 막고 이 줄에 '별점을 골라 주세요'를 띄운다(첫 빈 줄로 옮겨 준다).
+ * invalid는 서버가 빠졌다고 돌려보낸 줄
+ */
+export function StarRating({ name, label, value, required, invalid }: { name: string; label: string; value?: number | null; required?: boolean; invalid?: boolean }) {
   const [v, setV] = useState<number>(value ?? 0);
+  const [miss, setMiss] = useState(Boolean(invalid) && !value);
+  const box = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const msgId = useId();
+  useEffect(() => {
+    const form = box.current?.closest("form");
+    if (!required || !form) return;
+    const onSubmit = (e: SubmitEvent) => {
+      if (input.current?.value) return;
+      e.preventDefault();
+      setMiss(true);
+      // 빈 줄이 여럿이면 맨 위 줄로만 옮긴다
+      const empty = [...form.querySelectorAll<HTMLInputElement>("input[data-star-required]")].find((x) => !x.value);
+      if (empty === input.current) {
+        box.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+        box.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+      }
+    };
+    form.addEventListener("submit", onSubmit);
+    return () => form.removeEventListener("submit", onSubmit);
+  }, [required]);
+  const bad = miss && !v;
   return (
-    <div className="flex items-center justify-between gap-3 py-3.5">
-      <span className="text-[16px] text-ink">{label}</span>
-      <input type="hidden" name={name} value={v || ""} />
-      <span className="-mr-[7px] flex" role="radiogroup" aria-label={label}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} type="button" role="radio" aria-checked={v === n} aria-label={`${n}점`} onClick={() => setV(n)} className="p-[7px] transition active:scale-90">
-            <Star size={30} strokeWidth={0} className={n <= v ? "fill-accent" : "fill-dot"} />
-          </button>
-        ))}
-      </span>
+    <div ref={box} className="py-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className={`text-[16px] ${bad ? "font-bold text-danger" : "text-ink"}`}>{label}</span>
+        <input ref={input} type="hidden" name={name} value={v || ""} {...(required ? { "data-star-required": "" } : {})} />
+        <span className="-mr-[7px] flex" role="radiogroup" aria-label={label} aria-required={required || undefined} aria-invalid={bad || undefined} aria-describedby={bad ? msgId : undefined}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button key={n} type="button" role="radio" aria-checked={v === n} aria-label={`${n}점`} onClick={() => setV(n)} className="p-[7px] transition active:scale-90">
+              <Star size={30} strokeWidth={0} className={n <= v ? "fill-accent" : bad ? "fill-danger/25" : "fill-dot"} />
+            </button>
+          ))}
+        </span>
+      </div>
+      {bad && <p id={msgId} className="mt-1 text-right text-[13px] font-semibold text-danger">별점을 골라 주세요</p>}
     </div>
   );
 }

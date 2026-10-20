@@ -5,15 +5,19 @@ import { redirect } from "next/navigation";
 import { ChevronDown, Lock } from "lucide-react";
 import { ConfirmSubmit, CountedTextarea, ErrorText, Optional, PageTitle, PrimaryButton, Required, Screen, SectionCard, StarRating, inputCls } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
+import { FEEDBACK_SCORES, parseMissing } from "@/lib/feedback-rules";
 import { db } from "@/lib/supabase";
 import { report, submitFeedback } from "./actions";
 
 const REASONS = ["불쾌한 말이나 행동", "약속 시간 무시·무단 이탈", "원치 않는 연락", "그 밖의 문제"];
 
-export default async function Feedback({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string }> }) {
+export default async function Feedback({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const me = await requireMe();
   const { id } = await params;
-  const { e } = await searchParams;
+  const sp = await searchParams;
+  const { e } = sp;
+  // 별점을 덜 고르고 보냈다가 돌아온 경우: 빠진 줄 표시, 고른 값은 다시 채운다
+  const miss = new Set(parseMissing(sp.miss));
   const { data: mine } = await db().from("applications").select("id,attendance_status").eq("table_id", id).eq("user_id", me.id).maybeSingle();
   if (!mine) redirect("/");
   // 후기는 체크인한(참석한) 사람만 남길 수 있다: 폼을 다 채운 뒤 막히지 않게 먼저 알려 준다 (안내 문장은 신청 상세와 같다).
@@ -56,17 +60,18 @@ export default async function Feedback({ params, searchParams }: { params: Promi
 
       <form action={submitFeedback} className="mt-5 space-y-3">
         <input type="hidden" name="table_id" value={id} />
-        <SectionCard title="이번 모임에 대해 평가해 주세요">
-          <div className="-my-2 divide-y divide-line">
-            <StarRating name="mood" label="테이블 분위기" value={fb?.mood_score} />
-            <StarRating name="talk" label="대화" value={fb?.talk_score} />
-            <StarRating name="venue" label="식당" value={fb?.venue_score} />
-            <StarRating name="rejoin" label="또 참여하고 싶음" value={fb?.rejoin_intent} />
-            <StarRating name="recommend" label="친구에게 추천" value={fb?.recommend_intent} />
-          </div>
-        </SectionCard>
+        <div id="scores" className="scroll-mt-16">
+          <SectionCard title="이번 모임에 대해 평가해 주세요" required>
+            {miss.size > 0 && e && <div className="mb-2"><ErrorText msg={e} /></div>}
+            <div className="-my-2 divide-y divide-line">
+              {FEEDBACK_SCORES.map((f) => (
+                <StarRating key={f.name} name={f.name} label={f.label} required invalid={miss.has(f.name)} value={Number(sp[`s_${f.name}`]) || fb?.[f.column]} />
+              ))}
+            </div>
+          </SectionCard>
+        </div>
 
-        <SectionCard title="오늘 만난 분들" hint="다음 모임에서 다시 만나고 싶은지 골라 주세요. '다시는 싫어요'를 고르면 앞으로 같은 테이블에 앉지 않아요.">
+        <SectionCard title="오늘 만난 분들" optional hint="다음 모임에서 다시 만나고 싶은지 골라 주세요. '다시는 싫어요'를 고르면 앞으로 같은 테이블에 앉지 않아요.">
           <ul className="divide-y divide-line">
             {others.map((o, i) => (
               <li key={o.user_id} className="py-4 first:pt-0 last:pb-0">
@@ -130,7 +135,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
             <p className="text-[16px] font-bold text-ink">설명<Optional /></p>
             <div className="mt-2.5"><CountedTextarea name="detail" max={500} rows={3} placeholder="필요한 내용을 적어 주세요." className={ta} /></div>
           </div>
-          <ErrorText msg={e} />
+          {miss.size === 0 && <ErrorText msg={e} />}
           <ConfirmSubmit label="신고하고 차단하기" question="신고하면 이 분과는 다시 같은 테이블에 앉지 않아요. 상대에게는 알리지 않고, 운영팀이 내용을 확인해요." confirmLabel="신고하기" />
         </form>
       </section>

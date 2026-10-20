@@ -14,25 +14,29 @@ import { computeMetrics, metricValue } from "@/lib/metrics";
 import { maybeTick } from "@/lib/pipeline";
 import { db } from "@/lib/supabase";
 import { ConfirmButton } from "./confirm-button";
-import { autoAttend, moveClock, reapply, resetRound, runTick, seedParticipants, toggleBots } from "./demo-actions";
+import { DemoScroll } from "./demo-scroll";
+import { autoAttend, fixOldCopula, moveClock, reapply, resetRound, runTick, seedParticipants, toggleBots } from "./demo-actions";
 import { botsOn } from "@/lib/sim/bots";
 import { loadMetricsInput } from "./metrics/load";
 import { roundLabel } from "@/lib/round-label";
+import { demoHeaderLine, pickDashboardRound } from "@/lib/demo-panel";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export default async function AdminHome({ searchParams }: { searchParams: Promise<{ r?: string }> }) {
+export default async function AdminHome({ searchParams }: { searchParams: Promise<{ r?: string; demo?: string }> }) {
   const me = await requireAdmin();
   // 밀린 일(마감·리마인드·종료)은 화면을 먼저 보낸 뒤 처리한다
   after(() => maybeTick().catch(() => null));
-  const { r } = await searchParams;
+  const { r, demo } = await searchParams;
   const t = await now();
   const { data: clock } = await db().from("app_clock").select("offset_seconds").eq("id", 1).single();
 
   const { data: rounds } = await db().from("rounds").select("id,title,status,match_at,apply_deadline,slots(starts_at)").order("match_at");
-  const round = rounds?.find((x) => x.id === r) ?? rounds?.find((x) => x.status !== "closed") ?? rounds?.[0];
-  const nextRound = rounds?.find((x) => round && x.match_at > round.match_at);
+  // 주소에 r이 없으면 지금 모집 중인 회차, 없으면 가장 최근 회차 (lib/demo-panel.ts)
+  const round = pickDashboardRound(rounds ?? [], t, r);
+  // ④ 다시 신청은 아직 신청을 받는(매칭 전) 다음 회차에만
+  const nextRound = rounds?.find((x) => round && x.match_at > round.match_at && x.status === "open");
 
   const { data: apps } = round
     ? await db().from("applications").select("id,payment_status,match_status,attendance_status,realloc_count,resolution").eq("round_id", round.id)
@@ -243,12 +247,14 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         <div className="mt-12 flex items-center gap-3 text-[12px] font-semibold text-muted" aria-hidden="true">
           <span className="h-px flex-1 bg-line" />여기부터 심사용 시연 도구 (실제 운영 화면이 아니에요)<span className="h-px flex-1 bg-line" />
         </div>
-        <details className="group mt-4 rounded-[20px] border-2 border-dashed border-warn/40 bg-warn-soft/30 p-5">
+        <DemoScroll />
+        <details id="demo" open={demo === "1"} className="group mt-4 scroll-mt-28 rounded-[20px] lg:scroll-mt-6 border-2 border-dashed border-warn/40 bg-warn-soft/30 p-5">
           <summary className="flex cursor-pointer list-none items-center justify-between">
             <span className="flex items-center gap-2 text-[17px] font-semibold text-ink"><FlaskConical size={20} className="text-warn" />심사용 시연 패널 <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[12px] font-semibold text-warn">시연 전용</span><span className="rounded-full bg-card px-2 py-0.5 text-[12px] text-muted group-open:hidden">접힘</span></span>
             <ChevronDown size={20} className="text-muted transition group-open:rotate-180" />
           </summary>
-          <p className="mt-1 text-[13px] text-muted">마감 시각을 기다리지 않고 한 회차의 흐름을 처음부터 끝까지 돌려볼 수 있어요. 테스트 참가자만 만들고 바꿔요. 실제 운영에서는 숨기는 도구예요.</p>
+          <p className="mt-2 rounded-xl bg-card px-3 py-2 text-[14px] font-semibold text-ink">{demoHeaderLine(roundLabel(round.title, round.slots.map((s) => s.starts_at)), t, Number(clock?.offset_seconds ?? 0), (d) => fmtDateTime(d.toISOString()))}</p>
+          <p className="mt-1 text-[13px] text-muted">아래 버튼은 모두 이 회차에 적용돼요. 다른 회차에 쓰려면 위에서 회차를 고르세요. 마감 시각을 기다리지 않고 한 회차의 흐름을 처음부터 끝까지 돌려볼 수 있어요. 테스트 참가자만 만들고 바꿔요. 실제 운영에서는 숨기는 도구예요.</p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <form action={seedParticipants} className="shadow-card rounded-[20px] bg-card p-4">
@@ -279,6 +285,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
                 ))}
               </div>
               <form action={moveClock} className="mt-2">
+                <input type="hidden" name="r" value={round.id} />
                 <input type="hidden" name="to" value="reset" />
                 <button className="w-full text-[12px] text-muted underline underline-offset-4">실제 시각으로 돌아가기</button>
               </form>
@@ -292,25 +299,39 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             </form>
 
             <form action={toggleBots} className="shadow-card rounded-[20px] bg-card p-4">
+              <input type="hidden" name="r" value={round.id} />
               <input type="hidden" name="on" value={bots ? "0" : "1"} />
               <p className="flex items-center gap-2 text-[14px] font-semibold">시연 봇 <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${bots ? "bg-leaf-soft text-leaf" : "bg-field text-muted"}`}>{bots ? "켜짐" : "꺼짐"}</span></p>
               <p className="mt-1 text-[12px] text-muted">참가자가 결제하면 그 일정이 4명이 되도록 테스트 참가자가 같이 신청해요. 확정되면 단체방에서 성격대로 인사·대화하고, 사람이 쓴 말에 한두 명이 답해요. 모임 날엔 체크인(가끔 한 명은 안 와요)과 후기까지 남겨요.</p>
               <button className="mt-3 h-10 w-full rounded-xl border border-line bg-card text-[14px] font-semibold hover:border-accent">{bots ? "끄기" : "켜기"}</button>
             </form>
 
-            {nextRound && (
+            <form action={fixOldCopula} className="shadow-card rounded-[20px] bg-card p-4">
+              <input type="hidden" name="r" value={round.id} />
+              <p className="text-[14px] font-semibold">예전 메시지 문구 다듬기</p>
+              <p className="mt-1 text-[12px] text-muted">조사 처리가 들어가기 전에 나간 단체방·알림 문장에서 &lsquo;B5FA&rsquo;이에요 같은 &lsquo;이에요/예요&rsquo;를 받침에 맞게 고쳐요. 여러 번 눌러도 같아요.</p>
+              <button className="mt-3 h-10 w-full rounded-xl border border-line bg-card text-[14px] font-semibold hover:border-accent">다듬기</button>
+            </form>
+
+            {nextRound ? (
               <form action={reapply} className="shadow-card rounded-[20px] bg-card p-4">
                 <input type="hidden" name="round_id" value={round.id} />
                 <input type="hidden" name="next_round_id" value={nextRound.id} />
                 <p className="text-[14px] font-semibold">④ 다음 차수에 다시 신청시키기</p>
-                <p className="mt-1 text-[12px] text-muted">{nextRound.title}에 참석자들을 다시 넣어요. 그 차수를 매칭하면 이전 만남과 비선호가 반영돼요.</p>
+                <p className="mt-1 text-[12px] text-muted">{nextRound.title}에 이 회차 참석자(시연 참가자 포함)를 다시 넣어요. 4명이 안 되는 일정은 테스트 참가자로 채워요. 그 차수를 매칭하면 이전 만남과 비선호가 반영돼요.</p>
                 <button className="mt-3 h-10 w-full rounded-xl bg-accent text-[14px] font-semibold text-white">다시 신청시키기</button>
               </form>
+            ) : (
+              <div className="shadow-card rounded-[20px] bg-card p-4">
+                <p className="text-[14px] font-semibold">④ 다음 차수에 다시 신청시키기</p>
+                <p className="mt-1 text-[12px] text-muted">다음 회차를 먼저 만드세요. 이 회차 뒤에 아직 신청을 받는 회차가 없어요. 만들고 이 화면으로 돌아오면 버튼이 생겨요.</p>
+                <Link href="/admin/rounds?tab=new" className="mt-3 flex h-10 w-full items-center justify-center rounded-xl border border-line bg-card text-[14px] font-semibold hover:border-accent">회차 만들기</Link>
+              </div>
             )}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-4 text-[13px]">
-            <form action={runTick}><button className="underline underline-offset-4">밀린 작업 지금 처리</button></form>
+            <form action={runTick}><input type="hidden" name="r" value={round.id} /><button className="underline underline-offset-4">밀린 작업 지금 처리</button></form>
             <form action={resetRound}>
               <input type="hidden" name="round_id" value={round.id} />
               <ConfirmButton confirm={`'${round.title}'의 신청·테이블·후기를 모두 지우고 처음 상태로 되돌려요. 되돌릴 수 없어요. 계속할까요?`} className="text-danger underline underline-offset-4">이 회차 시연 데이터 초기화</ConfirmButton>

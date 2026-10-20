@@ -184,7 +184,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
     <div>
       <PageHeader
         title="예외 처리함"
-        desc={<>자동으로 풀지 못한 일(<Term tip={TIP.예외}>예외</Term>)만 모았어요. 처리할 것은 오래된 것부터 보여 줘요. 정상 흐름은 여기에 올라오지 않아요.</>}
+        desc={<>자동으로 풀지 못한 일(<Term tip={TIP.예외}>예외</Term>)만 모았어요. 처리할 것은 오래된 것부터 보여 줘요. 정상 흐름은 여기에 올라오지 않아요. 올라온·처리한 시각은 시연 시계가 아니라 실제 시각이에요(처리에 걸린 시간을 정확히 재려고).</>}
         how={["위 유형 버튼으로 골라 보기", "'왜'와 '먼저 할 일' 읽기", "카드 아래 버튼 하나 누르기 (메모는 선택)", "처리한 건은 '처리한 것'에서 확인·다시 열기"]}
       />
       <nav aria-label="예외 보기" className="mt-6 flex gap-1 overflow-x-auto border-b border-line">
@@ -235,7 +235,7 @@ export default async function Exceptions({ searchParams }: { searchParams: Promi
                 <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${PILL[e.kind] ?? "bg-danger/10 text-danger"}`}>{KIND_TIP[e.kind] ? <Term tip={KIND_TIP[e.kind]}>{LABEL[e.kind]}</Term> : LABEL[e.kind] ?? "기타 예외"}</span>
                 {e.status === "open" && reopened.has(e.id) && <span className="rounded-full bg-danger/10 px-3 py-1 text-[14px] font-semibold text-danger">다시 엶</span>}
                 {e.kind === "no_show" && isClaimed(e.reason) && <span className="rounded-full bg-accent-soft px-3 py-1 text-[14px] font-semibold text-accent">본인 참석 알림</span>}
-                <span className="text-[14px] text-muted">{fmtDateTime(e.created_at)} 올라옴{e.status === "open" ? ` · ${since(e.created_at)}` : ""}</span>
+                <span className="text-[14px] text-muted"><span title="실제 시각 기준">{fmtDateTime(e.created_at)} 올라옴</span>{e.status === "open" ? ` · ${since(e.created_at)}` : ""}</span>
               </div>
               <dl className="mt-3 grid gap-x-4 gap-y-1.5 text-[15px] sm:grid-cols-[72px_1fr]">
                 <dt className="text-[13px] font-semibold leading-6 text-muted">누구</dt>

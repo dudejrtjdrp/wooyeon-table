@@ -36,3 +36,18 @@ describe("pickMove: 조건 충돌 예외의 이동 추천", () => {
     expect(pickMove(home, sibs, rel(), DEFAULT_SETTINGS, "old")).toBeNull();
   });
 });
+
+describe("긴급 수정은 예외 상황에서만 (emergencyGate)", () => {
+  it("예외함 카드에서 들어오면 사유 그대로", async () => {
+    const { emergencyGate } = await import("./admin-ops");
+    expect(emergencyGate("ex-1", false, "신고 접수로 분리")).toEqual({ ok: true, reason: "신고 접수로 분리" });
+  });
+  it("예외 없이 들어오면 확인 없이는 막는다", async () => {
+    const { emergencyGate } = await import("./admin-ops");
+    expect(emergencyGate(null, false, "그냥 옮김").ok).toBe(false);
+  });
+  it("확인하면 이력 사유에 [예외 없이]를 붙인다", async () => {
+    const { emergencyGate } = await import("./admin-ops");
+    expect(emergencyGate(null, true, "참가자 전화로 불참")).toEqual({ ok: true, reason: "[예외 없이] 참가자 전화로 불참" });
+  });
+});

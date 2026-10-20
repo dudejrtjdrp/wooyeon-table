@@ -5,7 +5,7 @@ export type AppRow = {
   match_status: string;
   attendance_status: string | null;
   resolution?: string | null;
-  rounds?: { match_at?: string } | null;
+  rounds?: { match_at?: string; status?: string } | null;
 };
 
 /** t(지금)를 넘기면 결제 전에 매칭 시각이 지난 신청을 '결제 전 마감'으로 보여 준다 (화면마다 '결제 대기'로 남던 문제) */
@@ -21,6 +21,12 @@ export function headline(a: AppRow, t?: Date): { label: string; tone: "muted" | 
   if (a.payment_status === "REFUND_FAILED") return { label: "환불 다시 처리 중", tone: "candle", desc: "결제사에서 환불이 한 번에 되지 않아 10분 간격으로 자동으로 다시 시도하고 있어요. 세 번 안 되면 운영팀이 직접 처리해요. 따로 하실 일은 없어요." };
   switch (a.match_status) {
     case "WAITING":
+      // 발표 시각이 지났는데 아직 대기면, 같은 문구를 두지 않고 지금 결과를 정리 중이라고 알린다
+      // 회차 매칭이 이미 끝났는데 대기로 남았으면 '곧 알림' 약속 대신 운영팀이 확인 중이라고 알린다
+      if (a.rounds?.status && a.rounds.status !== "open" && a.rounds.status !== "matching")
+        return { label: "확인 중", tone: "candle", desc: "이번 회차 매칭에 들어가지 못한 신청이에요. 운영팀이 확인해 다음 일정 안내나 환불을 도와드릴게요. 급하면 내 정보 > 자주 묻는 질문과 문의로 알려 주세요." };
+      if (t && a.rounds?.match_at && new Date(a.rounds.match_at) <= t)
+        return { label: "결과 정리 중", tone: "accent", desc: "발표 시각이 지나 지금 테이블을 꾸리고 있어요. 끝나면 바로 알림으로 알려 드려요." };
       return { label: "매칭 대기", tone: "accent", desc: "신청 마감 뒤 자동으로 테이블을 꾸려요." };
     case "MATCHING":
       return { label: "매칭 중", tone: "accent", desc: "조건에 맞는 테이블을 찾고 있어요." };

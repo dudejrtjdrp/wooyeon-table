@@ -84,7 +84,7 @@ export default async function Guide() {
   const users = (demo ?? []).filter((u) => u.role === "user");
   const main = users.find((u) => !u.login_id.startsWith("test-")) ?? users[0];
   const A = admin?.login_id;
-  const panel = <As admin login={A} to="/admin">운영자로 · 시연 패널 열기</As>;
+  const panel = <As admin login={A} to="/admin?demo=1#demo">운영자로 · 시연 패널 열기</As>;
   const afterDeadline = <p className="text-[13px] text-muted">이 버튼은 4단계까지 마친 뒤 이 페이지를 새로고침하면 생겨요.</p>;
 
   return (

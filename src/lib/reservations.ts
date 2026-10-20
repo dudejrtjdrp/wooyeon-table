@@ -102,13 +102,13 @@ export async function attemptReservation(tableId: string, adapter?: BookingAdapt
   const res = await a.book({ channel: r.channel, venueName: r.venues.name, venueAddress: r.venues.address, bookingUrl: r.venues.booking_url, reservedFor: r.reserved_for, partySize: r.party_size, name: r.reservation_name });
   const attempts = r.attempts + 1;
   if (res.ok) {
-    await db().from("reservations").update({ status: "CONFIRMED", attempts, external_ref: res.externalRef, mode: a.mode, last_error: null, updated_at: new Date().toISOString() }).eq("id", r.id).eq("status", "REQUESTED");
+    await db().from("reservations").update({ status: "CONFIRMED", attempts, external_ref: res.externalRef, mode: a.mode, last_error: null, updated_at: (await now()).toISOString() }).eq("id", r.id).eq("status", "REQUESTED");
     await logStatus({ entityType: "reservation", entityId: r.id, field: "status", from: "REQUESTED", to: "CONFIRMED", actor: "system", reason: `${CHANNEL_LABEL[r.channel]} 예약 확정 ${res.externalRef}${a.mode === "mock" ? " (모의)" : ""}` });
     return "CONFIRMED";
   }
   // 전화 예약은 다시 시도해도 결과가 같아서 바로 다음 식당으로 넘어간다
   const failed = attempts >= MAX_ATTEMPTS || r.channel === "phone";
-  await db().from("reservations").update({ status: failed ? "FAILED" : "REQUESTED", attempts, last_error: res.error, updated_at: new Date().toISOString() }).eq("id", r.id);
+  await db().from("reservations").update({ status: failed ? "FAILED" : "REQUESTED", attempts, last_error: res.error, updated_at: (await now()).toISOString() }).eq("id", r.id);
   await logStatus({ entityType: "reservation", entityId: r.id, field: "attempt", from: String(r.attempts), to: String(attempts), actor: "system", reason: res.error });
   if (failed) {
     await logStatus({ entityType: "reservation", entityId: r.id, field: "status", from: "REQUESTED", to: "FAILED", actor: "system", reason: r.channel === "phone" ? "전화 예약 식당이라 자동 예약 불가" : `${MAX_ATTEMPTS}번 실패` });
@@ -140,7 +140,7 @@ export async function retryReservations(): Promise<number> {
 export async function markReservedManually(tableId: string, ref: string, adminId: string) {
   const { data } = await db().from("reservations").select("id,status").eq("table_id", tableId).maybeSingle();
   if (!data) return;
-  await db().from("reservations").update({ status: "CONFIRMED", mode: "manual", external_ref: ref || null, updated_at: new Date().toISOString() }).eq("id", data.id);
+  await db().from("reservations").update({ status: "CONFIRMED", mode: "manual", external_ref: ref || null, updated_at: (await now()).toISOString() }).eq("id", data.id);
   await logStatus({ entityType: "reservation", entityId: data.id, field: "status", from: data.status, to: "CONFIRMED", actor: `admin:${adminId}`, reason: `운영자가 직접 예약${ref ? ` (${ref})` : ""}` });
   await db().from("exceptions").update({ status: "resolved", resolution: "운영자가 직접 예약", resolved_by: adminId, resolved_at: new Date().toISOString() }).eq("dedupe_key", `reservation:${tableId}`).eq("status", "open");
 }

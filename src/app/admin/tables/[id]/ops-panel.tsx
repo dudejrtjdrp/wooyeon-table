@@ -38,13 +38,21 @@ export function OpsPanel({ tableId, slotId, members, siblings, active, exception
     <>
       <input type="hidden" name="table_id" value={tableId} />
       <input type="hidden" name="op" value={op} />
-      {exceptionId && <input type="hidden" name="ex" value={exceptionId} />}
+      {exceptionId ? (
+        <input type="hidden" name="ex" value={exceptionId} />
+      ) : (
+        <label className="flex items-start gap-2 rounded-lg bg-warn-soft/60 px-3 py-2 text-[13px] text-ink">
+          <input type="checkbox" name="no_ex" required className="mt-0.5" />
+          <span>예외함에 올라온 건이 아니지만 예외 상황이 맞아요 (참가자 연락·현장 사정 등). 이력에 &lsquo;예외 없이 수정&rsquo;으로 남아요</span>
+        </label>
+      )}
     </>
   );
   return (
     <div className="space-y-2">
       <p className="mb-3 rounded-xl bg-candle/15 px-3.5 py-2.5 text-[12px] leading-relaxed text-ink">
         정상 흐름은 자동으로 처리돼요. 확정 뒤 취소, 안전 문제처럼 자동으로 풀리지 않는 경우에만 쓰세요. 나이 차이·차단 관계는 여기서도 지켜요.
+        {!exceptionId && " 예외함 카드에서 들어오지 않았다면, 예외 상황이 맞는지 한 번 더 확인받아요."}
       </p>
       <Op title="참가자 이동" desc="다른 테이블로 옮기기">
         <form action={emergencyAction} className="space-y-2.5">

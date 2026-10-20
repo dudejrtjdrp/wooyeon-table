@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { ChevronDown, Clock3, Ticket } from "lucide-react";
 import { ErrorText, LinkButton, PageTitle, Screen } from "@/components/ui";
 import { requireProfile } from "@/lib/auth";
-import { PASSES, REFUND_POLICY, type PassType, won } from "@/lib/constants";
+import { PASSES, PAY_DEMO_HINT, REFUND_POLICY, type PassType, won } from "@/lib/constants";
 import { fmtSlot } from "@/lib/format";
 import { now } from "@/lib/clock";
 import { db } from "@/lib/supabase";
@@ -83,6 +83,8 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
         <div className="mt-4"><ErrorText msg={e} /></div>
         {!tossLive() && (
           <div className="mt-6 flex flex-col items-center gap-2.5 text-[13px] text-muted">
+            {/* 테스트 결제창이 열리지 않거나 실패해 돌아온 경우(테스트 키 401 등): 시연은 아래 버튼으로 이어 가게 */}
+            {e && <p className="rounded-[12px] bg-warn-soft px-4 py-2.5 text-center text-[14px] font-semibold text-[#6b5410]">{PAY_DEMO_HINT}</p>}
             <button formAction={pay} className="inline-flex h-11 items-center underline underline-offset-4">결제창 없이 바로 결제 완료 (시연용)</button>
             {app.payments.status === "PENDING" && (
               <button formAction={failPayment} className="inline-flex h-11 items-center underline underline-offset-4">결제 실패 상황 보기 (시연용)</button>

@@ -21,6 +21,7 @@ import { ExpandAll } from "./expand-all";
 import { computeMetrics } from "@/lib/metrics";
 import { loadMetricsInput } from "../metrics/load";
 import { failNote, monitorCounts, type MonitorCount } from "@/lib/match-monitor";
+import { scoreDisplay, scoreTip, tableConflicts } from "@/lib/table-conflicts";
 
 export const dynamic = "force-dynamic";
 
@@ -73,22 +74,13 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
     ? await Promise.all([
         db().from("blocks").select("blocker_id,blocked_id").in("blocker_id", uids),
         db().from("safety_reports").select("reporter_id,reported_id").in("reporter_id", uids),
-        db().from("person_prefs").select("from_user,to_user").eq("pref", "avoid").in("from_user", uids),
+        db().from("person_prefs").select("from_user,to_user,table_id").eq("pref", "avoid").in("from_user", uids),
         db().from("status_events").select("entity_id,field,to_value,created_at").eq("entity_type", "application").in("field", ["match_status", "application_status"]).in("to_value", ["ALTERNATIVE_OFFERED", "NO_MATCH", "TRANSFERRED", "EXCEPTION", "CANCELED"]).in("entity_id", apps.filter((a) => !a.table_id).map((a) => a.id)).order("created_at"),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
-  const rel = { block: new Set((blocks ?? []).map((b) => pairKey(b.blocker_id, b.blocked_id))), report: new Set((reps ?? []).map((b) => pairKey(b.reporter_id, b.reported_id))), avoid: new Set((avoids ?? []).map((b) => pairKey(b.from_user, b.to_user))) };
-  const conflictsOf = (ms: typeof apps) => {
-    const c = { block: 0, report: 0, avoid: 0 };
-    for (let i = 0; i < ms.length; i++)
-      for (let j = i + 1; j < ms.length; j++) {
-        const k = pairKey(ms[i].user_id, ms[j].user_id);
-        if (rel.block.has(k)) c.block++;
-        if (rel.report.has(k)) c.report++;
-        if (rel.avoid.has(k)) c.avoid++;
-      }
-    return c;
-  };
+  const rel = { block: new Set((blocks ?? []).map((b) => pairKey(b.blocker_id, b.blocked_id))), report: new Set((reps ?? []).map((b) => pairKey(b.reporter_id, b.reported_id))) };
+  // 끝난 테이블에서 그 테이블 후기로 남긴 '다시는 싫어요'는 충돌이 아니라 다음 매칭에 반영될 기록이다 (lib/table-conflicts.ts)
+  const conflictsOf = (t: { id: string; status: string }, ms: typeof apps) => tableConflicts(t, ms.map((m) => m.user_id), rel, (avoids ?? []) as { from_user: string; to_user: string; table_id: string | null }[]);
   // 못 든 사람마다 상태 이력 (사유·시각을 빈칸 없이 채운다)
   const evOf = new Map<string, { field: string; to_value: string; created_at: string }[]>();
   for (const e of failEv ?? []) evOf.set(e.entity_id, [...(evOf.get(e.entity_id) ?? []), e]);
@@ -214,8 +206,9 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
             const d = t.score_detail;
             const members = apps.filter((a) => a.table_id === t.id);
             const reasons = t.explanation.reasons ?? [];
-            const cf = conflictsOf(members);
-            const cfN = cf.block + cf.report + cf.avoid;
+            const cf = conflictsOf(t, members);
+            const cfN = cf.total;
+            const sc = scoreDisplay(Number(t.score), d?.gate);
             const open = tableHits(q, { names: members.map((m) => m.users.name), reservationName: t.reservation_name, venueName: t.venues?.name ?? null, region: t.slots.region });
             return (
               <details key={t.id} data-mt open={open} className={`shadow-card group min-w-0 rounded-[20px] bg-card ${open ? "ring-2 ring-accent/30" : ""}`}>
@@ -226,10 +219,11 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                       <span className="whitespace-nowrap text-[13px] text-muted">{fmtDay(t.slots.starts_at)} {fmtTime(t.slots.starts_at)}</span>
                       <span className="whitespace-nowrap"><Badge v={label(TABLE, t.status)} /></span>
                       {cfN > 0 && <span className="whitespace-nowrap rounded-full bg-danger/10 px-2 py-0.5 text-[12px] font-semibold text-danger">충돌 {cfN}쌍</span>}
+                      {cf.reflected > 0 && <span className="whitespace-nowrap rounded-full bg-field px-2 py-0.5 text-[12px] font-semibold text-muted">다음 매칭에 반영됨 {cf.reflected}쌍</span>}
                     </span>
                     <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#4c5368]">
                       <span className="whitespace-nowrap font-semibold text-ink">{members.length}명</span>
-                      <span className="whitespace-nowrap font-semibold text-accent">매칭 {Math.round(Number(t.score))}점{typeof d?.gate === "number" && Math.round(d.gate) !== Math.round(Number(t.score)) && <span className="font-normal text-muted"> (확정 판정 {Math.round(d.gate)}점)</span>}</span>
+                      <span className="whitespace-nowrap font-semibold text-accent">{sc.differs ? <Term inLink tip={scoreTip(sc, TIP.매칭점수)}>매칭 {sc.main}점</Term> : <>매칭 {sc.main}점</>}</span>
                       {typeof d?.ageGap === "number" && <span className={`whitespace-nowrap ${d.ageGap > DEFAULT_SETTINGS.maxAgeGap ? "font-semibold text-danger" : ""}`}>나이 차 {d.ageGap}살</span>}
                       {t.reservation_name && <span className="whitespace-nowrap">예약명 <b className="font-semibold text-ink">{t.reservation_name}</b></span>}
                       <span className="min-w-0 break-keep">{t.venues?.address ?? "주소 없음"}</span>
@@ -250,9 +244,8 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                       <p className="mt-1 text-[14px] text-muted">{t.venues?.address ?? "예외 처리함에서 식당을 다시 배정할 수 있어요"}{t.reservation_name ? ` · 예약명 ${t.reservation_name}` : ""}</p>
                     </div>
                     <div className="rounded-2xl bg-accent-soft/60 px-5 py-3 text-right">
-                      <p className="text-[12px] text-muted"><Term tip={TIP.매칭점수}>매칭 점수</Term></p>
-                      <p className="text-[30px] font-bold leading-tight text-accent">{Math.round(Number(t.score))}<span className="text-[16px] font-semibold">점</span></p>
-                      {typeof d?.gate === "number" && d.gate !== Number(t.score) && <p className="text-[12px] text-muted">확정 판정 {Math.round(d.gate)}점 (성비 감점 제외)</p>}
+                      <p className="text-[12px] text-muted"><Term tip={scoreTip(sc, TIP.매칭점수)}>매칭 점수</Term></p>
+                      <p className="text-[30px] font-bold leading-tight text-accent">{sc.main}<span className="text-[16px] font-semibold">점</span></p>
                     </div>
                   </div>
                   {/* 표가 넓으면 이 상자 안에서만 가로로 밀린다 */}
@@ -300,7 +293,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                     <Strip I={UsersRound} k="나이 차" v={`${d.ageGap}살`} sub={`${d.ageGap <= DEFAULT_SETTINGS.maxAgeGap ? `${DEFAULT_SETTINGS.maxAgeGap}살 이내 규칙 지킴` : `${DEFAULT_SETTINGS.maxAgeGap}살 규칙 넘음`} · 여성 ${d.female}명, 남성 ${d.male}명`} danger={d.ageGap > DEFAULT_SETTINGS.maxAgeGap} />
                     <Strip I={Heart} k="공통 관심사" v={d.commonInterests.slice(0, 2).join(" · ") || "-"} sub={`MBTI ${d.mbtiList.join(" · ")}`} />
                     <Strip I={Users} k="이전 만남" v={`${d.totalPairs}쌍 중 ${d.metPairs}쌍`} sub={`희망 성향 맞춘 사람 ${d.wantedTotal}명 중 ${d.wantedMet}명`} />
-                    <Strip I={ShieldCheck} k="차단·비선호 충돌" v={cfN ? `${cfN}쌍 있음` : "없음"} sub={`차단 ${cf.block} · 신고 ${cf.report} · 비선호 ${cf.avoid}쌍`} danger={cfN > 0} />
+                    <Strip I={ShieldCheck} k="차단·비선호 충돌" v={cfN ? `${cfN}쌍 있음` : "없음"} sub={`차단 ${cf.block} · 신고 ${cf.report} · 비선호 ${cf.avoid}쌍${cf.reflected ? ` · 다음 매칭에 반영 ${cf.reflected}쌍` : ""}`} danger={cfN > 0} />
                   </div>
                   {reasons.length > 0 && (
                     <div className="mt-4 rounded-2xl bg-accent-soft/40 p-4">
@@ -312,6 +305,7 @@ export default async function MatchingMonitor({ searchParams }: { searchParams: 
                   )}
                   <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted">
                     {cfN > 0 ? <span className="font-semibold text-danger">확정 뒤 생긴 차단·신고·비선호가 있어요. 테이블 상세의 <Term tip={TIP.긴급수정}>긴급 수정</Term>에서 분리해 주세요</span> : <span>지금 기준으로 다시 세어 봐도 충돌 없음</span>}
+                    {cf.reflected > 0 && <span>이 모임 후기로 남긴 &lsquo;다시는 싫어요&rsquo; {cf.reflected}쌍은 다음 매칭에서 같은 테이블에 앉지 않게 반영돼요</span>}
                     {t.confirmed_at && <span>{t.explanation.origin === "admin_split" ? "운영자 분리로 확정" : "자동 확정"} {fmtDateTime(t.confirmed_at)}</span>}
                     <Link href={`/admin/tables/${t.id}`} className="font-semibold text-accent">테이블 상세 →</Link>
                   </p>

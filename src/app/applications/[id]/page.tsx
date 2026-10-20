@@ -31,7 +31,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     .from("applications")
     .select(
       "id,user_id,application_status,payment_status,match_status,attendance_status,resolution,match_reason,realloc_count,table_id,submitted_at,payments(paid_at,amount,pass_type),dining_tables(slots(starts_at,ends_at))," +
-        "rounds(id,title,match_at,apply_deadline),application_slots(slots(id,region,starts_at))",
+        "rounds(id,title,match_at,apply_deadline,status),application_slots(slots(id,region,starts_at))",
     )
     .eq("id", id)
     .maybeSingle();

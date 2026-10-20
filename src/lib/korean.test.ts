@@ -26,3 +26,14 @@ describe("으로/로, 은/는", () => {
     expect(eunNeun("잠실·송파")).toBe("잠실·송파는");
   });
 });
+
+describe("예전 문장의 이에요/예요 고치기", () => {
+  it("받침에 맞지 않는 것만 고친다", async () => {
+    const { fixCopula } = await import("./korean");
+    expect(fixCopula("예약명은 '우연한식탁 B5FA'이에요.")).toBe("예약명은 '우연한식탁 B5FA'예요.");
+    expect(fixCopula("물리치료사 상우이에요 잘 부탁드려요")).toBe("물리치료사 상우예요 잘 부탁드려요");
+    expect(fixCopula("창가 쪽 테이블이에요")).toBe("창가 쪽 테이블이에요");
+    expect(fixCopula("'C5E1'예요")).toBe("'C5E1'이에요");
+    expect(fixCopula("좋아요")).toBe("좋아요");
+  });
+});

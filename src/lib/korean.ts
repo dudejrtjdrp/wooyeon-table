@@ -30,3 +30,14 @@ function rieul(word: string): boolean {
 export const euro = (word: string) => `${word}${hasBatchim(word) && !rieul(word) ? "으로" : "로"}`;
 /** 홍대·합정·연남 → …연남은, 잠실·송파 → …송파는 */
 export const eunNeun = (word: string) => `${word}${hasBatchim(word) ? "은" : "는"}`;
+
+/**
+ * 이미 쌓인 문장의 '이에요/예요'를 받침에 맞게 고친다(예전 시연 메시지 정리용).
+ * 낱말(한글·영문·숫자, 따옴표로 감싼 것 포함) 바로 뒤의 '이에요'·'예요'만 본다
+ */
+export function fixCopula(text: string): string {
+  return text.replace(/([가-힣A-Za-z0-9]+)(['"’”)]?)(이에요|예요)/g, (all, word: string, close: string, cop: string) => {
+    const want = hasBatchim(word) ? "이에요" : "예요";
+    return cop === want ? all : `${word}${close}${want}`;
+  });
+}

@@ -1,4 +1,5 @@
 import { pushNotifications } from "./push";
+import { now } from "./clock";
 import { db } from "./supabase";
 
 // 앱 내 알림. 바로 보내는 알림은 등록된 휴대폰으로 푸시도 함께 보낸다.
@@ -12,6 +13,8 @@ export async function notify(n: {
   dedupeKey?: string;
   scheduledAt?: Date;
 }) {
+  // 시연 시계로 찍는다. 예약 알림은 tick이 시연 시계로 보내니, 바로 보내는 알림과 알림함 순서가 섞이지 않게
+  const at = await now();
   const row = {
     user_id: n.userId,
     template: n.template,
@@ -19,9 +22,9 @@ export async function notify(n: {
     body: n.body,
     link: n.link ?? null,
     dedupe_key: n.dedupeKey ?? null,
-    scheduled_at: (n.scheduledAt ?? new Date()).toISOString(),
+    scheduled_at: (n.scheduledAt ?? at).toISOString(),
     status: n.scheduledAt ? "pending" : "sent",
-    sent_at: n.scheduledAt ? null : new Date().toISOString(),
+    sent_at: n.scheduledAt ? null : at.toISOString(),
   };
   const save = () =>
     n.dedupeKey

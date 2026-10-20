@@ -3,6 +3,7 @@
 // 이 수정으로 풀린 예외(같은 신청·테이블에 걸린 조건 충돌·식당 부족·예약 실패 등)는 함께 닫는다.
 import { type Member, fillOrReflow, tableMembers } from "./attendance";
 import { extendMembershipFor, releaseUse } from "./billing";
+import { now } from "./clock";
 import { logStatus } from "./events";
 import { fmtDate, fmtSlot, fmtTime } from "./format";
 import { canJoin } from "./matching/constraints";
@@ -76,7 +77,7 @@ async function rescheduleFor(appId: string, userId: string, from: string, to: Tb
   await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/tables/${from}`);
   await db().from("notifications").delete().eq("dedupe_key", `remind:${appId}`).eq("status", "pending");
   const at = new Date(new Date(to.slots.starts_at).getTime() - 24 * 3600_000);
-  if (at > new Date()) {
+  if (at > (await now())) {
     // 운영자가 '자동 메시지'에서 고친 하루 전 안내 문구를 그대로 쓴다
     const msg = render("reminder", { date: fmtDate(to.slots.starts_at), time: fmtTime(to.slots.starts_at), region: to.slots.region, venue: to.venues?.name ?? "식당은 모임 정보에서", reservation: to.reservation_name ?? "" }, await loadTemplates());
     await notify({ userId, template: "reminder", title: msg.title, body: msg.body, link: `/tables/${to.id}`, dedupeKey: `remind:${appId}:${to.id}`, scheduledAt: at });
@@ -92,6 +93,16 @@ export async function siblingTables(tableId: string) {
   const out = [];
   for (const r of rows) out.push({ ...r, count: (await tableMembers(r.id)).length });
   return out.sort((a, b) => a.slots.starts_at.localeCompare(b.slots.starts_at));
+}
+
+/**
+ * 긴급 수정은 예외 상황에서만 (MAT-14). 예외함 카드(ex)에서 들어왔으면 그대로,
+ * 아니면 운영자가 '예외 상황이 맞다'고 한 번 더 확인해야 하고, 이력 사유에 [예외 없이]를 붙여 남긴다
+ */
+export function emergencyGate(exceptionId: string | null, acknowledged: boolean, reason: string): { ok: true; reason: string } | { ok: false; message: string } {
+  if (exceptionId) return { ok: true, reason };
+  if (!acknowledged) return { ok: false, message: "예외함에서 들어온 수정이 아니에요. 예외 상황이 맞다면 확인란에 체크해 주세요" };
+  return { ok: true, reason: `[예외 없이] ${reason}` };
 }
 
 /** 참가자 한 명을 다른 테이블로 옮긴다 */
@@ -227,7 +238,7 @@ export async function splitTable(tableId: string, appIds: string[], reason: stri
   if (out.length < settings.minSize || stay < settings.minSize) return { ok: false, message: `나눈 뒤 두 테이블 모두 ${settings.minSize}명 이상이어야 해요 (지금 ${stay}명 / ${out.length}명)` };
   const { data: nt } = await db()
     .from("dining_tables")
-    .insert({ round_id: tb.round_id, slot_id: tb.slot_id, match_run_id: tb.match_run_id, status: "CONFIRMED", confirmed_at: new Date().toISOString(), explanation: { reasons: ["운영팀이 조정한 테이블"], origin: "admin_split" } })
+    .insert({ round_id: tb.round_id, slot_id: tb.slot_id, match_run_id: tb.match_run_id, status: "CONFIRMED", confirmed_at: (await now()).toISOString(), explanation: { reasons: ["운영팀이 조정한 테이블"], origin: "admin_split" } })
     .select("id")
     .single();
   const newTb = (await table(nt!.id))!;
