@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { afterMeetingNote, canClaimAttended, failureMoment, shouldNudgeCheckIn } from "./attendance-rules";
+import { afterMeetingNote, canClaimAttended, checkInOpen, failureMoment, shouldNudgeCheckIn } from "./attendance-rules";
 
 const at = (s: string) => new Date(`2026-10-23T${s}:00+09:00`);
 const start = at("19:30"), end = at("22:00");
 
 describe("체크인 시간 판정", () => {
+  it("체크인은 시작 1시간 전부터 끝날 때까지", () => {
+    expect(checkInOpen(start, end, at("18:29"))).toBe(false);
+    expect(checkInOpen(start, end, at("18:30"))).toBe(true);
+    expect(checkInOpen(start, end, at("22:00"))).toBe(true);
+    expect(checkInOpen(start, end, at("22:01"))).toBe(false);
+  });
   it("시작 20분이 지나고 끝나기 전에만 체크인 안내를 보낸다", () => {
     expect(shouldNudgeCheckIn(start, end, at("19:45"))).toBe(false);
     expect(shouldNudgeCheckIn(start, end, at("19:50"))).toBe(true);

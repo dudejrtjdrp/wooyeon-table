@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { botsNeeded, chooseBots, makeBot, nextGender } from "./join";
 import { arrivalMinutes, hasBatchim, iyeyo, josa, persona } from "./persona";
-import { beforeAnchor, phaseOpen, pickNoShow, planReplies, planTable, spreadTimes } from "./plan";
-import { categoryWord, ARRIVE_EARLY, ARRIVE_ON_TIME, BYE, DAY_MENU, DAY_PLAN, DAY_QA, GREET, GREET_MORE, LATE_ARRIVE, LATE_WARN, clockWord, intents, replyTo, reviewFor, topicReply } from "./scripts";
+import { beforeAnchor, greetFirst, phaseOpen, pickNoShow, pickQa, planReplies, planTable, spreadTimes } from "./plan";
+import { categoryWord, ARRIVE_EARLY, ARRIVE_ON_TIME, BYE, DAY_MENU, DAY_PLAN, DAY_QA, GREET, GREET_MORE, LATE_ARRIVE, LATE_WARN, clockWord, intents, qaTopics, replyTo, reviewFor, topicReply } from "./scripts";
 import { parseTopics } from "./bots";
 
 const P = (id: string, mbti: string | null, traits: string[] = [], name = "김서연") => persona({ id, name }, { job: "디자이너", mbti, interests: ["여행", "커피", "책"], my_traits: traits, gender: "F", birth_year: 1996 });
@@ -127,6 +127,43 @@ describe("plan", () => {
     expect(r[0].delayMs).toBeLessThan(r[1].delayMs);
     expect(planReplies("m2", "네", bots.slice(0, 1), ctx)).toHaveLength(1);
     expect(planReplies("m3", "아무 말", [], ctx)).toEqual([]);
+  });
+  it("확정 인사를 안 한 봇은 답하기 전에 인사부터 (모임 시작 전까지만)", () => {
+    const plan = planTable(base);
+    const hello = plan.find((m) => m.userId === "b1" && m.key.endsWith(":hello:1"))!;
+    const before = start - 2 * 86400_000;
+    expect(greetFirst(plan, new Set(), "b1", before, start, end)).toEqual(hello);
+    expect(greetFirst(plan, new Set([hello.key]), "b1", before, start, end)).toBeNull();
+    expect(greetFirst(plan, new Set(), "b1", start + 60_000, start, end)).toBeNull();
+    expect(greetFirst(planTable({ ...base, noticeAt: null }), new Set(), "b1", before, start, end)).toBeNull();
+  });
+  it("인사를 먼저 하는 봇은 답에서 또 인사하지 않고, 인사뿐인 말엔 따로 답하지 않는다", () => {
+    const g = new Set(bots.map((b) => b.userId));
+    for (const r of planReplies("m9", "안녕하세요 다들 몇 시쯤 오세요?", bots, ctx, undefined, g)) {
+      expect(r.body).not.toMatch(/안녕|반가/);
+      expect(r.body.length).toBeGreaterThan(0);
+    }
+    for (const r of planReplies("m10", "안녕하세요!", bots, ctx, undefined, g)) expect(r.body).toBe("");
+  });
+  it("질문 주제: 사람이 매운 걸 물었으면 봇은 매운 걸 다시 묻지 않는다", () => {
+    expect([...qaTopics(["매운 거 잘 드세요?"])]).toEqual(["spicy"]);
+    expect([...qaTopics(["몇 번 출구로 나가요?", "주차 되나요"])].sort()).toEqual(["parking", "way"]);
+    expect(qaTopics(["오늘 날씨 좋네요"]).size).toBe(0);
+    const all = new Set(DAY_QA.map((x) => x.topic));
+    for (let r = 0; r < 1; r += 0.05) {
+      expect(pickQa(r, new Set(["spicy"]))?.topic).not.toBe("spicy");
+      expect(pickQa(r, all)).toBeNull();
+    }
+    // 이미 올라간 질문은 그 짝을 그대로 (답이 어긋나지 않게)
+    expect(pickQa(0, new Set(["spicy"]), DAY_QA[0].q)).toBe(DAY_QA[0]);
+    // 겹치지 않으면 원래 고르던 질문 그대로
+    expect(pickQa(0.99, new Set(["spicy"]))).toBe(DAY_QA[DAY_QA.length - 1]);
+  });
+  it("계획: 사람이 물은 주제의 질문과 그 답은 빠진다", () => {
+    for (let k = 0; k < 20; k++) {
+      const plan = planTable({ ...base, tableId: `qa${k}`, askedTopics: new Set(["spicy"]) });
+      expect(plan.some((m) => /매운/.test(m.body) && m.phase === "daybefore")).toBe(false);
+    }
   });
   it("노쇼는 많아야 한 명, 봇이 둘 이상일 때만", () => {
     expect(pickNoShow("t", ["a"])).toBeNull();

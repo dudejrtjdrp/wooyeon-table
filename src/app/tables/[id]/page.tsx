@@ -14,7 +14,7 @@ import { refundCutoff } from "@/lib/policy";
 import { CHANNEL_LABEL, type Channel } from "@/lib/reservations";
 import { db } from "@/lib/supabase";
 import { checkIn, claimAttended } from "./actions";
-import { canClaimAttended } from "@/lib/attendance-rules";
+import { canClaimAttended, checkInOpen } from "@/lib/attendance-rules";
 import { after } from "next/server";
 import { maybeTick } from "@/lib/pipeline";
 
@@ -55,7 +55,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const n = await now();
   const start = new Date(t.slots.starts_at);
   const end = new Date(t.slots.ends_at);
-  const canCheckIn = mine?.attendance_status === "SCHEDULED" && n >= new Date(start.getTime() - 3600_000) && n <= end;
+  const canCheckIn = mine?.attendance_status === "SCHEDULED" && checkInOpen(start, end, n);
   // 주소를 누르면 지도 앱이 바로 열리게: 네이버 지도·카카오맵 (앱 없으면 웹 지도)
   const maps = t.venues ? mapLinks(t.venues.name, t.venues.address, t.venues.map_url) : null;
   const done = meetingEnded(t, n);

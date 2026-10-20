@@ -10,8 +10,8 @@ import { kstDay } from "../regions";
 import { db } from "../supabase";
 import { type JoinProfile, botsNeeded, chooseBots, makeBot, nextGender } from "./join";
 import { arrivalMinutes, persona } from "./persona";
-import { beforeAnchor, msgKey, phaseOpen, pickNoShow, planReplies, planTable, spreadTimes } from "./plan";
-import { type Ctx, categoryWord, reviewFor } from "./scripts";
+import { beforeAnchor, greetFirst, msgKey, phaseOpen, pickNoShow, planReplies, planTable, spreadTimes } from "./plan";
+import { type Ctx, DAY_QA, categoryWord, qaTopics, reviewFor } from "./scripts";
 
 export const BOTS_KEY = "demo.bots";
 const ACTOR = "system:demo-bot";
@@ -150,21 +150,58 @@ export async function botReplies(tableId: string, opts: { live?: boolean } = {})
   if (!room) return 0;
   let n = 0;
   const used = new Set(room.msgs.map((m) => m.body));
+  const plan = planFor(tb, room.msgs);
+  const posted = new Set(room.msgs.map((m) => m.dedupe_key));
   for (const h of pendingHuman(tb, room.msgs, Date.now())) {
-    const plan = planReplies(h.msg.id, h.text, repliers(tb, t.getTime()), ctxOf(tb, h.author), used);
-    for (const [k, r] of plan.entries()) {
+    const bots = repliers(tb, t.getTime());
+    // 아직 확정 인사를 안 한 봇은 답하기 전에 인사부터 한다
+    const hello = new Map(bots.map((p) => [p.userId, greetFirst(plan, posted, p.userId, t.getTime(), tb.start, tb.end)] as const).filter((x): x is [string, NonNullable<(typeof x)[1]>] => Boolean(x[1])));
+    const replies = planReplies(h.msg.id, h.text, bots, ctxOf(tb, h.author), used, new Set(hello.keys()));
+    for (const [k, r] of replies.entries()) {
       const key = msgKey(tb.id, r.userId, "reply", h.msg.id);
+      const greet = hello.get(r.userId);
+      if (greet) posted.add(greet.key);
       if (opts.live) {
         // 화면 응답 뒤라 기다려도 된다. 너무 길면 서버 시간 제한에 걸리니 짧게
         await sleep(k === 0 ? 2500 : 2000);
-        n += await insert(room.roomId, [{ userId: r.userId, body: r.body, key }]);
+        if (greet) {
+          n += await insert(room.roomId, [{ userId: r.userId, body: greet.body, key: greet.key }]);
+          if (r.body) await sleep(1500);
+        }
+        if (r.body) n += await insert(room.roomId, [{ userId: r.userId, body: r.body, key }]);
       } else {
-        const at = Math.min(Date.now() - (plan.length - k) * 1000, Date.parse(h.msg.created_at) + r.delayMs);
-        n += await insert(room.roomId, [{ userId: r.userId, body: r.body, key, at: Math.max(at, Date.parse(h.msg.created_at) + 1000) }]);
+        const at = Math.max(Math.min(Date.now() - (replies.length - k) * 1000, Date.parse(h.msg.created_at) + r.delayMs), Date.parse(h.msg.created_at) + 1000);
+        const rows = [];
+        // 인사는 답보다 0.5초 앞 (사람 메시지보다는 뒤)
+        if (greet) rows.push({ userId: r.userId, body: greet.body, key: greet.key, at: r.body ? Math.max(at - 500, Date.parse(h.msg.created_at) + 500) : at });
+        if (r.body) rows.push({ userId: r.userId, body: r.body, key, at });
+        n += await insert(room.roomId, rows);
       }
     }
   }
   return n;
+}
+
+/** 이 테이블의 봇 대화 계획. 사람이 이미 물은 질문 주제는 봇이 다시 묻지 않는다 */
+function planFor(tb: Table, msgs: Msg[]) {
+  const notice = msgs.find((m) => m.dedupe_key === `notice:${tb.id}`);
+  const content = msgs.find((m) => m.dedupe_key === `content:${tb.id}`);
+  const humanIds = new Set(tb.members.filter((m) => !m.bot).map((m) => m.userId));
+  const askedTopics = qaTopics(msgs.filter((m) => m.kind === "user" && m.sender_id && humanIds.has(m.sender_id)).map((m) => m.body));
+  // 봇 질문은 대사 그대로 올라간다(말투를 입히지 않음)
+  const postedQuestion = msgs.find((m) => m.dedupe_key?.endsWith(":daybefore:2") && DAY_QA.some((x) => x.q === m.body))?.body ?? null;
+  return planTable({
+    tableId: tb.id,
+    bots: personas(tb),
+    ctx: ctxOf(tb),
+    startMs: tb.start,
+    endMs: tb.end,
+    noticeAt: notice ? Date.parse(notice.created_at) : null,
+    topics: content ? parseTopics(content.body) : null,
+    noShow: noShowOf(tb),
+    askedTopics,
+    postedQuestion,
+  });
 }
 
 /** 한 테이블에서 지금 올릴 차례가 된 봇 대화(인사·하루 전·도착·주제·끝인사)를 올린다 */
@@ -174,18 +211,8 @@ async function scheduled(tb: Table, t: Date): Promise<number> {
   const realNow = Date.now();
   const offset = t.getTime() - realNow; // 시연 시계 - 실제 시각
   const keys = new Set(room.msgs.map((m) => m.dedupe_key));
-  const notice = room.msgs.find((m) => m.dedupe_key === `notice:${tb.id}`);
   const content = room.msgs.find((m) => m.dedupe_key === `content:${tb.id}`);
-  const plan = planTable({
-    tableId: tb.id,
-    bots: personas(tb),
-    ctx: ctxOf(tb),
-    startMs: tb.start,
-    endMs: tb.end,
-    noticeAt: notice ? Date.parse(notice.created_at) : null,
-    topics: content ? parseTopics(content.body) : null,
-    noShow: noShowOf(tb),
-  });
+  const plan = planFor(tb, room.msgs);
   const due = plan
     .filter((m) => !keys.has(m.key) && phaseOpen(m.phase, t.getTime(), tb.start, tb.end))
     .map((m) => ({ ...m, real: m.phase === "hello" ? m.due : m.due - offset }))

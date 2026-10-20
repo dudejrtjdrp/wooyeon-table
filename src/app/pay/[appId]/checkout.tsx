@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
 import { AlertCircle, CreditCard } from "lucide-react";
+import { PAY_DEMO_HINT } from "@/lib/constants";
 
 const ICON: Record<string, React.ReactNode> = {
   card: <CreditCard size={20} className="text-accent" />,
@@ -97,7 +98,12 @@ export function TossCheckout(p: Props) {
           </p>
         </div>
       </div>
-      {err && <p className="mt-3 rounded-2xl bg-danger/10 px-4 py-3 text-[14px] font-medium text-danger">{err}</p>}
+      {err && (
+        <div role="alert" className="mt-3 rounded-2xl bg-danger/10 px-4 py-3 text-[14px] font-medium text-danger">
+          <p>{err}</p>
+          {!p.live && <p className="mt-1 font-semibold">{PAY_DEMO_HINT}</p>}
+        </div>
+      )}
 
       <div className="pb-safe fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-line2 bg-paper px-5 pt-3">
         <div className="pb-3">

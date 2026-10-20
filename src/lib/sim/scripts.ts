@@ -106,15 +106,33 @@ export const DAY_MENU: Line[] = [
   { f: () => `가게 사진 봤는데 테이블이 넓어 보여서 좋네요` },
 ];
 
-/** 하루 전 질문과 다른 봇의 답. 짝으로 쓴다 */
-export const DAY_QA: { q: string; a: (p: Persona, c: Ctx) => string }[] = [
-  { q: "혹시 다들 매운 거 잘 드세요?", a: () => "저는 적당히는 먹어요. 너무 매운 건 좀 힘들어요" },
-  { q: "역에서 가까운가요? 몇 번 출구로 나가면 되는지 아시는 분", a: () => "지도 보니까 역에서 걸어서 5분 정도더라고요. 모임 정보에 지도 링크 있어요" },
-  { q: "도착하면 예약명 말하면 되는 거죠?", a: () => "네 위에 공지에 있는 예약명 말하면 된대요" },
-  { q: "내일 술도 한잔하시나요?", a: () => "저는 한두 잔 정도는 좋아요" },
-  { q: "다들 내일 몇 시쯤 오세요?", a: (p, c) => `저는 ${arriveWord(p, c.startMs)}쯤이요` },
-  { q: "혹시 주차되는지 아시는 분 있나요?", a: () => "근처에 공영주차장이 있긴 한데 지하철이 편할 거예요" },
+/** 하루 전 질문과 다른 봇의 답. 짝으로 쓴다. topic은 사람이 먼저 물은 질문과 겹치는지 볼 때 쓴다 */
+export const DAY_QA: { topic: QaTopic; q: string; a: (p: Persona, c: Ctx) => string }[] = [
+  { topic: "spicy", q: "혹시 다들 매운 거 잘 드세요?", a: () => "저는 적당히는 먹어요. 너무 매운 건 좀 힘들어요" },
+  { topic: "way", q: "역에서 가까운가요? 몇 번 출구로 나가면 되는지 아시는 분", a: () => "지도 보니까 역에서 걸어서 5분 정도더라고요. 모임 정보에 지도 링크 있어요" },
+  { topic: "booking", q: "도착하면 예약명 말하면 되는 거죠?", a: () => "네 위에 공지에 있는 예약명 말하면 된대요" },
+  { topic: "drink", q: "내일 술도 한잔하시나요?", a: () => "저는 한두 잔 정도는 좋아요" },
+  { topic: "time", q: "다들 내일 몇 시쯤 오세요?", a: (p, c) => `저는 ${arriveWord(p, c.startMs)}쯤이요` },
+  { topic: "parking", q: "혹시 주차되는지 아시는 분 있나요?", a: () => "근처에 공영주차장이 있긴 한데 지하철이 편할 거예요" },
 ];
+
+export type QaTopic = "spicy" | "way" | "booking" | "drink" | "time" | "parking";
+/** 질문 주제를 알아보는 낱말. 사람이 이미 물은 주제는 봇이 다시 묻지 않는다 */
+const QA_WORDS: [QaTopic, RegExp][] = [
+  ["spicy", /매운|맵|매워|맵기/],
+  ["way", /출구|역에서|몇 번 출구|위치|어디(에|예요|인가|로)|찾아가|가는 길|길 찾/],
+  ["booking", /예약명|예약자|예약 이름|누구 이름/],
+  ["drink", /술|한잔|한 잔|맥주|와인|소주|하이볼/],
+  ["time", /몇 ?시|언제 (오|도착)|도착 (예정|시간)/],
+  ["parking", /주차/],
+];
+
+/** 메시지들이 어떤 질문 주제를 다뤘는지 */
+export function qaTopics(texts: string[]): Set<QaTopic> {
+  const out = new Set<QaTopic>();
+  for (const t of texts) for (const [k, re] of QA_WORDS) if (re.test(t)) out.add(k);
+  return out;
+}
 
 // ── (c) 모임 시작 ──
 export const ARRIVE_EARLY: Line[] = [
@@ -270,8 +288,10 @@ const REPLY: Record<Intent, Line[]> = {
 };
 
 /** 사람이 쓴 메시지에 이 봇이 할 답. 뜻이 둘 걸리면(인사+몇 시) 두 문장을 잇는다. 두 번째 봇(rank 1)은 한 문장만 */
-export function replyTo(p: Persona, text: string, c: Ctx, key: string, rank: number, used?: Set<string>): string {
-  const it = intents(text);
+export function replyTo(p: Persona, text: string, c: Ctx, key: string, rank: number, used?: Set<string>, skip: Intent[] = []): string {
+  const it = intents(text).filter((x) => !skip.includes(x));
+  // 빼고 나니 할 말이 없으면(방금 인사했는데 상대도 인사만 한 경우) 답하지 않는다
+  if (!it.length) return "";
   const parts: string[] = [];
   const take = rank === 0 ? it.slice(0, 2) : [it.find((x) => x !== "greet") ?? it[0]];
   for (const i of take) {
