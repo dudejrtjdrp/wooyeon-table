@@ -49,7 +49,7 @@ export default async function Rounds() {
           <p>시연 중이면 운영자 화면에서 회차를 만들거나, 시연 패널에서 실제 시각으로 돌아가 보세요.</p>
           <p className="mt-1 flex flex-wrap gap-x-4 font-bold">
             <Link href="/admin/rounds?tab=new" className="inline-flex h-11 items-center underline underline-offset-4">회차 만들기</Link>
-            <Link href="/admin" className="inline-flex h-11 items-center underline underline-offset-4">시연 패널 열기</Link>
+            <Link href="/admin?demo=1#demo" className="inline-flex h-11 items-center underline underline-offset-4">시연 패널 열기</Link>
           </p>
         </div>
       )}
