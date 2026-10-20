@@ -108,6 +108,7 @@ export function WeightsForm({ initial, min, defaults, defaultMin, readOnly, acti
               title="새 템플릿 만들기"
               desc="이름을 붙이고 항목 점수와 최소 점수를 여기서 맞춰요. 기본값에서 시작하고, 숫자를 바꾸면 100점 나눔이 바로 보여요."
               triggerClassName={btnLight}
+              resetOnClose
             >
               <AddPresetForm start={DEFAULT_SETTINGS.weights as unknown as Record<string, number>} startMin={DEFAULT_SETTINGS.minScore} />
             </AdminModal>

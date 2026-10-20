@@ -62,17 +62,22 @@ export function parsePresets(v: unknown): Preset[] {
   return out;
 }
 
+/** 숫자 규칙만 본다(이름 빼고): 0~100 정수, 하나 이상 0보다 큼, 최소 점수, PRD 우선순위. 모달 입력칸도 같은 검사를 쓴다 */
+export function valueError(weights: Record<string, number>, minScore: number): string | null {
+  if (!WEIGHT_KEYS.every((k) => isScore(weights[k]))) return "항목 점수는 0~100 사이 정수로 적어 주세요";
+  if (weightSum(weights) <= 0) return "항목 점수를 하나 이상 0보다 크게 적어 주세요";
+  if (!isScore(minScore)) return "최소 점수는 0~100 사이 정수로 적어 주세요";
+  return priorityError(weights);
+}
+
 /** 저장할 때 받는 값 검사. 문제가 없으면 null */
 export function presetError(p: { name: string; desc: string; weights: Record<string, number>; minScore: number }, others: Preset[], selfId?: string): string | null {
   const name = p.name.trim();
   if (!name) return "템플릿 이름을 적어 주세요";
   if (name.length > PRESET_NAME_MAX) return `이름은 ${PRESET_NAME_MAX}자까지 적을 수 있어요`;
   if (p.desc.trim().length > PRESET_DESC_MAX) return `설명은 ${PRESET_DESC_MAX}자까지 적을 수 있어요`;
-  if (!WEIGHT_KEYS.every((k) => isScore(p.weights[k]))) return "항목 점수는 0~100 사이 정수로 적어 주세요";
-  if (weightSum(p.weights) <= 0) return "항목 점수를 하나 이상 0보다 크게 적어 주세요";
-  if (!isScore(p.minScore)) return "최소 점수는 0~100 사이 정수로 적어 주세요";
-  const order = priorityError(p.weights);
-  if (order) return order;
+  const v = valueError(p.weights, p.minScore);
+  if (v) return v;
   if (others.some((o) => o.id !== selfId && o.name === name)) return "같은 이름의 템플릿이 이미 있어요";
   if (!selfId && others.length >= PRESET_MAX) return `템플릿은 ${PRESET_MAX}개까지 만들 수 있어요. 안 쓰는 것을 지우고 다시 해 주세요`;
   return null;
@@ -86,12 +91,13 @@ export function priorityError(w: Partial<Record<WeightKey, number>> | Record<str
   for (let i = 1; i < PRIORITY.length; i++) {
     const hi = PRIORITY[i - 1], lo = PRIORITY[i];
     const ww = w as Record<string, number>;
-    if ((Number(ww[lo.k]) || 0) > (Number(ww[hi.k]) || 0)) return `PRD 우선순위대로 ${hi.label}(${ww[hi.k]}) ≥ ${lo.label}(${ww[lo.k]})여야 해요. 연령대 → 성비 → MBTI → 관심사 → 희망 성향 순서로 점수를 같거나 작게 맞춰 주세요`;
+    if ((Number(ww[lo.k]) || 0) > (Number(ww[hi.k]) || 0)) return `PRD 우선순위대로 ${hi.label}(${Number(ww[hi.k]) || 0}) ≥ ${lo.label}(${Number(ww[lo.k]) || 0})여야 해요. 연령대 → 성비 → MBTI → 관심사 → 희망 성향 순서로 점수를 같거나 작게 맞춰 주세요`;
   }
   return null;
 }
 
-export const weightSum = (w: Record<string, number>) => WEIGHT_KEYS.reduce((n, k) => n + (Number(w[k]) || 0), 0);
+const pos = (x: unknown) => Math.max(0, Number(x) || 0);
+export const weightSum = (w: Record<string, number>) => WEIGHT_KEYS.reduce((n, k) => n + pos(w[k]), 0);
 
 /** 값이 같은지 (가중치 6개 + 최소 점수) */
 export const sameCriteria = (a: Record<string, number>, aMin: number, b: Record<string, number>, bMin: number) =>
@@ -110,7 +116,7 @@ export function shares(w: Record<string, number>): Record<WeightKey, number> {
   const sum = weightSum(w);
   const out = Object.fromEntries(WEIGHT_KEYS.map((k) => [k, 0])) as Record<WeightKey, number>;
   if (sum <= 0) return out;
-  const raw = WEIGHT_KEYS.map((k) => ({ k, v: ((Number(w[k]) || 0) / sum) * 100 }));
+  const raw = WEIGHT_KEYS.map((k) => ({ k, v: (pos(w[k]) / sum) * 100 }));
   for (const r of raw) out[r.k] = Math.floor(r.v);
   let left = 100 - raw.reduce((n, r) => n + Math.floor(r.v), 0);
   for (const r of [...raw].sort((a, b) => (b.v - Math.floor(b.v)) - (a.v - Math.floor(a.v)) || WEIGHT_KEYS.indexOf(a.k) - WEIGHT_KEYS.indexOf(b.k))) {

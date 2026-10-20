@@ -82,3 +82,19 @@ describe("PRD 우선순위 지키기 (M8)", () => {
     expect(priorityError({ age: 22, gender: 20, mbti: 14, interests: 14, wanted: 8, fresh: 22 })).toBeNull();
   });
 });
+
+describe("모달 입력칸 숫자 검사 (valueError)", () => {
+  const base = { age: 25, gender: 22, mbti: 18, interests: 15, wanted: 12, fresh: 8 };
+  it("기본값은 통과", async () => {
+    const { valueError } = await import("./weights-presets");
+    expect(valueError(base, 50)).toBeNull();
+  });
+  it("빈칸·음수·전부 0은 막고, 오류 문구에 NaN이 나오지 않는다", async () => {
+    const { valueError, priorityError, shares } = await import("./weights-presets");
+    expect(valueError({ ...base, mbti: NaN }, 50)).toMatch(/0~100/);
+    expect(valueError({ ...base, age: -5 }, 50)).toMatch(/0~100/);
+    expect(valueError({ age: 0, gender: 0, mbti: 0, interests: 0, wanted: 0, fresh: 0 }, 50)).toMatch(/0보다 크게/);
+    expect(priorityError({ ...base, mbti: NaN })).not.toMatch(/NaN/);
+    expect(shares({ ...base, age: -5 }).age).toBe(0);
+  });
+});
