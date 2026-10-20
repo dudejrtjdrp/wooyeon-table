@@ -25,7 +25,7 @@ export default async function Rounds() {
   // 안내 문구의 동네 수는 실제로 열린 일정에서 센다 (문구와 목록이 어긋나지 않게)
   const openRegions = new Set((rounds ?? []).flatMap((r) => (r.slots ?? []).map((s) => s.region)));
   const { data: mineRaw } = me
-    ? await db().from("applications").select("id,round_id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at)").eq("user_id", me.id).order("created_at", { ascending: false })
+    ? await db().from("applications").select("id,round_id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at,status)").eq("user_id", me.id).order("created_at", { ascending: false })
     : { data: [] };
   const mine = (mineRaw ?? []) as unknown as (Parameters<typeof headline>[0] & { id: string; round_id: string; application_status: string; match_status: string; attendance_status: string | null; rounds: { title: string; match_at: string } })[];
   const applied = new Map(mine.filter((a) => a.application_status !== "CANCELED").map((a) => [a.round_id, a.id]));
@@ -37,7 +37,7 @@ export default async function Rounds() {
   const shownRounds = new Set((rounds ?? []).map((r) => r.id));
   const pendingRest = pending.filter((a) => !shownRounds.has(a.round_id));
   const byId = new Map(mine.map((a) => [a.id, a]));
-  // 열린 회차가 없을 때만 시연 중인지 본다 (시연 시계를 옮겼거나 시연 계정)
+  // 열린 회차가 없을 때만 시연 계정인지 본다 (로그인 전 방문자·실제 회원에게는 안 보임)
   const demo = !rounds?.length && (await demoMode(me?.id));
 
   return (

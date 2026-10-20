@@ -49,7 +49,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at,status),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
     .eq("user_id", me.id)
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .limit(10);
@@ -321,7 +321,7 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
       <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 분위기 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
         <span className="inline-flex h-7 items-center rounded-full bg-ink px-3 text-[13px] font-semibold text-paper">
-          {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed || h.label === "결과 정리 중" ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
+          {confirmed ? ddayLabel(dday(slot!.starts_at, t)) : failed || h.label === "결과 정리 중" || h.label === "확인 중" ? h.label : `결과 ${fmtDayClock(a.rounds.match_at).join(" ")}`}
         </span>
       </Hero>
       <div className="px-5 pt-4">

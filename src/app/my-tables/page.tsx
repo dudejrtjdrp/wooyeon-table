@@ -27,7 +27,7 @@ export default async function MyTables() {
   const t = await now();
   const { data } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at),dining_tables(id,status,slots(starts_at,ends_at,region),venues(name,address,price_range))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,created_at,rounds(title,match_at,status),dining_tables(id,status,slots(starts_at,ends_at,region),venues(name,address,price_range))")
     .eq("user_id", me.id)
     .order("created_at", { ascending: false });
   const apps = (data ?? []) as unknown as A[];
