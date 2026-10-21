@@ -72,6 +72,7 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
   const moved = apps.filter((a) => (a.realloc_count ?? 0) > 0);
   const tables = new Set(confirmed.map((a) => a.table_id)).size;
   const attended = apps.filter((a) => a.attendance_status === "ATTENDED").length;
+  const noShow = confirmed.filter((a) => a.attendance_status !== "ATTENDED").length;
   const nConfirmed = next?.apps.filter((a) => a.match_status === "CONFIRMED") ?? [];
   const rq = cur ? `?r=${cur.id}` : "";
   const nq = next ? `?r=${next.id}` : "";
@@ -91,17 +92,17 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
     deadline: `테이블 ${tables}개 확정 · ${confirmed.length}명 자리 확정 · 재배치 ${moved.length}명 · 테이블에 못 든 사람 ${failed.length}명`,
     dayBefore: "리마인드 알림과 단체방 안내 발송",
     start_meet: "단체방에 대화 주제 게시 · 체크인 열림",
-    end: `체크인 ${attended}명 · 후기 남김`,
+    end: `체크인 ${attended}명 · 후기 남김 · 이번 회차 노쇼 후보 ${noShow}명`,
     reapply: next ? `다음 회차 신청 ${next.apps.length}명` : undefined,
     rematch: next ? `다음 회차 ${new Set(nConfirmed.map((a) => a.table_id)).size}개 테이블 확정` : undefined,
   };
   const see: Partial<Record<TourStepKey, ReactNode>> = {
-    start: <><AdminLink href={`/admin/rounds${rq}`}>회차·식당 재고</AdminLink><AsUser a={human} to={() => "/rounds"}>앱 · 일정 탭</AsUser></>,
+    start: <><AdminLink href={`/admin/rounds${rq}`}>회차·식당 재고</AdminLink>{step === "gather" && <AsUser a={human} to={() => "/rounds"}>앱 · 일정 탭</AsUser>}</>,
     gather: <><AdminLink href={`/admin/applicants${rq}`}>신청자 목록</AdminLink><AsUser a={pick(apps, (a) => a.payment_status === "PAID")} to={() => "/"}>앱 · 홈 신청 상태</AsUser></>,
     deadline: <><AdminLink href={`/admin/matching${rq}`}>자동 매칭 모니터</AdminLink><AdminLink href="/admin/exceptions">예외 처리함</AdminLink><AsUser a={okOne} to={(a) => `/tables/${a.table_id}`}>앱 · 확정된 테이블</AsUser><AsUser a={failOne} to={(a) => `/applications/${a.id}/resolve`}>앱 · 못 든 사람 화면</AsUser></>,
     dayBefore: <><AdminLink href="/admin/messages">자동 메시지 발송 이력</AdminLink><AsUser a={okOne} to={(a) => `/tables/${a.table_id}/chat`}>앱 · 단체방</AsUser></>,
     start_meet: <><AdminLink href={`/admin/tables${rq}`}>테이블·단체방</AdminLink><AsUser a={okOne} to={(a) => `/tables/${a.table_id}/chat`}>앱 · 대화 주제</AsUser><AsUser a={okOne} to={() => "/"}>앱 · 홈 체크인</AsUser></>,
-    end: <><AdminLink href="/admin/feedback">피드백·안전</AdminLink><AdminLink href="/admin/attendance">참석·노쇼</AdminLink><AsUser a={okOne} to={() => "/"}>앱 · 홈 후기 카드</AsUser></>,
+    end: <><AdminLink href="/admin/feedback">피드백·안전</AdminLink><AdminLink href={`/admin/attendance${rq}`}>참석·노쇼</AdminLink><AsUser a={okOne} to={() => "/"}>앱 · 홈 후기 카드</AsUser></>,
     reapply: <><AdminLink href={`/admin/applicants${nq}`}>다음 회차 신청자</AdminLink></>,
     rematch: <><AdminLink href={`/admin/matching${nq}`}>다음 회차 매칭 모니터</AdminLink><AsUser a={nextOk} to={(a) => `/tables/${a.table_id}`}>앱 · 새 테이블</AsUser></>,
   };
@@ -120,7 +121,7 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
         <li className="flex items-center gap-1.5"><Monitor size={15} aria-hidden="true" />운영자 화면은 새 탭으로 열려요</li>
         <li className="flex items-center gap-1.5"><Smartphone size={15} aria-hidden="true" />참가자 앱도 새 탭으로, 그 상태인 참가자로 바로 들어가요 (휴대폰 폭으로 보면 좋아요)</li>
       </ul>
-      <p className="mt-3 rounded-xl bg-field px-4 py-2.5 text-[13px] text-muted">지금 시각 {fmtDateTime(t.toISOString())} · 버튼이 시계를 앞으로 옮겨요(시연용 가상 시각). 실제 회원 데이터는 바꾸지 않아요.</p>
+      <p className="mt-3 rounded-xl bg-field px-4 py-2.5 text-[13px] text-muted">지금 시각 {fmtDateTime(t.toISOString())} · 버튼이 시연용 가상 시계를 앞으로 옮겨요. 시계는 서비스 전체가 같이 쓰므로 다른 회차의 시간 일정도 함께 처리돼요. 회원 신청·결제를 지우지는 않아요.</p>
 
       {m && <p role="status" className="mt-4 rounded-xl bg-leaf-soft px-4 py-3 text-[15px] font-semibold text-leaf">{m}</p>}
 
