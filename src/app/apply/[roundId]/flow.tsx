@@ -351,12 +351,12 @@ export function ApplyFlow({
                   ? "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 취소해도 환불받을 수 없어요."
                   : pass === "owned" && owned?.unlimited
                     ? "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 매칭 결과가 나오기 전에는 신청을 취소할 수 없어요."
-                    : "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 매칭 결과가 나오기 전에는 신청을 취소할 수 없고, 쓴 이용권 1회도 돌려받지 못해요."}
+                    : "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 매칭 결과가 나오기 전에는 신청을 취소할 수 없고, 나중에 취소해도 쓴 이용권 1회는 돌려받지 못해요."}
               </p>
             )}
             <button type="button" role="checkbox" aria-checked={agree} onClick={() => setAgree(!agree)} className="mx-6 mt-2 flex min-h-[48px] items-center gap-2.5 text-left text-[15px] font-bold">
               <Box on={agree} />
-              {lateDays.length ? (amount ? "환불받을 수 없는 것을 확인했어요" : "결과 전에는 취소할 수 없는 것을 확인했어요") : "환불 규정을 확인했어요"}
+              {lateDays.length ? (amount ? "취소해도 환불받을 수 없는 것을 확인했어요" : "결과 전에는 취소할 수 없는 것을 확인했어요") : "환불 규정을 확인했어요"}
             </button>
           </>
         )}

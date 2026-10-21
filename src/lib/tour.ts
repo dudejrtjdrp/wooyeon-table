@@ -165,7 +165,7 @@ export function tourPhoneView(step: TourStepKey, cur: HumanApp | null, next: Hum
     case "deadline":
       return cur?.payment_status === "PAID"
         ? { line: "신청과 결제가 끝났어요. 마감하면 매칭 결과가 여기로 와요", href: "/", label: "홈에서 신청 상태 보기" }
-        : { line: "이 계정은 이번 투어 회차에 신청돼 있지 않아요. 투어는 /guide의 첫 번째 시연 계정(김우연)으로 따라와 주세요", href: "/", label: "홈 열기" };
+        : { line: "이 계정은 이번 투어 회차에 신청돼 있지 않아요. 투어용 계정은 PC 투어 화면 맨 위 '같은 링크를 휴대폰에서도 열어 주세요'에 적혀 있어요", href: "/", label: "홈 열기" };
     case "dayBefore":
       if (table) return { line: "테이블이 확정됐어요. 같이 앉는 이유와 식당을 확인해 보세요", href: `/tables/${table}`, label: "내 테이블 보기" };
       if (cur?.match_status === "ALTERNATIVE_OFFERED") return { line: "이번엔 테이블에 못 들었어요. 다른 일정·환불 중에서 골라 보세요", href: `/applications/${cur.id}/resolve`, label: "다음 방법 고르기" };
