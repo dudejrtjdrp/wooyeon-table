@@ -128,7 +128,7 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
                   <tr key={n.id}>
                     <td className="max-w-0 truncate px-4 py-2.5 text-ink">{n.title}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-muted">{fmtDateTime(n.sent_at ?? n.scheduled_at)}</td>
-                    <td className="px-4 py-2.5"><Badge v={n.status === "sent" ? (n.read_at ? ["읽음", "accent"] : ["보냄", "accent"]) : n.status === "pending" ? ["예약", "muted"] : ["실패", "danger"]} /></td>
+                    <td className="px-4 py-2.5"><Badge v={n.status === "sent" ? (n.read_at ? ["읽음", "accent"] : ["보냄", "accent"]) : n.status === "pending" ? ["예약", "muted"] : n.status === "canceled" ? ["예약 취소", "muted"] : ["실패", "danger"]} /></td>
                   </tr>
                 ))}
               </tbody>
