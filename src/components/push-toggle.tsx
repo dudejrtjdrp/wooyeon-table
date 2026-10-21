@@ -12,8 +12,20 @@ const b64ToBytes = (b64: string) => {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 };
 
-async function registration() {
+export async function registration() {
   return (await navigator.serviceWorker.getRegistration("/")) ?? navigator.serviceWorker.register("/sw.js", { scope: "/" });
+}
+
+/** 알림 권한을 묻고 이 기기를 구독한다. 켜졌으면 true */
+export async function subscribePush(): Promise<"on" | "off" | "denied"> {
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") return perm === "denied" ? "denied" : "off";
+  const reg = await registration();
+  await navigator.serviceWorker.ready;
+  const { publicKey } = await (await fetch("/api/push")).json();
+  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+  await fetch("/api/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub) });
+  return "on";
 }
 
 /** 휴대폰 알림 켜기. 아이폰은 홈 화면에 추가한 앱에서만 켤 수 있다 */
@@ -38,14 +50,7 @@ export function PushToggle({ variant = "row" }: { variant?: "row" | "card" }) {
   const turnOn = async () => {
     setBusy(true);
     try {
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") return setState(perm === "denied" ? "denied" : "off");
-      const reg = await registration();
-      await navigator.serviceWorker.ready;
-      const { publicKey } = await (await fetch("/api/push")).json();
-      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
-      await fetch("/api/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub) });
-      setState("on");
+      setState(await subscribePush());
     } catch {
       setState("off");
     } finally {

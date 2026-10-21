@@ -1,6 +1,7 @@
 import { Check, Monitor } from "lucide-react";
 import { notFound } from "next/navigation";
 import { InstallGuide } from "@/components/pwa";
+import { HideInApp } from "@/components/push-ask";
 import { PushToggle } from "@/components/push-toggle";
 import { LinkButton, Screen } from "@/components/ui";
 import { getMe } from "@/lib/auth";
@@ -11,7 +12,8 @@ import { tourHuman, tourSnapshot } from "@/lib/tour-state";
 import { TourFollow } from "./follow";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: `${TOUR_NAME} 따라보기 · 우연한 식탁` };
+// 아이폰은 홈 화면에 추가할 때 이 제목을 앱 이름으로 채운다. 투어 화면에서 추가해도 앱 이름이 '우연한 식탁'이 되게 한다
+export const metadata = { title: { absolute: "우연한 식탁" } };
 
 /**
  * 휴대폰에서 PC 투어를 따라보는 화면. 시연 참가자 계정만 볼 수 있고 일반 회원에게는 없는 화면(404).
@@ -31,8 +33,10 @@ export default async function TourFollowPage() {
           <a href={login} className="mt-5 flex h-[54px] w-full items-center justify-center rounded-[14px] bg-accent text-[16px] font-bold text-accent-ink">{h.name}님으로 들어가기</a>
           <p className="mt-3 text-[13px] leading-relaxed text-ink2">직접 로그인하려면 아이디 <code className="font-semibold text-ink">{h.login_id}</code> · 비밀번호 <code className="font-semibold text-ink">demo1234</code></p>
         </section>
-        <p className="mt-6 text-[15px] font-bold">홈 화면에 추가하면 알림도 받아요</p>
-        <InstallGuide />
+        <HideInApp>
+          <p className="mt-6 text-[15px] font-bold">홈 화면에 추가하면 알림도 받아요</p>
+          <InstallGuide />
+        </HideInApp>
       </Screen>
     );
   }
@@ -88,10 +92,13 @@ export default async function TourFollowPage() {
         <p className="mt-1 text-[13px] leading-relaxed text-muted">매칭 결과·하루 전 안내·단체방 새 글이 이 휴대폰 알림으로 와요. 아이폰은 홈 화면에 추가한 앱에서 켜 주세요.</p>
         <div className="mt-3"><PushToggle variant="card" /></div>
       </div>
-      <div className="mt-6">
-        <p className="text-[15px] font-bold">홈 화면에 추가하기</p>
-        <InstallGuide />
-      </div>
+      {/* 이미 앱으로 열었으면 설치 안내는 보이지 않는다 */}
+      <HideInApp>
+        <div className="mt-6">
+          <p className="text-[15px] font-bold">홈 화면에 추가하기</p>
+          <InstallGuide />
+        </div>
+      </HideInApp>
     </Screen>
   );
 }
