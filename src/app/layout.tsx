@@ -15,7 +15,8 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
   formatDetection: { telephone: false },
-  other: { "mobile-web-app-capable": "yes" },
+  // Next 15는 appleWebApp.capable을 mobile-web-app-capable로만 내보낸다. 아이폰이 홈 화면 아이콘을 앱(주소창 없이)으로 열게 예전 이름도 함께 둔다
+  other: { "mobile-web-app-capable": "yes", "apple-mobile-web-app-capable": "yes" },
 };
 
 export const viewport: Viewport = {

@@ -4,7 +4,7 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { after } from "next/server";
 import { AuthChooser } from "@/components/auth-chooser";
-import { PushToggle } from "@/components/push-toggle";
+import { PushAsk } from "@/components/push-ask";
 import { OfferBanner } from "@/components/offer-banner";
 import { TourEntry } from "@/components/tour-entry";
 import { RoundTable } from "@/components/brand";
@@ -123,6 +123,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   return (
     <TabScreen>
+      {/* 휴대폰 알림은 홈에 카드로 두지 않고, 처음 들어왔을 때 한 번만 묻는다 (설정에서 언제든 켜고 끔) */}
+      {me.hasProfile && <PushAsk />}
       <Toast msg={m} />
       <TourEntry userId={me.id} />
       {afterCard && <AfterMeetingCard a={afterCard.a} kind={afterCard.kind!} />}
@@ -141,8 +143,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
         <>
           <Greeting>{greetingFor(active, firstName, t)}</Greeting>
           <StatusCard a={active} t={t} keepAt={keepAt} members={members.map((x) => x.users?.name ?? "")} meId={me.id} memberIds={members.map((x) => x.user_id)} />
-          {/* 확정·하루 전 안내를 휴대폰으로 받으려면 알림을 켜야 해서, 진행 중인 신청이 있을 때 한 번 보여 준다 */}
-          <div className="mt-3"><PushToggle variant="card" /></div>
         </>
       ) : next ? (
         // 신청을 마친 사람에게는 맞춤 추천 하나만 주 버튼으로 보여준다 (일반 '신청하기'와 경쟁하지 않게)
