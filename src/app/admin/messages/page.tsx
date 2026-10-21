@@ -114,7 +114,7 @@ export default async function Messages({ searchParams }: { searchParams: Promise
                   <td className={td}>{n.users?.name ?? "-"}</td>
                   <td className={td}>{kindLabel(n.template)}</td>
                   <td className={td}>{n.status === "pending" || n.status === "canceled" ? <Link href={`/admin/messages/scheduled/${n.id}`} className="text-accent hover:underline">{n.title}</Link> : n.title}</td>
-                  <td className={td}><Badge v={failed ? [n.status === "failed" ? "실패" : "푸시 실패", "danger"] : n.status === "sent" ? ["보냄", "leaf"] : n.status === "canceled" ? ["예약 취소", "ink"] : ["예약", "muted"]} /></td>
+                  <td className={td}><Badge v={failed ? [n.status === "failed" ? "실패" : "푸시 실패", "danger"] : n.status === "sent" ? ["보냄", "leaf"] : n.status === "canceled" ? ["예약 취소", "ink"] : ["예약됨", "muted"]} /></td>
                   <td className={`${td} text-muted`}>{n.attempts ? `${n.attempts}회${n.last_error ? `, ${n.last_error.slice(0, 30)}` : ""}` : "-"}</td>
                   <td className={td}>
                     {n.status === "pending" && !ro && <Link href={`/admin/messages/scheduled/${n.id}`} className={`${btnLight} h-9 px-3 text-[13px]`}>고치기·취소</Link>}

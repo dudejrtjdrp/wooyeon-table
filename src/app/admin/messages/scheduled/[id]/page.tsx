@@ -61,7 +61,7 @@ export default async function ScheduledNotice({ params }: { params: Promise<{ id
               <label className="block text-[13px] text-muted">본문<textarea name="body" defaultValue={n.body} maxLength={SCHEDULED_BODY_MAX} required rows={4} className={`${ctl} mt-1 block h-auto w-full py-2.5 leading-relaxed`} /></label>
               <label className="block text-[13px] text-muted">보낼 시각(서울)<input type="datetime-local" name="at" defaultValue={toKstInput(n.scheduled_at)} required className={`${ctl} mt-1 block w-full max-w-[260px]`} /></label>
               <label className="block text-[13px] text-muted">고치는 사유<input name="reason" placeholder="예: 식당 주차 안내 추가" minLength={4} required className={`${ctl} mt-1 block w-full`} /></label>
-              {kind === "remind" && <p className="text-[13px] leading-relaxed text-muted">하루 전 안내는 원래 보낼 때 지금 식당·예약명으로 다시 써요. 여기서 고치면 고친 문구 그대로 나가고, 테이블이 바뀌면 링크만 따라가요.</p>}
+              {kind === "remind" && <p className="text-[13px] leading-relaxed text-muted">하루 전 안내는 원래 보낼 때 지금 식당·예약명으로 다시 써요. 여기서 고치면 고친 문구 그대로 나가요. 다만 그 뒤 테이블·식당·모임 시각이 바뀌면 이 예약은 거두고 지금 내용으로 새 안내를 걸어요(이력에 남아요).</p>}
               <button className={btnPrimary}>고치기</button>
             </form>
           ) : (

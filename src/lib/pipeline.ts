@@ -112,6 +112,9 @@ export async function assignVenue(tableId: string): Promise<boolean> {
     await logStatus({ entityType: "dining_table", entityId: tableId, field: "status", from: t.status, to: "VENUE_ASSIGNED", actor: "system", reason: `식당 자동 배정: ${pick.name}` });
     // 식당이 없어 첫 공지가 '정해지는 대로 알려 드릴게요'로 먼저 나간 테이블(운영자가 식당 부족을 해결한 경우)이면 정해진 식당을 따로 알린다
     await announceVenueSet(tableId, t, pick.venueId, reservation);
+    // 운영자가 식당 전에 고쳐 둔 하루 전 안내가 있으면 거두고 지금 식당으로 다시 건다
+    const { syncTable, quietly } = await import("./scheduled");
+    await quietly(syncTable(tableId, "system", `식당 자동 배정: ${pick.name}`, { contentChanged: true }));
   }
   // 이어서 식당 예약 요청 (네이버 예약·캐치테이블 어댑터, 실패하면 재시도 → 다른 식당 → 그래도 안 되면 예외)
   const { requestReservation } = await import("./reservations");
@@ -167,6 +170,11 @@ export async function reassignVenue(tableId: string, failedVenueId: string, why:
   const { data: moved } = await db().from("dining_tables").update({ venue_id: pick.venueId }).eq("id", tableId).eq("venue_id", failedVenueId).select("id");
   if (!moved?.length) return null;
   await logStatus({ entityType: "dining_table", entityId: tableId, field: "venue_id", from: failedVenueId, to: pick.venueId, actor: "system", reason: `예약이 안 돼 다른 식당으로: ${pick.name}` });
+  {
+    // 운영자가 고친 하루 전 안내는 옛 식당 기준이라 거두고 새 식당으로 다시 건다 (고치지 않은 안내는 보낼 때 새 식당으로 쓰인다)
+    const { syncTable, quietly } = await import("./scheduled");
+    await quietly(syncTable(tableId, "system", `예약이 안 돼 다른 식당으로: ${pick.name}`, { contentChanged: true }));
+  }
 
   const { data: v } = await db().from("venues").select("name,address,booking_channel,booking_url").eq("id", pick.venueId).single();
   const { CHANNEL_LABEL, deepLink } = await import("./reservations");

@@ -55,6 +55,8 @@ describe("하루 전 안내", () => {
     expect(verdict(remind({ edited: true }), app({ table_id: T2 }), table({ id: T2 }), ok, now)).toEqual({ action: "cancel", why: EDITED_STALE });
     expect(verdict(remind({ edited: true }), app(), table(), ok, now, { contentChanged: true })).toEqual({ action: "cancel", why: EDITED_STALE });
     expect(planSync([remind({ edited: true })], app(), table(), ok, now, { contentChanged: true }).needRemind).toBe(true);
+    // 고칠 때와 식당·모임 시각이 달라진 걸 기록으로 알아챈 경우(자동 식당 변경 등)
+    expect(verdict(remind({ edited: true, editedStale: true }), app(), table(), ok, now)).toEqual({ action: "cancel", why: EDITED_STALE });
     // 고치지 않은 예약은 식당이 바뀌어도 문구만 다시 쓴다
     expect(verdict(remind(), app(), table(), ok, now, { contentChanged: true })).toEqual({ action: "keep" });
   });

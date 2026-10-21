@@ -114,7 +114,8 @@ export async function editScheduled(form: FormData) {
   const { data: n } = await db().from("notifications").select("id,title,body,scheduled_at,status,link,dedupe_key").eq("id", id).maybeSingle();
   if (!n) return go("/admin/messages?st=pending#log", "e", "알림을 찾지 못했어요");
   if (n.status !== "pending") return go(back, "e", "이미 나갔거나 취소된 알림이라 고칠 수 없어요");
-  const startsAt = await scheduledStartsAt(n.link);
+  const tctx = await scheduledCtx(n.link);
+  const startsAt = tctx?.starts ?? null;
   const chk = checkScheduledEdit({ title: String(form.get("title") ?? ""), body: String(form.get("body") ?? ""), at: fromKstInput(String(form.get("at") ?? "")), reason: String(form.get("reason") ?? ""), now: await now(), startsAt });
   if (!chk.ok) return go(back, "e", chk.message);
   if (chk.title === n.title && chk.body === n.body && Math.abs(Date.parse(chk.at) - Date.parse(n.scheduled_at)) < 60_000) return go(back, "m", "바뀐 것이 없어요");
@@ -124,7 +125,7 @@ export async function editScheduled(form: FormData) {
   await logStatus({
     entityType: "notification", entityId: id, field: "scheduled_edit",
     from: JSON.stringify({ title: n.title, body: n.body, scheduled_at: n.scheduled_at }),
-    to: JSON.stringify({ title: chk.title, body: chk.body, scheduled_at: chk.at }),
+    to: JSON.stringify({ title: chk.title, body: chk.body, scheduled_at: chk.at, ...(tctx ? { ctx: tctx } : {}) }),
     actor: `admin:${admin.id}`, reason: `[운영자 예약 수정] ${chk.reason}`,
   });
   return go(back, "m", "예약을 고쳤어요. 보낼 때 이 문구 그대로 나가요");
@@ -146,10 +147,12 @@ export async function cancelScheduledNotice(form: FormData) {
   return go(still ? back : "/admin/messages?st=pending#log", "m", `'${n.title}' 예약을 취소했어요. 보내지 않아요`);
 }
 
-/** 테이블로 가는 예약이면 그 모임 시작 시각 (보낼 시각은 모임 전이어야 한다) */
-async function scheduledStartsAt(link: string | null): Promise<string | null> {
+/** 테이블로 가는 예약이면 고치는 지금의 테이블·식당·모임 시각. 보낼 시각은 모임 전이어야 하고, 뒤에 식당·시각이 바뀌면 고친 문구가 옛 내용이 된다 */
+async function scheduledCtx(link: string | null): Promise<{ table: string; venue: string | null; starts: string | null } | null> {
   const m = /^\/tables\/([0-9a-f-]{36})$/.exec(link ?? "");
   if (!m) return null;
-  const { data } = await db().from("dining_tables").select("slots(starts_at)").eq("id", m[1]).maybeSingle();
-  return (data as unknown as { slots: { starts_at: string } | null } | null)?.slots?.starts_at ?? null;
+  const { data } = await db().from("dining_tables").select("venue_id,slots(starts_at)").eq("id", m[1]).maybeSingle();
+  if (!data) return null;
+  const d = data as unknown as { venue_id: string | null; slots: { starts_at: string } | null };
+  return { table: m[1], venue: d.venue_id ?? null, starts: d.slots?.starts_at ?? null };
 }

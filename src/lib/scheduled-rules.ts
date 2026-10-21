@@ -22,7 +22,7 @@ export const SCHEDULED_LABEL: Record<ScheduledKind, string> = {
   other: "예약 알림",
 };
 
-export type PendingRow = { id: string; user_id: string; dedupe_key: string | null; link: string | null; scheduled_at: string; edited?: boolean };
+export type PendingRow = { id: string; user_id: string; dedupe_key: string | null; link: string | null; scheduled_at: string; edited?: boolean; /** 운영자가 고친 뒤 식당·모임 시각이 바뀜 */ editedStale?: boolean };
 
 export type AppState = {
   id: string;
@@ -85,7 +85,7 @@ export function verdict(row: PendingRow, app: AppState | null, table: TableState
     const patch: { scheduled_at?: string; link?: string } = {};
     const link = `/tables/${app!.table_id}`;
     // 운영자가 고친 문구는 그 테이블·식당·시각을 전제로 쓴 것이라, 그게 바뀌면 고친 예약을 거두고 새 안내를 건다(덮어쓰지는 않는다)
-    if (row.edited && (o.contentChanged || (row.link && row.link !== link))) return { action: "cancel", why: EDITED_STALE };
+    if (row.edited && (o.contentChanged || row.editedStale || (row.link && row.link !== link))) return { action: "cancel", why: EDITED_STALE };
     if (row.link !== link) patch.link = link;
     const at = remindAt(table!.starts_at);
     // 이미 시각이 지났으면(확정이 하루 안에 난 경우) 그대로 둔다: 다음 tick에 바로 나간다

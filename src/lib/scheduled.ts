@@ -9,12 +9,26 @@ import { loadTemplates, render, slotVars } from "./templates";
 type Row = PendingRow & { title: string; body: string; template: string };
 const COLS = "id,user_id,template,title,body,link,dedupe_key,scheduled_at";
 
-/** 운영자가 직접 고친 예약인지 (status_events field scheduled_edit) */
-async function editedIds(ids: string[]): Promise<Set<string>> {
-  if (!ids.length) return new Set();
-  const { data } = await db().from("status_events").select("entity_id").eq("entity_type", "notification").eq("field", "scheduled_edit").in("entity_id", ids);
-  return new Set((data ?? []).map((x) => String(x.entity_id)));
+/** 운영자가 고칠 때의 테이블·식당·모임 시각 (editScheduled가 status_events to 값에 ctx로 남긴다) */
+export type EditCtx = { table?: string | null; venue?: string | null; starts?: string | null };
+
+/** 운영자가 직접 고친 예약과, 고칠 때의 상황 (status_events field scheduled_edit, 가장 최근 것) */
+async function editedIds(ids: string[]): Promise<Map<string, EditCtx | null>> {
+  if (!ids.length) return new Map();
+  const { data } = await db().from("status_events").select("entity_id,to_value,created_at").eq("entity_type", "notification").eq("field", "scheduled_edit").in("entity_id", ids).order("created_at");
+  const m = new Map<string, EditCtx | null>();
+  for (const x of data ?? []) {
+    let ctx: EditCtx | null = null;
+    try { ctx = (JSON.parse(String(x.to_value)) as { ctx?: EditCtx }).ctx ?? null; } catch { /* 예전 기록 */ }
+    m.set(String(x.entity_id), ctx);
+  }
+  return m;
 }
+
+type TableRow = { id: string; venue_id?: string | null; slots: { starts_at: string } };
+/** 고친 뒤 식당이나 모임 시각이 바뀌었는지. 고칠 때 상황을 모르는(예전) 기록은 바뀌지 않은 것으로 본다 */
+const staleEdit = (ctx: EditCtx | null | undefined, tb: TableRow | undefined) =>
+  Boolean(ctx && tb && ((ctx.venue !== undefined && ctx.venue !== (tb.venue_id ?? null)) || (ctx.starts && Date.parse(ctx.starts) !== Date.parse(tb.slots.starts_at))));
 
 /**
  * 이 신청의 하루 전 안내를 운영자가 '예약 취소'로 직접 거둔 적이 있는지. 같은 테이블일 때만 막는다
@@ -55,7 +69,7 @@ async function loadState(appIds: string[]) {
   const tableIds = [...new Set([...appMap.values()].map((a) => a.table_id).filter(Boolean))] as string[];
   const userIds = [...new Set([...appMap.values()].map((a) => a.user_id))];
   const [{ data: tbs }, { data: us }] = await Promise.all([
-    tableIds.length ? db().from("dining_tables").select("id,status,reservation_name,slots(starts_at,region),venues(name)").in("id", tableIds) : Promise.resolve({ data: [] }),
+    tableIds.length ? db().from("dining_tables").select("id,status,reservation_name,venue_id,slots(starts_at,region),venues(name)").in("id", tableIds) : Promise.resolve({ data: [] }),
     userIds.length ? db().from("users").select("id,deleted_at").in("id", userIds) : Promise.resolve({ data: [] }),
   ]);
   type Tb = { id: string; status: string; reservation_name: string | null; slots: { starts_at: string; region: string }; venues: { name: string } | null };
@@ -111,7 +125,7 @@ export async function syncScheduled(appIds: string[], actor: string, reason: str
   for (const appId of ids) {
     const app = appMap.get(appId) ?? null;
     const tb = app?.table_id ? tableMap.get(app.table_id) : undefined;
-    const mine = rows.filter((r) => keyKind(r.dedupe_key).appId === appId).map((r) => ({ ...r, edited: edited.has(r.id) }));
+    const mine = rows.filter((r) => keyKind(r.dedupe_key).appId === appId).map((r) => ({ ...r, edited: edited.has(r.id), editedStale: edited.has(r.id) && staleEdit(edited.get(r.id), tb) }));
     const plan = planSync(mine, app, tableState(tb), { gone: app ? gone.has(app.user_id) : false }, t, { remindSent: sentFor.has(appId), contentChanged: o.contentChanged });
     for (const c of plan.cancel) {
       const r = mine.find((x) => x.id === c.id)!;
@@ -173,7 +187,7 @@ export const quietly = <T>(p: Promise<T>) => p.catch((e) => (console.error("[sch
 
 /**
  * tick이 예약 알림을 보내기 직전에 부른다. 보낼 이유가 사라졌으면 skip(취소 사유), 하루 전 안내는 지금 식당·예약명·테이블로 다시 쓴 patch.
- * 운영자가 고친 예약은 문구를 덮어쓰지 않고 링크만 맞춘다.
+ * 운영자가 고친 예약은 고친 문구 그대로 보낸다. 다만 고친 뒤 테이블·식당·모임 시각이 바뀌었으면 지금 내용으로 바꿔 보낸다.
  */
 export async function checkBeforeSend(n: { id: string; dedupe_key: string | null }, tpl: Awaited<ReturnType<typeof loadTemplates>>): Promise<{ skip?: string; patch?: { title?: string; body?: string; link?: string } }> {
   const { kind, appId } = keyKind(n.dedupe_key);
@@ -183,8 +197,9 @@ export async function checkBeforeSend(n: { id: string; dedupe_key: string | null
   if (!row) return { skip: "알림을 찾지 못했어요" };
   const app = appMap.get(appId) ?? null;
   const tb = app?.table_id ? tableMap.get(app.table_id) : undefined;
-  let edited = (await editedIds([n.id])).has(n.id);
-  const v = verdict({ ...(row as Row), edited }, app, tableState(tb), { gone: app ? gone.has(app.user_id) : false }, t);
+  const ed = await editedIds([n.id]);
+  let edited = ed.has(n.id);
+  const v = verdict({ ...(row as Row), edited, editedStale: edited && staleEdit(ed.get(n.id), tb) }, app, tableState(tb), { gone: app ? gone.has(app.user_id) : false }, t);
   // 운영자가 고친 문구가 옛 테이블 기준이면, 보내기 직전엔 거두는 대신 지금 내용으로 바꿔 보낸다(다시 걸 기회가 없으므로)
   if (v.action === "cancel" && v.why === EDITED_STALE) edited = false;
   else if (v.action === "cancel") return { skip: v.why };
