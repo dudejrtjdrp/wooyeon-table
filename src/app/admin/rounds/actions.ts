@@ -52,6 +52,8 @@ export async function createRound(form: FormData) {
   if (!title || !dates.length || !regions.length) failRound(form, `${[!title && "이름", !dates.length && "날짜", !regions.length && "동네"].filter(Boolean).join(", ")}을(를) 채워 주세요`);
   if (!deadline) failRound(form, "신청 마감을 정하지 못했어요. 날짜를 다시 확인하거나 마감 시각을 직접 넣어 주세요");
   if (matchAtRaw < deadline) failRound(form, "자동 매칭은 신청 마감과 같거나 뒤여야 해요");
+  // 매칭이 환불 마감(모임 주 화요일 24:00) 뒤면, 결제한 사람이 결과를 기다리는 동안 취소·환불을 못 한다 (운영사 Q&A: 환불 마감 = 매칭 마감)
+  if (auto && matchAtRaw > fmtLocal(auto)) failRound(form, `자동 매칭은 환불 마감(${fmtLocal(auto).replace("T", " ")}) 전이어야 해요. 비워 두면 그 시각으로 맞춰요`);
   if (!(maxTables >= 1)) failRound(form, "일정당 최대 테이블 수는 1 이상이어야 해요");
 
   // 이미 열린 회차(취소·종료 제외. 취소한 회차도 status closed로 남는다)와 같은 날짜·동네 일정이 있으면 막는다(복제를 두 번 누르거나 같은 주를 또 만들지 않게)

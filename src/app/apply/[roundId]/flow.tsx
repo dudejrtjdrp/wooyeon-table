@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PrimaryButton } from "@/components/client";
 import { neighborsOf } from "@/lib/regions";
+import { refundCutoff } from "@/lib/policy";
 import { stepFromUrl, useStepHistory } from "@/lib/use-step-history";
 
 type Area = { name: string; open: boolean };
@@ -32,7 +33,7 @@ export function ApplyFlow({
   action, round, sidos, hot, slots, passes, owned, refund, error, nudge = null, initialStep = 1,
 }: {
   action: (f: FormData) => void | Promise<void>;
-  round: { id: string; title: string; deadline: string; today: string };
+  round: { id: string; title: string; deadline: string; today: string; /** 지금 시각(시연 시계). 환불 마감이 지난 날짜를 알린다 */ now?: string };
   sidos: { name: string; areas: Area[] }[];
   hot: string[];
   slots: Slot[];
@@ -53,6 +54,8 @@ export function ApplyFlow({
   const [pass, setPass] = useState(owned ? "owned" : passes[0]?.key ?? "single");
   const [agree, setAgree] = useState(false);
   const [msg, setMsg] = useState<string | null>(error ?? null);
+  // 고른 날짜 중 환불 마감(모임 주 화요일 밤 12시)이 이미 지난 날: 결제하면 취소·환불이 안 된다
+  const lateDays = round.now ? days.filter((d) => slots.some((s) => s.day === d && refundCutoff(s.startsAt).getTime() <= Date.parse(round.now!))) : [];
 
   // 결제 화면이나 오류에서 뒤로 돌아와도 고른 동네·날짜·이용권과 단계를 이어 간다
   const storeKey = `apply:${round.id}`;
@@ -341,9 +344,14 @@ export function ApplyFlow({
               <div className="pb-4">{refund.filter((_, i) => ![0, 2, 3].includes(i)).map((r) => <p key={r}>{r}</p>)}</div>
             </details>
             </div>
+            {lateDays.length > 0 && (
+              <p role="alert" className="mx-6 mt-3 rounded-[14px] bg-danger/10 px-4 py-3 text-[14px] font-semibold leading-relaxed text-danger">
+                고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 신청을 취소하거나 환불받을 수 없어요.
+              </p>
+            )}
             <button type="button" role="checkbox" aria-checked={agree} onClick={() => setAgree(!agree)} className="mx-6 mt-2 flex min-h-[48px] items-center gap-2.5 text-left text-[15px] font-bold">
               <Box on={agree} />
-              환불 규정을 확인했어요
+              {lateDays.length ? "취소·환불이 안 되는 것을 확인했어요" : "환불 규정을 확인했어요"}
             </button>
           </>
         )}

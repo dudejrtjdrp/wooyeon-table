@@ -5,6 +5,7 @@ import { requireProfile } from "@/lib/auth";
 import { PASSES, PAY_DEMO_HINT, REFUND_POLICY, type PassType, won } from "@/lib/constants";
 import { fmtSlot } from "@/lib/format";
 import { now } from "@/lib/clock";
+import { beforeMatchCutoff } from "@/lib/cancel-rules";
 import { db } from "@/lib/supabase";
 import { tossClientKey, tossLive } from "@/lib/toss";
 import { failPayment, pay } from "./actions";
@@ -16,15 +17,18 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
   const { e } = await searchParams;
   const { data } = await db()
     .from("applications")
-    .select("id,user_id,payment_id,payment_status,rounds(title,match_at),payments(amount,pass_type,status)")
+    .select("id,user_id,payment_id,payment_status,rounds(title,match_at),payments(amount,pass_type,status),application_slots(slots(starts_at))")
     .eq("id", appId)
     .maybeSingle();
-  const app = data as unknown as { id: string; user_id: string; payment_id: string; payment_status: string; rounds: { title: string; match_at: string }; payments: { amount: number; pass_type: PassType; status: string } } | null;
+  const app = data as unknown as { id: string; user_id: string; payment_id: string; payment_status: string; rounds: { title: string; match_at: string }; payments: { amount: number; pass_type: PassType; status: string }; application_slots?: { slots: { starts_at: string } | null }[] } | null;
   if (!app || app.user_id !== me.id) redirect(`/?m=${encodeURIComponent("이 결제 화면을 찾지 못했어요. 내 신청은 일정 탭에서 볼 수 있어요")}`);
   if (app.payments.status === "PAID") redirect(`/applications/${appId}`);
   const passDef = PASSES[app.payments.pass_type] ?? PASSES.single;
   // 매칭 시각이 지난 뒤에는 결제를 받지 않는다. 받으면 이미 끝난 매칭에 돈만 내게 된다
-  if (new Date(app.rounds.match_at) <= (await now())) {
+  const t = await now();
+  // 환불 마감(모임 주 화요일 밤 12시)이 이미 지난 일정이면 결제 전에 분명히 알린다
+  const noRefund = beforeMatchCutoff(app.rounds.match_at, (app.application_slots ?? []).flatMap((x) => (x.slots ? [x.slots.starts_at] : []))) <= t;
+  if (new Date(app.rounds.match_at) <= t) {
     return (
       <Screen title="결제" back={`/applications/${appId}`}>
         <PageTitle className="mt-4" title="이 일정은" accent="신청이 마감됐어요" sub={`${app.rounds.title}은 ${fmtSlot(app.rounds.match_at)}에 테이블을 꾸렸어요. 결제 전이라 빠져나간 돈은 없어요.`} />
@@ -53,6 +57,12 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
           <p className="mt-1 text-[14px] text-muted">식사비는 현장에서 각자 계산해요.</p>
         </section>
 
+        {noRefund && (
+          <p role="alert" className="mt-3 rounded-[22px] bg-danger/10 p-5 text-[14px] font-semibold leading-relaxed text-danger">
+            이 일정은 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 신청을 취소하거나 환불받을 수 없어요.
+          </p>
+        )}
+
         <TossCheckout
           clientKey={tossClientKey()}
           live={tossLive()}
@@ -69,7 +79,7 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
           <summary className="flex cursor-pointer list-none items-center justify-between p-5">
             <span>
               <span className="block text-[16px] font-bold text-ink">환불 규정 확인하기</span>
-              <span className="mt-0.5 block text-[13px] text-muted">모임 주 화요일 밤 12시까지는 전액 환불돼요.</span>
+              <span className="mt-0.5 block text-[13px] text-muted">{noRefund ? "이 일정은 환불 마감이 지났어요." : "모임 주 화요일 밤 12시까지는 전액 환불돼요."}</span>
             </span>
             <ChevronDown size={20} className="text-muted transition group-open:rotate-180" />
           </summary>

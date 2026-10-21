@@ -16,6 +16,7 @@ import { getMe } from "@/lib/auth";
 import { usablePass } from "@/lib/billing";
 import { now } from "@/lib/clock";
 import { PASSES, isMembership } from "@/lib/constants";
+import { autoKeepAt } from "@/lib/resolve";
 import { dday, ddayLabel, fmtDay, fmtDayClock, fmtSlot } from "@/lib/format";
 import { areasLabel } from "@/lib/regions";
 import { maybeTick } from "@/lib/pipeline";
@@ -69,6 +70,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   // 체크인한 뒤에도 모임이 끝날 때까지는 홈 카드에 남긴다(체크인하자마자 '열린 일정이 없어요'로 바뀌지 않게)
   const ongoing = live.filter((a) => a.attendance_status !== "NO_SHOW" && !ended(a));
   const active = ongoing[0] ?? null;
+  // 매칭 실패 안내를 받았으면 고르지 않을 때 정리되는 시각 (신청 상세·해결 화면과 같은 시각)
+  const keepAt = active?.match_status === "ALTERNATIVE_OFFERED" ? (await autoKeepAt(active.id))?.toISOString() ?? null : null;
   const next = me.hasProfile && !active ? await nextPick(me.id) : null;
   // 체크인을 못 한 채 끝난 모임도 지난 식탁에 남긴다: 테이블 화면에서 '참석했는데 체크인을 못 했어요'로 알릴 수 있게
   const past = list.find((a) => a.id !== active?.id && a.table_id && a.dining_tables?.slots && (a.attendance_status === "ATTENDED" || ended(a)));
@@ -134,7 +137,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
       ) : active ? (
         <>
           <Greeting>{greetingFor(active, firstName, t)}</Greeting>
-          <StatusCard a={active} t={t} members={members.map((x) => x.users?.name ?? "")} meId={me.id} memberIds={members.map((x) => x.user_id)} />
+          <StatusCard a={active} t={t} keepAt={keepAt} members={members.map((x) => x.users?.name ?? "")} meId={me.id} memberIds={members.map((x) => x.user_id)} />
           {/* 확정·하루 전 안내를 휴대폰으로 받으려면 알림을 켜야 해서, 진행 중인 신청이 있을 때 한 번 보여 준다 */}
           <div className="mt-3"><PushToggle variant="card" /></div>
         </>
@@ -313,7 +316,7 @@ const STEPS = ["신청", "결제", "매칭", "확정"] as const;
 const SEAT_TONES = ["#c9b8a4", "#a8b59b", "#d8b27a", "#9fa9b5", "#c4a29a"];
 
 /** E10 매칭 대기 / 확정 카드: 식탁 그림 색면 + 사람 + 진행 막대 */
-function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date; members: string[]; memberIds: string[]; meId: string }) {
+function StatusCard({ a, t, keepAt, members, memberIds, meId }: { a: ActiveRow; t: Date; keepAt?: string | null; members: string[]; memberIds: string[]; meId: string }) {
   const h = headline(a, t);
   const slot = a.dining_tables?.slots;
   const confirmed = a.match_status === "CONFIRMED" && slot && a.table_id;
@@ -327,7 +330,7 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
   const others = members.filter((_, i) => memberIds[i] !== meId);
   const canCheckIn = Boolean(confirmed) && a.attendance_status === "SCHEDULED" && checkInOpen(new Date(slot!.starts_at), new Date(slot!.ends_at), t);
   const checkedIn = Boolean(confirmed) && a.attendance_status === "ATTENDED";
-  const step = nextStep({ ...a, matchAt: a.rounds.match_at, applyDeadline: a.rounds.apply_deadline, roundStatus: a.rounds.status, startsAt: slot?.starts_at, endsAt: slot?.ends_at, starts: (a.application_slots ?? []).flatMap((x) => (x.slots ? [x.slots.starts_at] : [])), membership: isMembership(a.payments?.pass_type) }, t);
+  const step = nextStep({ ...a, matchAt: a.rounds.match_at, applyDeadline: a.rounds.apply_deadline, roundStatus: a.rounds.status, startsAt: slot?.starts_at, endsAt: slot?.ends_at, starts: (a.application_slots ?? []).flatMap((x) => (x.slots ? [x.slots.starts_at] : [])), membership: isMembership(a.payments?.pass_type), keepAt }, t);
   return (
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
       <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 분위기 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>

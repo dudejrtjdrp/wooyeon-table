@@ -76,7 +76,9 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   if (app.match_status === "ALTERNATIVE_OFFERED") {
     steps[3] = app.resolution === "wait"
       ? { label: "자리 기다리는 중", done: false, when: "", note: "고른 일정에 자리가 나면 먼저 여쭤볼게요." }
-      : { label: "매칭 실패 · 다음 방법 고르기", done: false, when: "", note: "다른 일정으로 옮기거나 보관·환불을 골라 주세요." };
+      : { label: "매칭 실패 · 다음 방법 고르기", done: false, when: "", note: isMembership(app.payments?.pass_type) ? "빈자리·다른 일정 중에 고르거나 이번은 넘겨 주세요. 멤버십 기간은 7일 늘려 드렸어요." : "다른 일정으로 옮기거나 보관·환불을 골라 주세요." };
+    // 실패했으면 모임 단계의 '하루 전에 알려 드려요'는 아직 오지 않을 일이라 빼 둔다
+    steps.splice(4, 1);
   }
   // 취소된 신청은 진행 단계를 이어 보여 주지 않는다: 마친 단계까지 두고 '취소됨'으로 끝낸다
   const canceledApp = app.application_status === "CANCELED" || !!app.attendance_status?.startsWith("CANCELED");

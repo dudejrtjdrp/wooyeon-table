@@ -68,10 +68,10 @@ describe("피드백이 다음 매칭에 반영된다 (F11)", () => {
     rel.cool = new Set([pairKey(t0[0].replace("a", "u"), t0[1].replace("a", "u"))]);
     const next = runMatching(people, [slot], rel);
     const all = next.tables.flatMap((t) => t.reasons);
-    expect(all).toContain("지난 모임 후기를 반영해 자리를 나눴어요");
+    expect(all).toContain("지난 모임 별점을 반영해 자리를 나눴어요");
     for (const line of all) expect(line).not.toMatch(/u\d|a\d/);
     // 후기 신호가 없으면 그 줄도 없다
-    expect(base.tables.flatMap((t) => t.reasons)).not.toContain("지난 모임 후기를 반영해 자리를 나눴어요");
+    expect(base.tables.flatMap((t) => t.reasons)).not.toContain("지난 모임 별점을 반영해 자리를 나눴어요");
   });
 
   it("재참가자 가점도 이유에 사람 말로 들어간다", () => {

@@ -66,7 +66,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   return (
     <ApplyFlow
       action={submitApplication}
-      round={{ id: round.id, title: round.title, deadline: fmtSlot(round.apply_deadline), today: kstDay(t.toISOString()) }}
+      round={{ id: round.id, title: round.title, deadline: fmtSlot(round.apply_deadline), today: kstDay(t.toISOString()), now: t.toISOString() }}
       sidos={sidos.map(({ name, areas }) => ({ name, areas: areas.map(({ name: n, open: o }) => ({ name: n, open: o })) }))}
       hot={hot}
       slots={slots}
