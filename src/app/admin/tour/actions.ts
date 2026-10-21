@@ -3,25 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminWrite } from "@/lib/auth";
-import { createTourRound, fillAttendance, moveClockTo } from "@/lib/demo-ops";
+import { applyTourHuman, checkInTourHuman, createTourRound, fillAttendance, moveClockTo } from "@/lib/demo-ops";
 import { logStatus } from "@/lib/events";
 import { db } from "@/lib/supabase";
-import { TOUR_KEY } from "@/lib/tour";
+import { TOUR_KEY, TOUR_NAME } from "@/lib/tour";
+import { loadTour, saveTour } from "@/lib/tour-state";
 import { reapply, seedParticipants } from "../demo-actions";
-
-type Tour = { roundId?: string; nextRoundId?: string };
-
-export async function loadTour(): Promise<Tour> {
-  const { data } = await db().from("settings").select("value").eq("key", TOUR_KEY).maybeSingle();
-  return (data?.value as Tour | null) ?? {};
-}
-async function saveTour(v: Tour) {
-  await db().from("settings").upsert({ key: TOUR_KEY, value: v }, { onConflict: "key" });
-}
 
 function done(msg: string): never {
   revalidatePath("/admin/tour");
   revalidatePath("/admin");
+  revalidatePath("/tour");
   redirect(`/admin/tour?m=${encodeURIComponent(msg)}#now`);
 }
 
@@ -42,13 +34,22 @@ export async function tourNext(form: FormData) {
     const id = await createTourRound(me.id);
     if (!id) done("회차를 만들지 못했어요. 잠시 뒤 다시 눌러 주세요");
     await saveTour({ roundId: id! });
-    await logStatus({ entityType: "setting", entityId: me.id, field: TOUR_KEY, from: tour.roundId ?? null, to: id!, actor: `admin:${me.id}`, reason: "심사 투어 시작" });
+    await logStatus({ entityType: "setting", entityId: me.id, field: TOUR_KEY, from: tour.roundId ?? null, to: id!, actor: `admin:${me.id}`, reason: `${TOUR_NAME} 시작` });
     done("시연 회차를 만들었어요. 이제 ② 참가자 모으기를 눌러 주세요");
   }
   const roundId = tour.roundId;
   if (!roundId) done("먼저 ① 시연 회차 만들기를 눌러 주세요");
 
-  if (step === "gather") return seedParticipants(fwd({ round_id: roundId!, count: "36" }));
+  if (step === "gather") {
+    // 테스트 참가자를 넣은 뒤(끝나면 투어 화면으로 돌려보낸다) 휴대폰으로 볼 시연 참가자도 같은 일정에 결제 완료로 신청시킨다
+    try {
+      await seedParticipants(fwd({ round_id: roundId!, count: "36" }));
+    } finally {
+      await applyTourHuman(roundId!);
+      revalidatePath("/tour");
+    }
+    return;
+  }
   if (step === "deadline") {
     const r = await moveClockTo("deadline", roundId!);
     done(r ? "마감이 지나 자동 매칭이 돌았어요. 아래 '확인해 보세요'에서 결과를 열어 보세요" : "마감 시각을 찾지 못했어요");
@@ -59,12 +60,14 @@ export async function tourNext(form: FormData) {
   }
   if (step === "start_meet") {
     await moveClockTo("start", roundId!);
-    done("모임이 시작됐어요. 단체방에 대화 주제가 올라왔어요");
+    done("모임이 시작됐어요. 단체방에 대화 주제가 올라왔어요. 휴대폰에서 체크인을 눌러 보세요");
   }
   if (step === "end") {
     const n = await fillAttendance(roundId!);
+    // 휴대폰에서 체크인하지 않았으면 여기서 참석 처리(그래야 다음 회차에 다시 신청돼요). 후기는 휴대폰에서 직접
+    const human = await checkInTourHuman(roundId!);
     await moveClockTo("end", roundId!);
-    done(`모임이 끝났어요. 참가자 ${n}명이 체크인하고 후기를 남겼어요`);
+    done(`모임이 끝났어요. 테스트 참가자 ${n}명이 체크인하고 후기를 남겼어요${human ? " · 시연 참가자는 대신 체크인해 두었어요" : ""}`);
   }
   if (step === "reapply") {
     let next = tour.nextRoundId;

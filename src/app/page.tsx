@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { AuthChooser } from "@/components/auth-chooser";
 import { PushToggle } from "@/components/push-toggle";
 import { OfferBanner } from "@/components/offer-banner";
+import { TourEntry } from "@/components/tour-entry";
 import { RoundTable } from "@/components/brand";
 import { Card, LinkButton, PrimaryButton, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { checkInOpen } from "@/lib/attendance-rules";
@@ -113,6 +114,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   return (
     <TabScreen>
       <Toast msg={m} />
+      <TourEntry userId={me.id} />
       {afterCard && <AfterMeetingCard a={afterCard.a} kind={afterCard.kind!} />}
       {me.hasProfile && <div className="pt-2"><OfferBanner userId={me.id} /></div>}
 
