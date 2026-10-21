@@ -272,7 +272,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
   const f = parseContentFilter(sp);
   const kind = f.k;
   const [{ data }, rules, { data: posted }, { data: trows }, clock] = await Promise.all([
-    db().from("conversation_contents").select("id,kind,body,tags,table_types,priority,active,updated_at").order("active", { ascending: false }).order("priority", { ascending: false }).order("created_at"),
+    db().from("conversation_contents").select("id,kind,body,tags,table_types,priority,active,updated_at").order("created_at").order("id"),
     loadContentRules(),
     db().from("chat_messages").select("id").eq("kind", "system").contains("meta", { type: "content" }),
     db().from("dining_tables").select("id,status,slots(starts_at,region),applications(match_status)").in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY", "IN_PROGRESS", "DONE"]).order("created_at", { ascending: false }).limit(300),
