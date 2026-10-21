@@ -70,7 +70,7 @@ export async function tourNext(form: FormData) {
     let next = tour.nextRoundId;
     const { data: nr } = next ? await db().from("rounds").select("status").eq("id", next).maybeSingle() : { data: null };
     if (!nr || nr.status !== "open") {
-      next = (await createTourRound(me.id, undefined, "심사 시연 다음 회차")) ?? undefined;
+      next = (await createTourRound(me.id, undefined, "심사 시연 다음")) ?? undefined;
       if (!next) done("다음 회차를 만들지 못했어요. 잠시 뒤 다시 눌러 주세요");
       await saveTour({ roundId, nextRoundId: next });
     }

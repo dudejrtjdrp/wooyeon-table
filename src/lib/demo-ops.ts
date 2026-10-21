@@ -89,8 +89,8 @@ export async function createTourRound(adminId: string, base?: Date, label = "심
   const t = base ?? (await now());
   const dates = [kstDatePlus(t, 3), kstDatePlus(t, 4)];
   const deadline = new Date(t.getTime() + 24 * 3600_000).toISOString();
-  const md = (d: string) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일`;
-  const title = `${label} ${md(dates[0])}·${md(dates[1]).replace(/^\d+월 /, "")}`;
+  // 날짜는 화면이 회차 이름 옆에 붙여 보여 준다(roundLabel)
+  const title = `${label} 회차`;
   const { data: round } = await db().from("rounds").insert({ title, apply_deadline: deadline, match_at: deadline }).select("id").single();
   if (!round) return null;
   const rows = dates.flatMap((d) =>

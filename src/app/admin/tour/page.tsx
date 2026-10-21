@@ -8,7 +8,6 @@ import { fmtDateTime, withRo } from "@/lib/format";
 import { roundLabel } from "@/lib/round-label";
 import { db } from "@/lib/supabase";
 import { TOUR_ORDER, TOUR_TEXT, type TourStepKey, tourStep } from "@/lib/tour";
-import { demoLogin } from "../../guide/actions";
 import { SubmitButton } from "../confirm-button";
 import { loadTour, tourNext } from "./actions";
 
@@ -29,17 +28,14 @@ async function roundInfo(id?: string) {
 /** 그 상태인 사람 한 명: 시연 사람 계정(010…)을 먼저, 없으면 테스트 참가자 */
 const pick = (apps: App[], ok: (a: App) => boolean) => apps.filter(ok).sort((a, b) => Number(isDemoHuman(b.users)) - Number(isDemoHuman(a.users)))[0];
 
-/** 참가자 앱을 새 탭에서 그 사람으로 연다 (운영자 로그인은 그대로 남는다) */
+/** 참가자 앱을 새 탭에서 그 사람으로 연다 (운영자 로그인은 그대로 남는다). 서버 액션은 새 탭을 못 열어서 GET 링크로 */
 function AsUser({ a, to, children }: { a?: App; to: (a: App) => string; children: ReactNode }) {
   if (!a) return null;
+  const href = `/api/demo-login?${new URLSearchParams({ login: a.users.login_id, to: to(a) }).toString()}`;
   return (
-    <form action={demoLogin} target="_blank">
-      <input type="hidden" name="login_id" value={a.users.login_id} />
-      <input type="hidden" name="to" value={to(a)} />
-      <button className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-accent-soft px-3.5 text-[14px] font-semibold text-accent-text hover:bg-accent hover:text-white">
-        <Smartphone size={16} aria-hidden="true" />{children} <span className="font-normal opacity-80">· {withRo(a.users.name)}</span><ExternalLink size={14} aria-hidden="true" />
-      </button>
-    </form>
+    <a href={href} target="_blank" rel="noopener" className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-accent-soft px-3.5 text-[14px] font-semibold text-accent-text hover:bg-accent hover:text-white">
+      <Smartphone size={16} aria-hidden="true" />{children} <span className="font-normal opacity-80">· {withRo(a.users.name)}</span><ExternalLink size={14} aria-hidden="true" />
+    </a>
   );
 }
 
