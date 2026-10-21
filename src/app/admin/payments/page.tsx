@@ -17,6 +17,20 @@ import { manualRefund } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+/** 표 머리글과 풀이. 처음 보면 헷갈리는 칸만 풀이를 단다 */
+const COLS: [string, string?][] = [
+  ["결제 시각", "결제가 끝난 시각이에요. 아직 결제 전이면 결제를 만든 시각이에요."],
+  ["참가자"],
+  ["회차"],
+  ["산 상품", "1회권·멤버십처럼 이번에 결제한 상품이에요. '보유 이용권 사용'은 돈을 내지 않고 남은 이용권으로 신청한 건이에요."],
+  ["결제 수단"],
+  ["금액"],
+  ["결제 상태"],
+  ["이용권 남은 횟수", "이 결제로 받은 이용권이 지금 몇 번 남았는지와 쓸 수 있는 기한이에요. 멤버십은 기한 안에 횟수 제한이 없어요."],
+  ["환불 시각"],
+  ["직접 환불", "자동 환불이 안 된 건만 여기서 사유를 적고 돌려줘요. 신청이 진행 중이면 신청자 화면에서 대리 취소해요."],
+];
+
 export default async function Payments({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const me = await requireAdmin();
   const f = parsePaymentFilter(await searchParams);
@@ -100,7 +114,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
       </p>
       <TableScroll className="shadow-card mt-2 rounded-[20px] bg-card" label="결제 표">
         <table className={`${table} min-w-[1040px]`}>
-          <thead className="border-b border-line"><tr>{["시각", "참가자", "회차", "이용권", "결제 수단", "금액", "상태", "이용권 남은 횟수", "환불 시각", "환불"].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+          <thead className="border-b border-line"><tr>{COLS.map(([h, tip]) => <th key={h} className={th}>{tip ? <Term tip={tip}>{h}</Term> : h}</th>)}</tr></thead>
           <tbody className="divide-y divide-line">
             {rows.map((p) => (
               <tr key={p.id}>

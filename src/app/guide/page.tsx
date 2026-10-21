@@ -97,12 +97,12 @@ export default async function Guide() {
 
       {A && (
         <section className="mt-6 rounded-[20px] bg-ink p-5 text-white" aria-labelledby="start-title">
-          <h2 id="start-title" className="text-[18px] font-bold">처음이면 여기부터: 심사 투어</h2>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-white/80">운영자 화면에서 <b className="text-white">초록 버튼 하나씩</b>만 누르면 신청 → 자동 매칭 → 안내 → 모임 → 후기 → 다음 매칭까지 한 바퀴를 볼 수 있어요. 단계마다 운영자 화면과 참가자 앱에서 어디를 보면 되는지 버튼으로 알려 줘요. 비밀번호는 필요 없어요.</p>
+          <h2 id="start-title" className="text-[18px] font-bold">처음이면 여기부터: 해커톤 심사 투어</h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-white/80">운영자 화면에서 <b className="text-white">초록 버튼 하나씩</b>만 누르면 신청 → 자동 매칭 → 안내 → 모임 → 후기 → 다음 매칭까지 한 바퀴를 볼 수 있어요. 단계마다 운영자 화면과 참가자 앱에서 어디를 보면 되는지 버튼으로 알려 줘요. 휴대폰에서 <b className="text-white">/tour</b>를 열면 참가자 앱과 알림도 같이 따라가요. 비밀번호는 필요 없어요.</p>
           <form action={demoLogin} className="mt-4">
             <input type="hidden" name="login_id" value={A} />
             <input type="hidden" name="to" value="/admin/tour" />
-            <button className="inline-flex min-h-12 items-center rounded-2xl bg-white px-6 text-[16px] font-bold text-ink">심사 투어 시작하기</button>
+            <button className="inline-flex min-h-12 items-center rounded-2xl bg-white px-6 text-[16px] font-bold text-ink">해커톤 심사 투어 시작하기</button>
           </form>
         </section>
       )}
@@ -231,8 +231,8 @@ export default async function Guide() {
         </Step>
 
         <Step n={10} who="참가자" title="행사 뒤 참가자가 체크인과 만족도·사람별 선호를 남긴다"
-          actions={<>{ok && <As login={ok.users.login_id} to={`/tables/${ok.table_id}/feedback`}>확정된 참가자로 · 후기 남기기</As>}{panel}</>}>
-          <p>시연 패널 <b>② 모임 끝난 뒤</b>를 누른 다음, 확정된 참가자로 <b>모임 후기 남기기</b>에서 체크인·만족도·사람별 선호(다시 만나고 싶어요/다시는 싫어요)를 남겨요.</p>
+          actions={<>{ok && <As login={ok.users.login_id} to={`/tables/${ok.table_id}/feedback`}>확정된 참가자로 · 별점 남기기</As>}{panel}</>}>
+          <p>시연 패널 <b>② 모임 끝난 뒤</b>를 누른 다음, 확정된 참가자로 <b>오늘 저녁 별점 남기기</b>(후기 화면)에서 체크인·만족도·사람별 선호(다시 만나고 싶어요/다시는 싫어요)를 남겨요.</p>
           <p>나머지 테스트 참가자는 시연 패널 <b>③ 체크인·후기 채우기 → 채우기</b>로 한 번에 채워요.</p>
         </Step>
 

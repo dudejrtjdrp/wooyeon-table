@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PrimaryButton } from "@/components/client";
 import { neighborsOf } from "@/lib/regions";
+import { refundCutoff } from "@/lib/policy";
 import { stepFromUrl, useStepHistory } from "@/lib/use-step-history";
 
 type Area = { name: string; open: boolean };
@@ -32,7 +33,7 @@ export function ApplyFlow({
   action, round, sidos, hot, slots, passes, owned, refund, error, nudge = null, initialStep = 1,
 }: {
   action: (f: FormData) => void | Promise<void>;
-  round: { id: string; title: string; deadline: string; today: string };
+  round: { id: string; title: string; deadline: string; today: string; /** 지금 시각(시연 시계). 환불 마감이 지난 날짜를 알린다 */ now?: string };
   sidos: { name: string; areas: Area[] }[];
   hot: string[];
   slots: Slot[];
@@ -53,6 +54,8 @@ export function ApplyFlow({
   const [pass, setPass] = useState(owned ? "owned" : passes[0]?.key ?? "single");
   const [agree, setAgree] = useState(false);
   const [msg, setMsg] = useState<string | null>(error ?? null);
+  // 고른 날짜 중 환불 마감(모임 주 화요일 밤 12시)이 이미 지난 날: 결제하면 취소·환불이 안 된다
+  const lateDays = round.now ? days.filter((d) => slots.some((s) => s.day === d && refundCutoff(s.startsAt).getTime() <= Date.parse(round.now!))) : [];
 
   // 결제 화면이나 오류에서 뒤로 돌아와도 고른 동네·날짜·이용권과 단계를 이어 간다
   const storeKey = `apply:${round.id}`;
@@ -131,7 +134,7 @@ export function ApplyFlow({
 
   const amount = pass === "owned" ? 0 : passes.find((p) => p.key === pass)?.amount ?? 0;
   const areaLabel = picked.length ? (picked.length === 1 ? picked[0] : `${picked[0]} 외 ${picked.length - 1}곳`) : "";
-  const dayLabel = days.length ? [...days].sort().map((d) => `${Number(d.slice(8))}일`).join(", ") + (days.length > 1 ? " 중 하루" : "") : "";
+  const dayLabel = days.length ? [...days].sort().map((d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일(${WEEK[new Date(`${d}T12:00:00+09:00`).getUTCDay()]})`).join(", ") + (days.length > 1 ? " 중 하루" : "") : "";
   const sidoList = sidos.find((s) => s.name === active)!;
   // 시·도 탭은 이번에 테이블이 열린 곳만. 아직 안 여는 시·도는 목록 아래 '다른 지역 원해요' 한 줄로 보낸다
   const openSidos = sidos.filter((s) => s.areas.some((a) => a.open));
@@ -335,15 +338,25 @@ export function ApplyFlow({
             {/* 결제 전에는 환불 마감·당일 취소·노쇼 세 줄을 늘 보여 주고, 나머지만 접는다 (details 안의 summary 앞 내용은 접히면 안 보여서 밖에 둔다) */}
             <div className="mx-6 mt-3.5 rounded-[14px] bg-card px-4 pt-3.5 text-[13px] leading-[1.7] text-ink2">
               <p className="font-bold text-ink">환불 규정</p>
-              {[0, 2, 3].map((i) => refund[i] && <p key={i}>{refund[i]}</p>)}
+              {/* 고른 날짜의 환불 마감이 지났으면 '전액 환불돼요' 줄 대신 지금 해당하는 말을 둔다 */}
+              {[0, 2, 3].map((i) => refund[i] && <p key={i}>{i === 0 && lateDays.length ? "고른 날짜는 이미 환불 마감이 지났어요. 다른 날짜는 모임 주 화요일 밤 12시까지 전액 환불돼요." : refund[i]}</p>)}
             <details className="group/refund">
               <summary className="flex min-h-11 cursor-pointer list-none items-center text-[13px] font-semibold text-accent group-open/refund:hidden">나머지 규정 보기</summary>
               <div className="pb-4">{refund.filter((_, i) => ![0, 2, 3].includes(i)).map((r) => <p key={r}>{r}</p>)}</div>
             </details>
             </div>
+            {lateDays.length > 0 && (
+              <p role="alert" className="mx-6 mt-3 rounded-[14px] bg-danger/10 px-4 py-3 text-[14px] font-semibold leading-relaxed text-danger">
+                {amount
+                  ? "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 취소해도 환불받을 수 없어요."
+                  : pass === "owned" && owned?.unlimited
+                    ? "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 매칭 결과가 나오기 전에는 신청을 취소할 수 없어요."
+                    : "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 매칭 결과가 나오기 전에는 신청을 취소할 수 없고, 나중에 취소해도 쓴 이용권 1회는 돌려받지 못해요."}
+              </p>
+            )}
             <button type="button" role="checkbox" aria-checked={agree} onClick={() => setAgree(!agree)} className="mx-6 mt-2 flex min-h-[48px] items-center gap-2.5 text-left text-[15px] font-bold">
               <Box on={agree} />
-              환불 규정을 확인했어요
+              {lateDays.length ? (amount ? "취소해도 환불받을 수 없는 것을 확인했어요" : "결과 전에는 취소할 수 없는 것을 확인했어요") : "환불 규정을 확인했어요"}
             </button>
           </>
         )}
@@ -372,7 +385,7 @@ export function ApplyFlow({
               <PrimaryButton
                 type="submit"
                 pendingText="신청서 보내는 중"
-                onClick={(e) => { if (!agree) { e.preventDefault(); setMsg("환불 규정을 확인해주세요"); } }}
+                onClick={(e) => { if (!agree) { e.preventDefault(); setMsg(lateDays.length ? "환불 마감이 지났다는 안내를 확인하고 체크해 주세요" : "환불 규정을 확인해 주세요"); } }}
               >
                 {amount ? `${won(amount)} 결제하기` : "이용권으로 신청하기"}
               </PrimaryButton>

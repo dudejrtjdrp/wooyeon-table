@@ -7,6 +7,10 @@ import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtSlot } from "@/lib/format";
 import { headline } from "@/lib/status";
+import { nextStep } from "@/lib/next-step";
+import { beforeMatchCutoff } from "@/lib/cancel-rules";
+import { autoKeepAt } from "@/lib/resolve";
+import { NextStepBox } from "@/components/next-step";
 import { db } from "@/lib/supabase";
 import { cancelRule, wasReallocatedTo } from "@/lib/attendance";
 import { afterMeetingNote, canClaimAttended } from "@/lib/attendance-rules";
@@ -40,7 +44,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     attendance_status: string | null; resolution: string | null; match_reason: string | null; realloc_count: number; table_id: string | null; submitted_at: string | null;
     payments: { paid_at: string | null; amount: number; pass_type: string } | null;
     dining_tables: { slots: { starts_at: string; ends_at: string } } | null;
-    rounds: { id: string; title: string; match_at: string; apply_deadline: string };
+    rounds: { id: string; title: string; match_at: string; apply_deadline: string; status?: string };
     application_slots: { slots: Slot }[];
   } | null;
   if (!app || app.user_id !== me.id) redirect(`/?m=${encodeURIComponent("이 신청을 찾지 못했어요. 내 신청은 일정 탭에서 볼 수 있어요")}`);
@@ -64,15 +68,17 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const steps = [
     { label: "신청", done: true, when: app.submitted_at ? fmtSlot(app.submitted_at) : "", note: "신청이 완료됐어요." },
     { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : new Date(app.rounds.match_at) <= t ? "결제 전에 마감됐어요. 빠져나간 돈은 없어요." : "결제를 마쳐야 매칭에 들어가요." },
-    { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: matchDone ? "신청 인원을 모아 테이블을 꾸렸어요." : "신청 인원을 모아 테이블을 꾸려요." },
-    { label: "테이블 확정 · 안내", done: matched, when: "", note: matched ? "식당과 함께 앉을 분들을 알려 드렸어요." : "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
-    { label: "모임", done: app.attendance_status === "ATTENDED" || ended, when: "", note: app.attendance_status === "ATTENDED" ? "함께 저녁을 먹었어요." : ended ? "모임이 끝났어요." : "정해진 식당에서 저녁을 함께 먹어요." },
+    { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: matchDone ? "신청 인원을 모아 테이블을 꾸렸어요." : "이 시각에 신청한 분들을 한 번에 테이블로 나눠요. 인원이 먼저 찬다고 일찍 열리지 않아요." },
+    { label: "테이블 확정 · 안내", done: matched, when: "", note: matched ? "식당과 함께 앉을 분들을 알려 드렸어요." : "정해지는 순간 알림이 가고, 식당·함께 앉을 분들·단체방이 함께 열려요." },
+    { label: "모임", done: app.attendance_status === "ATTENDED" || ended, when: "", note: app.attendance_status === "ATTENDED" ? "함께 저녁을 먹었어요." : ended ? "모임이 끝났어요." : "하루 전에 한 번 더 알려 드리고, 시작되면 테이블에서 나눌 이야기가 열려요." },
   ];
   // 매칭 실패면 '테이블 확정' 단계가 아직 올 것처럼 보이지 않게, 그 자리에서 실패와 다음 할 일을 말한다
   if (app.match_status === "ALTERNATIVE_OFFERED") {
     steps[3] = app.resolution === "wait"
       ? { label: "자리 기다리는 중", done: false, when: "", note: "고른 일정에 자리가 나면 먼저 여쭤볼게요." }
-      : { label: "매칭 실패 · 다음 방법 고르기", done: false, when: "", note: "다른 일정으로 옮기거나 보관·환불을 골라 주세요." };
+      : { label: "매칭 실패 · 다음 방법 고르기", done: false, when: "", note: isMembership(app.payments?.pass_type) ? "빈자리·다른 일정 중에 고르거나 이번은 넘겨 주세요. 멤버십 기간은 7일 늘려 드렸어요." : "다른 일정으로 옮기거나 보관·환불을 골라 주세요." };
+    // 실패했으면 모임 단계의 '하루 전에 알려 드려요'는 아직 오지 않을 일이라 빼 둔다
+    steps.splice(4, 1);
   }
   // 취소된 신청은 진행 단계를 이어 보여 주지 않는다: 마친 단계까지 두고 '취소됨'으로 끝낸다
   const canceledApp = app.application_status === "CANCELED" || !!app.attendance_status?.startsWith("CANCELED");
@@ -107,7 +113,10 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     if (ps === "REFUND_FAILED") return `${won(pay.amount)} 환불 다시 처리 중 · 따로 하실 일은 없어요`;
     return null;
   })();
-  const idle = !cta && paid && ["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status);
+  // 다음에 일어날 일과 그 시각, 지금 할 수 있는 일 (홈 카드와 같은 문장)
+  const cancelBy = beforeMatchCutoff(app.rounds.match_at, slots.map((x) => x.starts_at));
+  const keepAt = app.match_status === "ALTERNATIVE_OFFERED" ? await autoKeepAt(app.id) : null;
+  const step = ended ? null : nextStep({ ...app, matchAt: app.rounds.match_at, applyDeadline: app.rounds.apply_deadline, roundStatus: app.rounds.status, startsAt: app.dining_tables?.slots.starts_at, endsAt: app.dining_tables?.slots.ends_at, starts: slots.map((x) => x.starts_at), membership: isMembership(app.payments?.pass_type), keepAt: keepAt?.toISOString() ?? null }, t);
 
   return (
     <Screen title="내 신청" back="/rounds">
@@ -136,18 +145,11 @@ export default async function ApplicationDetail({ params, searchParams }: { para
               취소 이유 문의하기
             </a>
           )}
-          {["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status) && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
-            <>
-              <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-muted">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>
-            </>
-          )}
+          {step && <NextStepBox s={step} className="mt-5" />}
           {app.application_status !== "CANCELED" && cta && (
             <Link href={cta[1]} className="mt-6 flex h-[56px] items-center justify-center gap-1 rounded-[14px] bg-accent text-[17px] font-extrabold text-white active:scale-[.985]">
               {cta[0]} <ChevronRight size={20} />
             </Link>
-          )}
-          {app.application_status !== "CANCELED" && idle && (
-            <p className="mt-5 rounded-[14px] bg-card px-4 py-3 text-[14px] leading-relaxed text-ink2">지금은 하실 일이 없어요. 결과가 나오면 알림과 홈 화면으로 바로 알려 드릴게요.</p>
           )}
         </div>
       </section>
@@ -195,15 +197,8 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       {matched && app.attendance_status === "SCHEDULED" && app.dining_tables && (() => {
         const start = app.dining_tables.slots.starts_at;
         const rule = cancelRule(start, t);
-        const remind = new Date(new Date(start).getTime() - 24 * 3600_000);
         return (
           <>
-            {/* 하루 전 안내 시각이 지났으면 '다음 안내'를 보여 주지 않는다 */}
-            {remind > t && (
-              <p className="mt-3 rounded-[20px] bg-accent-soft px-4 py-3.5 text-[14px] text-accent">
-                다음 안내: {fmtSlot(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
-              </p>
-            )}
             {rule.kind !== "blocked" && (
               <div className="mt-6 text-center">
                 <ConfirmSheet
@@ -234,17 +229,17 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           </Row>
         ))}
       </List>
-      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
-        <p className="mt-2 px-1 text-[13px] leading-relaxed text-muted">동네나 날짜를 바꾸려면 아래에서 신청을 취소하고 다시 신청해 주세요. 매칭 시각 전이라 결제한 금액은 그대로 돌려드려요.</p>
+      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && cancelBy > t && (
+        <p className="mt-2 px-1 text-[13px] leading-relaxed text-muted">동네나 날짜를 바꾸려면 아래에서 신청을 취소하고 다시 신청해 주세요. {fmtSlot(cancelBy.toISOString())}까지는 결제한 금액을 그대로 돌려드려요.</p>
       )}
 
-      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
+      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && cancelBy > t && (
         <div className="mt-8 text-center">
           <ConfirmSheet
             trigger={<button className="inline-flex h-11 items-center px-4 text-[15px] font-semibold text-danger underline underline-offset-4">신청 취소하기</button>}
             title="신청을 취소할까요?"
             body={paid
-              ? <>매칭 시각({fmtSlot(app.rounds.match_at)}) 전이라 결제한 금액은 전액 돌려드려요. 이용권으로 신청했다면 1회를 다시 쓸 수 있고, 멤버십은 기간 안에 다른 일정을 바로 신청할 수 있어요.</>
+              ? <>지금 취소하면 결제한 금액은 전액 돌려드려요({fmtSlot(cancelBy.toISOString())}까지). 이용권으로 신청했다면 1회를 다시 쓸 수 있고, 멤버십은 기간 안에 다른 일정을 바로 신청할 수 있어요.</>
               : <>아직 결제 전이라 빠져나간 돈은 없어요. 취소하면 이 신청만 닫히고, 마감 전이면 같은 일정을 다시 신청할 수 있어요.</>}
             confirmLabel="신청 취소하기"
             action={cancelApplication}

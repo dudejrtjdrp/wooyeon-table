@@ -4,7 +4,7 @@ import { cleanQuery } from "./audit";
 
 // ── 발송 이력 ─────────────────────────────────────────
 export const LOG_PAGE_SIZE = 30;
-export const LOG_STATUS = { sent: "보냄", pending: "예약", failed: "실패" } as const;
+export const LOG_STATUS = { sent: "보냄", pending: "예약됨", failed: "실패", canceled: "예약 취소" } as const;
 export type LogStatus = keyof typeof LOG_STATUS;
 
 export interface LogFilter {

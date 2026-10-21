@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   ]);
   // 생년은 내보내지 않고 연령대만, 연락처는 넣지 않는다 (개인정보는 필요한 화면에서만)
   const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Asia/Seoul", year: "numeric" }).format(await now()));
-  const head = ["신청ID", "이름", "연령대", "성별", "MBTI", "희망 동네", "결제", "매칭", "참석", "이전 참석", "이전 노쇼", "받은 신고", "재배치 횟수", "테이블ID", "테이블 점수", "지역", "모임 시각", "식당"];
+  const head = ["신청ID", "이름", "연령대", "성별", "MBTI", "희망 동네", "결제", "매칭", "이번 회차 참석", "다른 회차 참석(회)", "다른 회차 노쇼(회)", "받은 신고(누적 건)", "재배치 횟수", "테이블ID", "테이블 점수", "지역", "모임 시각", "식당"];
   // 상태값은 화면과 같은 한국어 이름으로 (영문 코드는 운영자가 읽기 어렵다). 표에 없는 값은 그대로 둔다
   const ko = (map: Record<string, [string, unknown]>, v: string | null) => (v ? map[v]?.[0] ?? v : "");
   const kst = (iso?: string) => (iso ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso)) : "");

@@ -3,6 +3,7 @@
 // 3) 자리 나면 알려 주기(마감 있음)  4) 이용권 보관  5) 환불
 // 아무것도 고르지 않으면 3일 뒤 이용권으로 보관하고, 하루 전에 한 번 더 알린다. 기다리기는 모임 2일 전에 끝난다.
 import { ACTIVE_TABLE, offerSeat, tableInfo, tableMembers, tableMembersOf, toCand } from "./attendance";
+import { quietly, syncScheduled } from "./scheduled";
 import { now } from "./clock";
 import { logStatus } from "./events";
 import { fmtSlot } from "./format";
@@ -219,6 +220,8 @@ export async function joinTable(appId: string, tableId: string, actor: string): 
     await offerSeat(o.table_id, "system");
   }
   await db().from("notifications").delete().eq("user_id", app.user_id).eq("status", "pending").eq("link", `/applications/${appId}/resolve`);
+  // 빈자리로 들어온 사람도 하루 전 안내를 받게 건다 (다른 차수로 옮겼으면 새 신청 기준, 예전 신청의 예약은 정리)
+  await quietly(syncScheduled([appId, targetApp], actor, `빈자리 합류 (테이블 ${tableId.slice(0, 8)})`));
   const room = await ensureRoom(tableId);
   await postSystem(room, `빈자리에 새로운 분이 합류했어요. ${me?.name ?? ""}님 반가워요!`);
   await notify({
@@ -252,6 +255,7 @@ export async function keepPassFor(appId: string, actor: string, why: "choice" | 
   const reason = { choice: "이용권 보관", no_answer: "3일 동안 고르지 않아 이용권으로 자동 보관", wait_over: "기다리던 자리가 나지 않아 이용권으로 자동 보관" }[why];
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "NO_MATCH", actor, reason });
   await db().from("seat_offers").update({ status: "void", responded_at: new Date().toISOString() }).eq("application_id", appId).eq("status", "pending");
+  await quietly(syncScheduled([appId], actor, reason));
   const body = {
     choice: "다음 일정에 바로 쓸 수 있어요",
     no_answer: "3일 동안 고르지 않아 보관했어요",
@@ -279,7 +283,7 @@ export async function startWaiting(appId: string, actor: string): Promise<{ ok: 
   // 이미 비어 있는 자리가 있으면 바로 묻는다
   const { data: tables } = await db().from("dining_tables").select("id").eq("round_id", app.round_id).in("status", ACTIVE_TABLE);
   for (const tb of tables ?? []) await offerSeat(tb.id, "system");
-  await db().from("notifications").delete().eq("user_id", app.user_id).eq("status", "pending").like("dedupe_key", `alt_remind:${appId}%`);
+  await quietly(syncScheduled([appId], actor, "자리 나면 알려 주기"));
   await notify({
     userId: app.user_id,
     template: "waiting",

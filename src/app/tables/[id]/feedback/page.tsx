@@ -40,10 +40,10 @@ export default async function Feedback({ params, searchParams }: { params: Promi
   const AV = ["bg-accent-soft text-accent-text", "bg-[#CFE3D8] text-accent-text", "bg-[#EEF1EF] text-ink2", "bg-[#FDF3D2] text-[#6b5410]"];
   const ta = "w-full resize-none rounded-[14px] border border-line bg-field px-4 pt-3.5 text-[16px] text-ink outline-none placeholder:text-faint focus:border-accent focus:bg-card";
   return (
-    <Screen title="모임 후기" back={`/tables/${id}`}>
+    <Screen title="오늘 저녁 돌아보기" back={`/tables/${id}`}>
       {blocked ? (
         <>
-          <PageTitle className="mt-4" title="후기는 참석한 분만" accent="남길 수 있어요" sub={note ? note.text : "모임이 끝나면 체크인한 분이 후기를 남길 수 있어요."} />
+          <PageTitle className="mt-4" title="별점은 참석한 분만" accent="남길 수 있어요" sub={note ? note.text : "모임이 끝나면 체크인한 분이 별점을 남길 수 있어요."} />
           <p className="mt-4 text-[13px] text-muted">불편한 일이 있었다면 참석 여부와 상관없이 아래에서 신고할 수 있어요.</p>
           <div className="mt-6 flex flex-col gap-2">
             {note?.contact ? (
@@ -55,13 +55,13 @@ export default async function Feedback({ params, searchParams }: { params: Promi
         </>
       ) : (
       <>
-      <PageTitle className="mt-4" title="함께한 저녁," accent="어떠셨나요?" sub="남겨 주신 점수와 선택은 다음 테이블을 꾸릴 때 바로 반영돼요." />
+      <PageTitle className="mt-4" title="함께한 저녁," accent="어땠어요?" sub="별 다섯 개만 누르면 끝나요. 같이 앉은 분에 대한 선택은 다음 테이블을 꾸릴 때 반영하고, 식당 점수는 다음 일정 추천에 써요." />
       <p className="mt-5 flex items-center gap-2.5 rounded-[14px] bg-field px-4 py-3.5 text-[14px] text-ink2"><Lock size={17} className="shrink-0 text-accent" />다른 참가자에게는 보이지 않아요.</p>
 
       <form action={submitFeedback} className="mt-5 space-y-3">
         <input type="hidden" name="table_id" value={id} />
         <div id="scores" className="scroll-mt-16">
-          <SectionCard title="이번 모임에 대해 평가해 주세요" required>
+          <SectionCard title="별점 다섯 개" required>
             {miss.size > 0 && e && <div className="mb-2"><ErrorText msg={e} /></div>}
             <div className="-my-2 divide-y divide-line">
               {FEEDBACK_SCORES.map((f) => (
@@ -71,7 +71,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           </SectionCard>
         </div>
 
-        <SectionCard title="오늘 만난 분들" optional hint="다음 모임에서 다시 만나고 싶은지 골라 주세요. '다시는 싫어요'를 고르면 앞으로 같은 테이블에 앉지 않아요.">
+        <SectionCard title="같이 앉은 분들은 어땠어요?" optional hint="고르면 다음 테이블을 꾸릴 때 참고해요. '다시는 싫어요'를 고르면 앞으로 같은 테이블에 앉지 않아요.">
           <ul className="divide-y divide-line">
             {others.map((o, i) => (
               <li key={o.user_id} className="py-4 first:pt-0 last:pb-0">
@@ -95,9 +95,9 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           </ul>
         </SectionCard>
 
-        <SectionCard title="한마디" optional>
+        <SectionCard title="더 하고 싶은 말" optional>
           <CountedTextarea name="comment" max={500} defaultValue={fb?.comment ?? ""} rows={4} placeholder="편하게 이야기할 수 있어서 좋았어요." className={ta} />
-          <div className="mt-4"><PrimaryButton type="submit" pendingText="보내는 중">후기 보내기</PrimaryButton></div>
+          <div className="mt-4"><PrimaryButton type="submit" pendingText="보내는 중">다음 테이블에 반영하기</PrimaryButton></div>
         </SectionCard>
       </form>
       </>
@@ -105,7 +105,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
 
       <section id="report" className="mt-10 scroll-mt-16 border-t border-line pt-8">
         <h2 className="text-[20px] font-extrabold text-ink">불편한 일이 있었나요?</h2>
-        <p className="mt-1.5 text-[14px] leading-relaxed text-muted">후기와 따로 접수돼요. 상대에게는 알리지 않고, 신고하면 바로 같은 테이블에 앉지 않게 막아요.</p>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-muted">별점과 따로 접수돼요. 상대에게는 알리지 않고, 신고하면 바로 같은 테이블에 앉지 않게 막아요.</p>
         <form action={report} className="mt-5 space-y-5">
           <input type="hidden" name="table_id" value={id} />
           <div>

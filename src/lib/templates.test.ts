@@ -48,7 +48,7 @@ describe("알림 템플릿 (G10)", () => {
     const need: TemplateKey[] = ["applied", "payment_pending", "paid", "reallocating", "confirmed", "alternative", "transferred", "refund_requested", "refunded", "reminder", "feedback", "next_round"];
     for (const k of need) expect(TEMPLATES[k], k).toBeTruthy();
     expect(render("applied", SAMPLE_VARS).body).toContain("결제");
-    expect(render("feedback", SAMPLE_VARS).body).toContain("후기");
+    expect(render("feedback", SAMPLE_VARS).body).toContain("다음 테이블");
   });
 
   it("하루 전 푸시에 시각·식당·예약명이 들어가고(INF-07), 식당이 없으면 모임 정보로 안내한다", () => {

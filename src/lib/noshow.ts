@@ -4,6 +4,7 @@
 //  2회: 30일 동안 신청 제한 (자동)
 //  3회 이상: 영구 제한을 운영자가 검토 (예외 처리함)
 import { logStatus } from "./events";
+import { quietly, syncScheduled } from "./scheduled";
 import { fmtDay, fmtSlot } from "./format";
 import { notify } from "./notify";
 import { db } from "./supabase";
@@ -42,6 +43,8 @@ export async function applyNoShowPolicy(userId: string, appId: string, actor: st
     .in("entity_id", stillNoShow.length ? stillNoShow : [appId]);
   const count = countNoShows(data ?? [], stillNoShow, appId);
   const step = noShowStep(count);
+  // 후기 다시 요청처럼 참석을 전제로 한 예약 알림은 거둔다
+  await quietly(syncScheduled([appId], actor, "노쇼 확정"));
   if (step === "warn") {
     await db().from("users").update({ account_status: "warned" }).eq("id", userId).eq("account_status", "active");
     await logStatus({ entityType: "user", entityId: userId, field: "account_status", to: "warned", actor, reason: `노쇼 ${count}회(최근 ${NOSHOW_WINDOW_DAYS}일): 경고` });

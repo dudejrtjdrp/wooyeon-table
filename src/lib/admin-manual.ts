@@ -2,6 +2,7 @@
 // 판단은 admin-manual-rules.ts(순수 함수)에 있고, 여기서는 읽고 쓰고 기록만 한다.
 // 식당 바꾸기는 예약이 안 돼 자동으로 바꿀 때(pipeline.ts reassignVenue)와 같은 순서로 예약·단체방·알림을 다시 맞춘다.
 import { type AttendOp, ATTEND_OP_LABEL, attendanceChange, canRunMatchNow, canSwapVenue, runResultText, swapCandidates, type SwapCandidate, type SwapOption } from "./admin-manual-rules";
+import { quietly, syncScheduled, syncTable } from "./scheduled";
 import { now, realNowIso } from "./clock";
 import { postSystem } from "./delivery";
 import { logStatus } from "./events";
@@ -55,7 +56,7 @@ async function openTodo(key: string, row: { kind: string; ref_type: string; ref_
  * 운영자가 테이블 식당을 바꾼다. 모임 시작 전, 같은 동네·일정에서 자리가 남은 식당으로만.
  * 1) 테이블 식당을 조건부로 바꾸고(두 번 눌러도 한 번) 이력  2) 예약 기록을 새 식당으로 고쳐 다시 요청
  * 3) 첫 공지가 나간 테이블이면 단체방과 참가자에게 바뀐 식당 안내  4) 자동 예약 채널이면 바로 예약 시도
- * 하루 전 안내는 보내는 순간의 식당으로 다시 쓰이므로(pipeline.ts freshReminder) 따로 고치지 않는다.
+ * 하루 전 안내는 보내는 순간의 식당으로 다시 쓰이므로(scheduled.ts checkBeforeSend) 따로 고치지 않는다.
  */
 export async function swapVenue(tableId: string, venueId: string, reason: string, adminId: string): Promise<Result> {
   const actor = `admin:${adminId}`;
@@ -72,6 +73,8 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
   const { data: moved } = await db().from("dining_tables").update({ venue_id: pick.venueId }).eq("id", tableId).eq("venue_id", fromId).in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY"]).select("id");
   if (!moved?.length) return { ok: false, message: "그 사이 식당이나 테이블 상태가 바뀌었어요. 새로 고쳐 확인해 주세요" };
   const changeId = await logStatus({ entityType: "dining_table", entityId: tableId, field: "venue_id", from: fromName, to: pick.name, actor, reason: `[운영자 식당 변경] ${reason}` });
+  // 예약해 둔 하루 전 안내 문구도 새 식당으로 (보내는 순간에도 다시 쓰지만, 예정된 안내 화면에 옛 식당이 보이지 않게)
+  await quietly(syncTable(tableId, actor, `식당 변경 ${fromName} → ${pick.name}`, { contentChanged: true }));
 
   // 예약 기록 (테이블당 한 줄): 새 식당으로 고쳐 처음부터 다시 요청
   const { data: v } = await db().from("venues").select("name,address,booking_channel,booking_url").eq("id", pick.venueId).single();
@@ -170,6 +173,8 @@ export async function setAttendance(appId: string, op: AttendOp, note: string, a
   if (!up?.length) return { ok: false, message: "그 사이 다른 곳에서 처리됐어요. 새로 고쳐 확인해 주세요" };
   const why = `[운영자 ${ATTEND_OP_LABEL[op]}] ${note || "참석 관리에서 직접 처리"}`;
   await logStatus({ entityType: "application", entityId: appId, field: "attendance_status", from: chk.from, to: chk.to, actor, reason: why });
+  // 노쇼면 후기 다시 요청 같은 예약을 거두고, 참석으로 바뀌면 그대로 둔다
+  await quietly(syncScheduled([appId], actor, why));
 
   const key = `noshow:${appId}`;
   const at = t.toISOString();

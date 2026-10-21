@@ -17,7 +17,7 @@ export async function submitFeedback(form: FormData) {
     .maybeSingle();
   if (!app) redirect("/");
   // 후기는 이 테이블에 실제로 참석한(체크인한) 사람만 남긴다. 다음 매칭 입력이 되니 오지 않은 사람의 점수는 받지 않는다
-  if (app.attendance_status !== "ATTENDED") redirect(`/tables/${tableId}?e=${encodeURIComponent("체크인한 모임에만 후기를 남길 수 있어요")}`);
+  if (app.attendance_status !== "ATTENDED") redirect(`/tables/${tableId}?e=${encodeURIComponent("체크인한 모임에만 별점을 남길 수 있어요")}`);
 
   // 별점 다섯 개는 모두 골라야 한다(빈 후기가 다음 매칭 입력이 되지 않게). 고른 값은 주소에 남겨 다시 채운다
   const parsed = parseFeedbackScores((k) => form.get(k));

@@ -44,13 +44,29 @@ export function explainScore(c: Content, common: string[], types: string[], rule
 
 const sum = (r: Reason[]) => Math.round(r.reduce((n, x) => n + x.points, 0) * 10) / 10;
 
-/** 단체방에 올라가는 글. pipeline.ts tick()의 '모임 시작' 메시지와 같은 모양이다 */
+/**
+ * 단체방에 올라가는 글. pipeline.ts tick()의 '모임 시작' 메시지와 같은 모양이다.
+ * 모임 중엔 다들 마주 앉아 있으니 채팅으로 답하라는 말이 아니라 테이블에서 나누자는 말로 쓴다
+ */
+export const CONTENT_INTRO = "자리에 다 모이셨나요? 휴대폰은 잠시 내려놓고, 아래 이야기를 테이블에서 함께 나눠 보세요.";
+export const CONTENT_OUTRO = "모임 정보의 '지금 테이블에서'에서도 다시 볼 수 있어요.";
 export function contentMessage(topics: { body: string }[], icebreakers: { body: string }[]): string {
   return [
-    "모두 모이셨나요? 오늘의 대화 주제예요.",
+    CONTENT_INTRO,
+    "\n오늘의 대화 주제",
     ...topics.map((x, i) => `${i + 1}. ${x.body}`),
     icebreakers.length ? `\n아이스브레이킹\n${icebreakers.map((x) => `· ${x.body}`).join("\n")}` : "",
+    `\n${CONTENT_OUTRO}`,
   ].join("\n");
+}
+
+/** 단체방에 올라간 글에서 대화 주제(번호 줄)와 아이스브레이킹(· 줄)을 다시 꺼낸다. 모임 정보 화면이 같은 내용을 보여 주려고 쓴다 */
+export function parseContentMessage(body: string): { topics: string[]; icebreakers: string[] } {
+  const lines = body.split("\n").map((l) => l.trim());
+  return {
+    topics: lines.map((l) => l.match(/^\d+\.\s*(.+)$/)?.[1]).filter((x): x is string => Boolean(x)),
+    icebreakers: lines.map((l) => l.match(/^·\s*(.+)$/)?.[1]).filter((x): x is string => Boolean(x)),
+  };
 }
 
 /** 실제로 고를 콘텐츠(chooseContents)와 그 이유, 아깝게 빠진 주제까지 */

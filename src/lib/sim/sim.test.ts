@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import { botsNeeded, chooseBots, makeBot, nextGender } from "./join";
 import { arrivalMinutes, hasBatchim, iyeyo, josa, persona } from "./persona";
 import { beforeAnchor, greetFirst, phaseOpen, pickNoShow, pickQa, planReplies, planTable, spreadTimes } from "./plan";
-import { categoryWord, ARRIVE_EARLY, ARRIVE_ON_TIME, BYE, DAY_MENU, DAY_PLAN, DAY_QA, GREET, GREET_MORE, LATE_ARRIVE, LATE_WARN, clockWord, intents, qaTopics, replyTo, reviewFor, topicReply } from "./scripts";
-import { parseTopics } from "./bots";
+import { categoryWord, ARRIVE_EARLY, ARRIVE_ON_TIME, BYE, DAY_MENU, DAY_PLAN, DAY_QA, GREET, GREET_MORE, LATE_ARRIVE, LATE_WARN, clockWord, intents, qaTopics, replyTo, reviewFor } from "./scripts";
 
 const P = (id: string, mbti: string | null, traits: string[] = [], name = "김서연") => persona({ id, name }, { job: "디자이너", mbti, interests: ["여행", "커피", "책"], my_traits: traits, gender: "F", birth_year: 1996 });
 const start = Date.parse("2026-11-13T19:30:00+09:00");
@@ -45,7 +44,7 @@ describe("scripts", () => {
   });
   it("이모지를 쓰지 않는다", () => {
     const people = Array.from({ length: 30 }, (_, i) => P(`s${i}`, i % 2 ? "ENFP" : "INTJ", i % 3 ? ["유쾌한"] : ["차분한"]));
-    const plan = people.slice(0, 5).flatMap((_, k) => planTable({ tableId: `t${k}`, bots: people.slice(k * 5, k * 5 + 5), ctx, startMs: start, endMs: end, noticeAt: start - 3 * 86400_000, topics: ["요즘 다녀온 여행지", "인생 영화", "주말 루틴"], noShow: null }));
+    const plan = people.slice(0, 5).flatMap((_, k) => planTable({ tableId: `t${k}`, bots: people.slice(k * 5, k * 5 + 5), ctx, startMs: start, endMs: end, noticeAt: start - 3 * 86400_000, noShow: null }));
     for (const m of plan) expect(m.body).not.toMatch(/\p{Extended_Pictographic}/u);
   });
   it("업종 괄호는 뺀다", () => {
@@ -69,10 +68,6 @@ describe("scripts", () => {
     expect(s.match(/ㅎㅎ/g)?.length ?? 0).toBeLessThanOrEqual(1);
     expect(s).toMatch(/\d+시/);
   });
-  it("대화 주제 번호에 맞춰 답한다", () => {
-    const s = topicReply(P("t1", "ENFP"), ["요즘 다녀온 여행지", "인생 영화"], "x");
-    expect(s).toBeTruthy();
-  });
   it("후한 사람은 점수가 높다", () => {
     const warm = persona({ id: "w", name: "이다인" }, { my_traits: ["다정한", "리액션 좋은"], mbti: "ENFJ" });
     const strict = persona({ id: "w", name: "이다인" }, { my_traits: ["솔직한", "진지한"], mbti: "ISTJ" });
@@ -84,11 +79,13 @@ describe("scripts", () => {
 
 describe("plan", () => {
   const bots = ["b1", "b2", "b3"].map((id, i) => P(id, i ? "INFP" : "ENFP", [], ["김민준", "이서윤", "박도윤"][i]));
-  const base = { tableId: "tbl", bots, ctx, startMs: start, endMs: end, noticeAt: start - 3 * 86400_000, topics: ["요즘 다녀온 여행지", "인생 영화", "주말 루틴"], noShow: "b3" };
+  const base = { tableId: "tbl", bots, ctx, startMs: start, endMs: end, noticeAt: start - 3 * 86400_000, noShow: "b3" };
   it("단계마다 메시지가 있고 키가 겹치지 않는다", () => {
     const plan = planTable(base);
     const phases = new Set(plan.map((m) => m.phase));
-    for (const ph of ["hello", "daybefore", "arrive", "topic", "bye"]) expect(phases.has(ph as never)).toBe(true);
+    for (const ph of ["hello", "daybefore", "arrive", "bye"]) expect(phases.has(ph as never)).toBe(true);
+    // 모임 중엔 마주 앉아 있으니 대화 주제에 채팅으로 답하지 않는다
+    expect(phases.has("topic" as never)).toBe(false);
     expect(new Set(plan.map((m) => m.key)).size).toBe(plan.length);
     // 같은 말이 겹치지 않는다 (이름만 다른 같은 틀도)
     expect(new Set(plan.map((m) => m.body)).size).toBe(plan.length);
@@ -100,20 +97,29 @@ describe("plan", () => {
     for (const m of plan) {
       if (m.phase === "hello") expect(m.due).toBeGreaterThan(base.noticeAt);
       if (m.phase === "daybefore") expect(m.due).toBeGreaterThan(start - 24 * 3600_000), expect(m.due).toBeLessThan(start - 23 * 3600_000);
-      if (m.phase === "topic") expect(m.due).toBeGreaterThan(start), expect(m.due).toBeLessThanOrEqual(start + 30 * 60_000);
       if (m.phase === "bye") expect(m.due).toBeGreaterThanOrEqual(end);
     }
   });
   it("안 오는 사람은 모임 날 말이 없다", () => {
     const plan = planTable(base);
-    expect(plan.filter((m) => m.userId === "b3" && ["arrive", "topic", "bye"].includes(m.phase))).toEqual([]);
+    expect(plan.filter((m) => m.userId === "b3" && ["arrive", "bye"].includes(m.phase))).toEqual([]);
   });
   it("같은 입력이면 같은 계획 (몇 번 돌려도 한 번만 올라가게)", () => {
     expect(planTable(base)).toEqual(planTable(base));
   });
-  it("공지가 없으면 인사도, 주제가 없으면 주제 답도 없다", () => {
-    const plan = planTable({ ...base, noticeAt: null, topics: null });
-    expect(plan.some((m) => m.phase === "hello" || m.phase === "topic")).toBe(false);
+  it("공지가 없으면 인사도 없다", () => {
+    const plan = planTable({ ...base, noticeAt: null });
+    expect(plan.some((m) => m.phase === "hello")).toBe(false);
+  });
+  it("모임 중 답장: 현장 얘기(늦음·도착·자리)에만 한 명이, 대화 주제 같은 말엔 답하지 않는다", () => {
+    expect(planReplies("s1", "저는 2번 주제 좋아요! 여행 얘기 해요", bots, ctx, undefined, undefined, true)).toEqual([]);
+    expect(planReplies("s2", "아이스브레이킹 누가 먼저 할래요?", bots, ctx, undefined, undefined, true)).toEqual([]);
+    const late = planReplies("s3", "조금 늦을 것 같아요", bots, ctx, undefined, undefined, true);
+    expect(late).toHaveLength(1);
+    expect(late[0].body.length).toBeGreaterThan(0);
+    const where = planReplies("s4", "안녕하세요 다들 어디 앉으셨어요?", bots, ctx, undefined, undefined, true);
+    expect(where).toHaveLength(1);
+    expect(where[0].body).not.toMatch(/안녕|반가/);
   });
   it("단계가 지나면 올리지 않는다", () => {
     expect(phaseOpen("hello", start + 1, start, end)).toBe(false);
@@ -223,12 +229,6 @@ describe("join", () => {
       expect(b.profile.interests).toHaveLength(3);
       expect(b.name).toHaveLength(3);
     }
-  });
-});
-
-describe("parseTopics", () => {
-  it("번호 붙은 줄만", () => {
-    expect(parseTopics("모두 모이셨나요? 오늘의 대화 주제예요.\n1. 여행\n2. 영화\n\n아이스브레이킹\n· 게임")).toEqual(["여행", "영화"]);
   });
 });
 

@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; hint: string; subs?: { href: string; label: string }[] };
 const GROUPS: { name: string; items: Item[] }[] = [
   { name: "심사", items: [
-    { href: "/admin/tour", label: "심사 투어", icon: Route, hint: "처음이면 여기부터. 버튼 하나씩 눌러 신청부터 다음 매칭까지 한 바퀴를 봐요" },
+    { href: "/admin/tour", label: "해커톤 심사 투어", icon: Route, hint: "처음이면 여기부터. 버튼 하나씩 눌러 신청부터 다음 매칭까지 한 바퀴를 봐요" },
   ] },
   { name: "매일", items: [
     { href: "/admin", label: "오늘 처리할 일", icon: LayoutDashboard, hint: "지금 처리할 일과 이번 회차 진행 상황을 한눈에 봐요" },
@@ -27,7 +27,7 @@ const GROUPS: { name: string; items: Item[] }[] = [
     { href: "/admin/feedback", label: "피드백·안전", icon: ShieldCheck, hint: "만족도·후기, 안전 신고, 사람별 선호·차단을 탭으로 나눠 봐요", subs: [
       { href: "/admin/feedback", label: "만족도·후기" },
       { href: "/admin/feedback/reports", label: "안전 신고" },
-      { href: "/admin/feedback/person", label: "사람별 보기" },
+      { href: "/admin/feedback/person", label: "사람별 매칭 반영" },
     ] },
   ] },
   { name: "다음 회차 준비", items: [

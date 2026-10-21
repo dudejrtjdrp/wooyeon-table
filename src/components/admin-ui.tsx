@@ -17,7 +17,7 @@ export function PageHeader({ title, desc, actions, how }: { title: string; desc?
           <h1 className="text-[32px] font-bold tracking-[-0.03em] text-ink">{title}</h1>
           {desc && <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-muted">{desc}</p>}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
       </div>
       {how && how.length > 0 && <HowTo steps={how} />}
     </div>
@@ -62,8 +62,9 @@ export function Badge({ v }: { v: [string, "muted" | "accent" | "leaf" | "ink" |
 /** 회차 고르기 (주소의 r 값으로 넘긴다) */
 export function RoundPicker({ rounds, current, extra }: { rounds: { id: string; title: string }[]; current?: string; extra?: React.ReactNode }) {
   return (
-    <form className="flex flex-wrap items-center gap-2">
-      <select name="r" defaultValue={current} className={ctl}>
+    <form className="flex max-w-full flex-wrap items-center gap-2">
+      {/* 회차 이름이 길어도 좁은 화면 밖으로 밀려나지 않게 */}
+      <select name="r" defaultValue={current} className={`${ctl} min-w-0 max-w-full`}>
         {rounds.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
       </select>
       {extra}

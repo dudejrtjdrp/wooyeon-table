@@ -121,6 +121,6 @@ export async function claimAttended(form: FormData) {
   }
   await logStatus({ entityType: "application", entityId: m.id, field: "attendance_claim", from: "SCHEDULED", to: "CLAIMED", actor: `user:${me.id}`, reason: "참석했는데 체크인을 못 했다고 알림" });
   revalidatePath(`/tables/${tableId}`);
-  redirect(`/tables/${tableId}?m=${encodeURIComponent("알려 주셔서 고마워요. 운영팀이 확인하면 참석으로 바뀌고 후기를 남길 수 있어요")}`);
+  redirect(`/tables/${tableId}?m=${encodeURIComponent("알려 주셔서 고마워요. 운영팀이 확인하면 참석으로 바뀌고 별점을 남길 수 있어요")}`);
 }
 

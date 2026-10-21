@@ -95,7 +95,7 @@ export default async function MyTables() {
           <Link href={failed ? `/applications/${a.id}/resolve` : many ? "/rounds" : `/applications/${a.id}`} className="mt-5 flex min-h-[64px] items-center gap-3 rounded-[18px] bg-card px-5 py-3">
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[16px] font-extrabold">{many ? `진행 중인 신청 ${pending.length}건` : a.rounds.title}</span>
-              <span className="mt-0.5 block text-[13px] text-muted">{failed ? "다음 방법을 골라 주세요." : "테이블이 정해지면 여기서 단체방이 열려요."}</span>
+              <span className="mt-0.5 block text-[13px] text-muted">{failed ? "다음 방법을 골라 주세요." : !many && new Date(a.rounds.match_at) > t ? `${fmtSlot(a.rounds.match_at)}에 테이블이 정해지면 여기서 단체방이 열려요.` : "테이블이 정해지면 여기서 단체방이 열려요."}</span>
             </span>
             {!many && <Pill tone={h.tone}>{h.label}</Pill>}
             <ChevronRight size={18} className="shrink-0 text-[#9a8c7e]" />
@@ -119,7 +119,7 @@ export default async function MyTables() {
                   href={needReview ? `/tables/${a.table_id}/feedback` : `/tables/${a.table_id}/chat`}
                   title={`${fmtDay(s.starts_at)} · ${s.region}`}
                   sub={a.dining_tables?.venues?.name ?? label}
-                  pill={needReview ? <Pill tone="accent">후기 남기기</Pill> : reviewed.has(a.id) ? <Pill tone="muted">후기 남김</Pill> : <Pill tone="muted">{label}</Pill>}
+                  pill={needReview ? <Pill tone="accent">별점 남기기</Pill> : reviewed.has(a.id) ? <Pill tone="muted">별점 남김</Pill> : <Pill tone="muted">{label}</Pill>}
                 />
               );
             })}

@@ -112,6 +112,9 @@ export async function assignVenue(tableId: string): Promise<boolean> {
     await logStatus({ entityType: "dining_table", entityId: tableId, field: "status", from: t.status, to: "VENUE_ASSIGNED", actor: "system", reason: `식당 자동 배정: ${pick.name}` });
     // 식당이 없어 첫 공지가 '정해지는 대로 알려 드릴게요'로 먼저 나간 테이블(운영자가 식당 부족을 해결한 경우)이면 정해진 식당을 따로 알린다
     await announceVenueSet(tableId, t, pick.venueId, reservation);
+    // 운영자가 식당 전에 고쳐 둔 하루 전 안내가 있으면 거두고 지금 식당으로 다시 건다
+    const { syncTable, quietly } = await import("./scheduled");
+    await quietly(syncTable(tableId, "system", `식당 자동 배정: ${pick.name}`, { contentChanged: true }));
   }
   // 이어서 식당 예약 요청 (네이버 예약·캐치테이블 어댑터, 실패하면 재시도 → 다른 식당 → 그래도 안 되면 예외)
   const { requestReservation } = await import("./reservations");
@@ -167,6 +170,11 @@ export async function reassignVenue(tableId: string, failedVenueId: string, why:
   const { data: moved } = await db().from("dining_tables").update({ venue_id: pick.venueId }).eq("id", tableId).eq("venue_id", failedVenueId).select("id");
   if (!moved?.length) return null;
   await logStatus({ entityType: "dining_table", entityId: tableId, field: "venue_id", from: failedVenueId, to: pick.venueId, actor: "system", reason: `예약이 안 돼 다른 식당으로: ${pick.name}` });
+  {
+    // 운영자가 고친 하루 전 안내는 옛 식당 기준이라 거두고 새 식당으로 다시 건다 (고치지 않은 안내는 보낼 때 새 식당으로 쓰인다)
+    const { syncTable, quietly } = await import("./scheduled");
+    await quietly(syncTable(tableId, "system", `예약이 안 돼 다른 식당으로: ${pick.name}`, { contentChanged: true }));
+  }
 
   const { data: v } = await db().from("venues").select("name,address,booking_channel,booking_url").eq("id", pick.venueId).single();
   const { CHANNEL_LABEL, deepLink } = await import("./reservations");
@@ -242,7 +250,7 @@ export async function afterConfirm(tableId: string) {
   const remindAt = new Date(new Date(t.slots.starts_at).getTime() - 24 * 60 * 60 * 1000);
   const tpl = await loadTemplates();
   const { data: vn } = t.venue_id ? await db().from("venues").select("name").eq("id", t.venue_id).maybeSingle() : { data: null };
-  // 문구는 보낼 때 최신 식당·예약명으로 다시 만든다(tick → freshReminder). 여기서는 자리만 잡아 둔다
+  // 문구는 보낼 때 최신 식당·예약명으로 다시 만든다(tick → scheduled.ts checkBeforeSend). 여기서는 자리만 잡아 둔다
   const rm = render("reminder", { ...slotVars(t.slots.starts_at), region: t.slots.region, venue: vn?.name ?? "식당은 모임 정보에서", reservation: t.reservation_name ?? "" }, tpl);
   for (const m of ms) {
     await notify({
@@ -318,34 +326,20 @@ export async function tick() {
 
   // 2. 예약된 알림 발송 (INF-07, INF-08)
   const tpl = await loadTemplates();
-  const { data: pending } = await db().from("notifications").select("id,attempts,dedupe_key").eq("status", "pending").lte("scheduled_at", iso).limit(200);
+  const { data: pending } = await db().from("notifications").select("id,title,attempts,dedupe_key").eq("status", "pending").lte("scheduled_at", iso).limit(200);
   const sentNow: string[] = [];
+  let skipped = 0;
   for (const n of pending ?? []) {
-    // 보낼 때가 됐어도 이유가 사라진 알림은 보내지 않는다 (이미 결제함, 이미 후기 남김)
-    const key = n.dedupe_key ?? "";
-    if (key.startsWith("payment_pending:")) {
-      const { data: a } = await db().from("applications").select("payment_status,application_status").eq("id", key.split(":")[1]).maybeSingle();
-      if (!a || a.application_status === "CANCELED" || !["PENDING", "FAILED"].includes(a.payment_status)) {
-        await db().from("notifications").delete().eq("id", n.id);
-        continue;
-      }
+    // 보낼 때가 됐어도 이유가 사라진 알림은 보내지 않는다(취소·해제·이미 결제·이미 후기). 하루 전 안내는 지금 식당·예약명·테이블로 다시 쓴다
+    // 판단은 lib/scheduled-rules.ts. 운영자가 고친 예약은 고친 문구 그대로, 고친 뒤 테이블·식당·시각이 바뀌었으면 지금 내용으로 보낸다
+    const { checkBeforeSend, cancelScheduled } = await import("./scheduled");
+    const chk = await checkBeforeSend(n, tpl).catch(() => ({}) as { skip?: string; patch?: Record<string, string> });
+    if (chk.skip) {
+      await cancelScheduled({ id: n.id, title: n.title, dedupe_key: n.dedupe_key }, "system", `보내기 직전 확인: ${chk.skip}`);
+      skipped++;
+      continue;
     }
-    // 하루 전 리마인드는 보내는 순간의 식당·예약명·테이블로 다시 쓴다 (식당이 나중에 정해지거나 테이블을 옮긴 경우)
-    let fresh: { title: string; body: string; link: string } | null = null;
-    if (key.startsWith("remind:")) {
-      fresh = await freshReminder(n.id, key, tpl);
-      if (!fresh) {
-        await db().from("notifications").delete().eq("id", n.id);
-        continue;
-      }
-    }
-    if (key.startsWith("feedback-remind:")) {
-      const { data: f } = await db().from("feedbacks").select("application_id").eq("application_id", key.split(":")[1]).maybeSingle();
-      if (f) {
-        await db().from("notifications").delete().eq("id", n.id);
-        continue;
-      }
-    }
+    const fresh = chk.patch ?? null;
     const { data: up, error } = await db().from("notifications").update({ status: "sent", sent_at: iso, ...(fresh ?? {}) }).eq("id", n.id).eq("status", "pending").select("id");
     if (up?.length) sentNow.push(n.id);
     if (error) {
@@ -361,7 +355,8 @@ export async function tick() {
     }
   }
   await pushNotifications(sentNow).catch(() => null);
-  if (pending?.length) done.push(`예약 알림 ${pending.length}건 발송`);
+  if (sentNow.length) done.push(`예약 알림 ${sentNow.length}건 발송`);
+  if (skipped) done.push(`보낼 이유가 사라진 예약 ${skipped}건 취소`);
 
   // 2-0. 발송 실패 재시도 (INF-08): 푸시·단체방 메시지를 10분 간격으로 3번까지, 그래도 안 되면 예외 큐
   const rp = await retryPushes(t.getTime()).catch(() => 0);
@@ -427,6 +422,12 @@ export async function tick() {
       );
       const { data: up } = await db().from("dining_tables").update({ status: "IN_PROGRESS" }).eq("id", tb.id).in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY"]).select("id");
       if (up?.length) await logStatus({ entityType: "dining_table", entityId: tb.id, field: "status", from: tb.status, to: "IN_PROGRESS", actor: "system", reason: "모임 시작 시각" });
+      // 시작 알림: 누르면 모임 정보의 '지금 테이블에서'(대화 주제·아이스브레이킹)로 간다. 이미 끝난 모임엔 보내지 않는다
+      if (t < end) {
+        for (const m of (await members(tb.id)).filter((x) => ["SCHEDULED", "ATTENDED"].includes(x.attendance_status ?? ""))) {
+          await notify({ userId: m.user_id, template: "meeting_start", ...render("meeting_start", {}, tpl), link: `/tables/${tb.id}?now=1`, dedupeKey: `meeting-start:${m.id}` });
+        }
+      }
     }
 
     // 시작 20분이 지나도 체크인하지 않은 사람에게 한 번 알린다 (갔는데 체크인을 깜빡해 노쇼 후보가 되는 일을 줄인다)
@@ -441,7 +442,7 @@ export async function tick() {
       const { data: up } = await db().from("dining_tables").update({ status: "DONE" }).eq("id", tb.id).neq("status", "DONE").select("id");
       if (up?.length) {
         await logStatus({ entityType: "dining_table", entityId: tb.id, field: "status", from: "IN_PROGRESS", to: "DONE", actor: "system", reason: "모임 종료 시각" });
-        await systemMessage(roomId, "오늘 함께해 주셔서 고마워요. 후기를 남겨 주시면 다음 테이블이 더 좋아져요.", `bye:${tb.id}`, { type: "bye" });
+        await systemMessage(roomId, "오늘 함께해 주셔서 고마워요. 모임 정보에서 별점을 남겨 주시면 다음 테이블에 바로 반영할게요.", `bye:${tb.id}`, { type: "bye" });
         const ms = await members(tb.id);
         for (const m of ms) {
           if (m.attendance_status === "SCHEDULED") {
@@ -582,18 +583,6 @@ export async function freshRoomReminder(tableId: string): Promise<{ skip?: true;
   return { body: render("reminder_chat", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "", reservation: tb.reservation_name ?? "", reservation_line: reservationLine(tb.reservation_name) }, tpl).body };
 }
 
-export async function freshReminder(notificationId: string, key: string, tpl: Awaited<ReturnType<typeof loadTemplates>>): Promise<{ title: string; body: string; link: string } | null> {
-  const appId = key.split(":")[1];
-  const { data: app } = await db().from("applications").select("id,match_status,attendance_status,table_id").eq("id", appId).maybeSingle();
-  if (!app || app.match_status !== "CONFIRMED" || app.attendance_status !== "SCHEDULED" || !app.table_id) return null;
-  const { data: dup } = await db().from("notifications").select("id").like("dedupe_key", `remind:${appId}%`).eq("status", "sent").neq("id", notificationId).limit(1);
-  if (dup?.length) return null;
-  const { data } = await db().from("dining_tables").select("id,status,reservation_name,slots(starts_at,region),venues(name)").eq("id", app.table_id).maybeSingle();
-  const tb = data as unknown as { id: string; status: string; reservation_name: string | null; slots: { starts_at: string; region: string }; venues: { name: string } | null } | null;
-  if (!tb || tb.status === "DISSOLVED") return null;
-  const m = render("reminder", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "식당은 모임 정보에서", reservation: tb.reservation_name ?? "" }, tpl);
-  return { title: m.title, body: m.body, link: `/tables/${tb.id}` };
-}
 
 /** 확정·식당 배정까지 됐는데 단체방 첫 공지가 없는 테이블에 확정 뒤 안내를 다시 한다 (afterConfirm은 여러 번 불러도 한 번만 생긴다) */
 async function resumeAfterConfirm(t: Date): Promise<number> {

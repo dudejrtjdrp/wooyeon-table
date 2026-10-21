@@ -22,7 +22,7 @@ export async function FeedbackHeader({ current, desc, how, actions, r }: { curre
         tabs={[
           { href: `/admin/feedback${q}`, label: "만족도·후기" },
           { href: `/admin/feedback/reports${q}`, label: "안전 신고", count: open || undefined, tone: "danger", hint: open ? `검토 대기 ${open}건` : undefined },
-          { href: `/admin/feedback/person${q}`, label: "사람별 보기" },
+          { href: `/admin/feedback/person${q}`, label: "사람별 매칭 반영" },
         ]}
       />
     </>

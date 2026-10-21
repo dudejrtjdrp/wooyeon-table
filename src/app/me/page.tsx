@@ -38,7 +38,7 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
 
   return (
     <TabScreen title="내 정보">
-      <Toast msg={done === "feedback" ? "후기 고마워요. 다음 테이블을 꾸릴 때 반영할게요" : m} />
+      <Toast msg={done === "feedback" ? "고마워요. 다음 테이블을 꾸릴 때 반영할게요" : m} />
       <Toast msg={e} tone="danger" />
       <section className="mt-5 overflow-hidden rounded-[24px] bg-card">
         <Link href="/onboarding?next=/me" className="flex items-center gap-4 px-5 pt-5">

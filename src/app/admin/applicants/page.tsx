@@ -3,7 +3,7 @@ import { Download } from "lucide-react";
 import Link from "next/link";
 import { Badge, PageHeader, TableScroll, Term, btn, btnLight, ctl, table, td, tdNowrap, th } from "@/components/admin-ui";
 import { TIP } from "@/lib/admin-glossary";
-import { ATTEND_NONE, type ApplicantHistory, HISTORY, MATCH_EXTRA, applicantFiltered, applicantSearch, parseApplicantFilter } from "@/lib/applicant-filter";
+import { ATTEND_NONE, type ApplicantHistory, HISTORY, MATCH_EXTRA, applicantFiltered, applicantSearch, parseApplicantFilter, pastAttendance } from "@/lib/applicant-filter";
 import { type ApplicantRow, loadApplicants } from "@/lib/applicant-query";
 import { requireAdmin } from "@/lib/auth";
 import { fmtDateTime } from "@/lib/format";
@@ -12,6 +12,19 @@ import { ACCOUNT, ATTEND, MATCH, PAYMENT, RESOLUTION, ageBand, label } from "@/l
 import { db } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+
+/** 표 머리글과 풀이. 처음 보면 헷갈리는 칸만 풀이를 단다 */
+const COLS: [string, string?][] = [
+  ["이름"],
+  ["프로필", "연령대 · 성별 · MBTI와 직업이에요. 생년과 연락처는 상세 화면에서만 보여요."],
+  ["희망 동네"],
+  ["결제 상태"],
+  ["매칭 상태", "이번 회차 자동 매칭 결과예요. 재배치된 횟수나 대체 일정·환불 선택도 함께 보여요."],
+  ["이번 회차 참석", "이 회차 모임에 체크인했는지예요. 모임 전이면 비어 있어요."],
+  ["다른 회차 참석·노쇼", "이번 회차를 뺀 지난 모임에서 참석한 횟수와 노쇼로 확정된 횟수예요. 노쇼 후보는 운영자가 확정하기 전까지 세지 않아요."],
+  ["받은 신고(누적)", "지금까지 이 사람이 받은 안전 신고 수예요. 처리 결과와 상관없이 다 세요."],
+  ["신청 시각"],
+];
 
 export default async function Applicants({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireAdmin();
@@ -90,12 +103,14 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
           {filtered && round && <Link href={`/admin/applicants?r=${round.id}`} className={`${btnLight} whitespace-nowrap`}>조건 풀기</Link>}
         </div>
       </form>
-      <p className="mt-5 text-[13px] text-muted">이전 참석·노쇼는 이번 회차를 뺀 기록이에요. 고른 조건은 주소에 남아서, 주소를 그대로 보내면 같은 목록이 열려요.</p>
+      <p className="mt-5 text-[13px] text-muted">&lsquo;다른 회차 참석·노쇼&rsquo;는 이번 회차를 뺀 지난 기록이고, 노쇼가 있으면 빨갛게 보여요. 고른 조건은 주소에 남아서, 주소를 그대로 보내면 같은 목록이 열려요.</p>
 
       <TableScroll className="shadow-card mt-2 rounded-[20px] bg-card" label="신청자 표">
-        <table className={`${table} min-w-[1040px]`}>
+        <table className={`${table} min-w-[1080px]`}>
           <thead className="border-b border-line">
-            <tr>{["이름", "프로필", "희망 동네", "결제", "매칭", "참석", "이전 참석·노쇼", "받은 신고", "신청 시각"].map((h) => <th key={h} className={th}>{h}</th>)}</tr>
+            <tr>
+              {COLS.map(([h, tip]) => <th key={h} className={th}>{tip ? <Term tip={tip}>{h}</Term> : h}</th>)}
+            </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {rows.map((a) => {
@@ -122,10 +137,18 @@ export default async function Applicants({ searchParams }: { searchParams: Promi
                   </td>
                   <td className={tdNowrap}>{a.attendance_status ? <Badge v={label(ATTEND, a.attendance_status)} /> : <span className="text-muted">-</span>}</td>
                   <td className={`${tdNowrap} tabular-nums`}>
-                    {h.attended ? `${h.attended}번` : <span className="text-muted">{h.noShows ? "0번" : "처음"}</span>}
-                    {h.noShows > 0 && <span className="ml-1.5"><Badge v={[`노쇼 ${h.noShows}번`, "danger"]} /></span>}
+                    {(() => {
+                      const pa = pastAttendance(h);
+                      if (pa.first) return <span className="text-muted">{pa.attended}</span>;
+                      return (
+                        <>
+                          <span className="text-ink">{pa.attended}</span>
+                          {pa.noShows ? <span className="ml-1.5"><Badge v={[pa.noShows, "danger"]} /></span> : <span className="text-muted"> · 노쇼 없음</span>}
+                        </>
+                      );
+                    })()}
                   </td>
-                  <td className={tdNowrap}>{h.reports ? <Badge v={[`${h.reports}건`, "danger"]} /> : <span className="text-muted">-</span>}</td>
+                  <td className={tdNowrap}>{h.reports ? <Badge v={[`${h.reports}건`, "danger"]} /> : <span className="text-muted">없음</span>}</td>
                   <td className={`${tdNowrap} text-muted`}>{a.submitted_at ? fmtDateTime(a.submitted_at) : "-"}</td>
                 </tr>
               );

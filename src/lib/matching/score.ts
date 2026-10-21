@@ -225,7 +225,7 @@ export function reasonsFor(detail: ScoreDetail, settings: MatchSettings, ctx: { 
   // 성비를 못 맞췄으면 숨기지 않고 알려 준다 (설명 가능성)
   if (skew) top.push(`이번엔 성비를 맞추기 어려웠어요 (여 ${detail.female} · 남 ${detail.male})`);
   // 후기가 실제로 이번 조합을 바꿨으면 사람 말로 알려 준다 (F11, 설명 가능성). 누구의 후기인지는 쓰지 않는다
-  if (ctx.separated) top.push("지난 모임 후기를 반영해 자리를 나눴어요");
+  if (ctx.separated) top.push("지난 모임 별점을 반영해 자리를 나눴어요");
   if (detail.guideBonus > 0) top.push("지난 모임을 즐겁게 보낸 분이 처음 오신 분과 함께해요");
   return top;
 }

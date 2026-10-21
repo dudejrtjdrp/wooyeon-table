@@ -53,6 +53,7 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
   const adminName = new Map((admins ?? []).map((x) => [x.id, x.name]));
   // Q13: 노쇼 횟수와 멤버십 기한 연장을 한눈에
   const noShows = (history ?? []).filter((h) => (h as { attendance_status: string | null }).attendance_status === "NO_SHOW").length + (a.attendance_status === "NO_SHOW" ? 1 : 0);
+  const attendedN = (history ?? []).filter((h) => (h as { attendance_status: string | null }).attendance_status === "ATTENDED").length + (a.attendance_status === "ATTENDED" ? 1 : 0);
   const extends_ = timeline.filter((e) => e.field === "membership_extend");
   const p = u.profiles;
 
@@ -127,7 +128,7 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
                   <tr key={n.id}>
                     <td className="max-w-0 truncate px-4 py-2.5 text-ink">{n.title}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-muted">{fmtDateTime(n.sent_at ?? n.scheduled_at)}</td>
-                    <td className="px-4 py-2.5"><Badge v={n.status === "sent" ? (n.read_at ? ["읽음", "accent"] : ["보냄", "accent"]) : n.status === "pending" ? ["예약", "muted"] : ["실패", "danger"]} /></td>
+                    <td className="px-4 py-2.5"><Badge v={n.status === "sent" ? (n.read_at ? ["읽음", "accent"] : ["보냄", "accent"]) : n.status === "pending" ? ["예약", "muted"] : n.status === "canceled" ? ["예약 취소", "muted"] : ["실패", "danger"]} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -174,7 +175,8 @@ export default async function ApplicantDetail({ params }: { params: Promise<{ id
             </ul>
             {!!reportsAgainst?.length && <p className="mt-3 rounded-xl bg-danger/10 px-3 py-2 text-[13px] text-danger">신고 {reportsAgainst.length}건 받음</p>}
             <dl className="mt-3 space-y-1.5 border-t border-line pt-3 text-[13px]">
-              <div className="flex justify-between"><dt className="text-muted">노쇼</dt><dd className={noShows ? "font-semibold text-danger" : "text-ink"}>{noShows ? `${noShows}회` : "없음"}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">참석(이번 회차 포함)</dt><dd className="tabular-nums text-ink">{attendedN}회</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">노쇼(이번 회차 포함)</dt><dd className={noShows ? "font-semibold text-danger" : "text-ink"}>{noShows ? `${noShows}회` : "없음"}</dd></div>
               <div className="flex justify-between gap-3"><dt className="shrink-0 text-muted">멤버십 기한 연장</dt><dd className="text-right text-ink">{extends_.length ? `${extends_.length}회, 지금 ${fmtDateTime(extends_[extends_.length - 1].to_value)}까지` : "없음"}</dd></div>
             </dl>
           </Panel>
