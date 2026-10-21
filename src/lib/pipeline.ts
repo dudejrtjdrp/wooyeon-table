@@ -451,7 +451,7 @@ export async function tick() {
       const { data: up } = await db().from("dining_tables").update({ status: "DONE" }).eq("id", tb.id).neq("status", "DONE").select("id");
       if (up?.length) {
         await logStatus({ entityType: "dining_table", entityId: tb.id, field: "status", from: "IN_PROGRESS", to: "DONE", actor: "system", reason: "모임 종료 시각" });
-        await systemMessage(roomId, "오늘 함께해 주셔서 고마워요. 모임 정보에서 별점을 남겨 주시면 다음 테이블에 바로 반영할게요.", `bye:${tb.id}`, { type: "bye" });
+        await systemMessage(roomId, "오늘 함께해 주셔서 고마워요. 아래 버튼으로 별점을 남겨 주시면 다음 테이블을 꾸릴 때 반영할게요.", `bye:${tb.id}`, { type: "bye" });
         const ms = await members(tb.id);
         for (const m of ms) {
           if (m.attendance_status === "SCHEDULED") {

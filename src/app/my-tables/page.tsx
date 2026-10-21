@@ -2,7 +2,7 @@ import { pastRowState, splitHistory } from "@/lib/history";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { RoundTable } from "@/components/brand";
-import { EmptyState, LinkButton, List, Pill, SectionTitle, TabScreen } from "@/components/ui";
+import { EmptyState, LinkButton, List, Pill, SectionTitle, TabScreen, Toast } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtDay, fmtSlot } from "@/lib/format";
@@ -20,7 +20,8 @@ type A = {
   dining_tables: { id: string; status?: string; slots: { starts_at: string; ends_at?: string; region: string } | null; venues: { name: string; address: string; price_range: string | null } | null } | null;
 };
 
-export default async function MyTables() {
+export default async function MyTables({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
+  const { m } = await searchParams;
   const me = await requireMe();
   // 예약 실행(GitHub Actions)이 몇 시간씩 밀릴 때가 있어, 모임 화면을 열 때도 밀린 일(시작 콘텐츠·체크인 안내·리마인드)을 돌린다
   after(() => maybeTick().catch(() => null));
@@ -52,6 +53,8 @@ export default async function MyTables() {
   if (!upcoming.length && !past.length && !pending.length) {
     return (
       <TabScreen title="단체방" sub={SUB}>
+      <Toast msg={m} />
+        <Toast msg={m} />
         <EmptyState
           icon={<RoundTable size={150} filled={1} />}
           title="아직 단체방이 없어요"

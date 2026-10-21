@@ -8,7 +8,9 @@ import { now } from "@/lib/clock";
 import { fmtClock, fmtDay } from "@/lib/format";
 import { refundCutoff } from "@/lib/policy";
 import { db } from "@/lib/supabase";
-import { lateNotice, sendMessage } from "../actions";
+import { lateNotice, leaveChat, sendMessage } from "../actions";
+import { leftUsers } from "@/lib/chat-leave";
+import { ConfirmSubmit } from "@/components/client";
 import { Composer } from "../composer";
 import { Refresher } from "../refresher";
 import { after } from "next/server";
@@ -36,10 +38,12 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
   const mems = (memRaw ?? []) as unknown as { id: string; user_id: string; attendance_status: string; users: { name: string; profiles: { job: string | null } | null } }[];
   const mine = mems.find((m) => m.user_id === me.id);
   if (!mine && me.role !== "admin") redirect("/");
+  // 단체방에서 나간 사람은 다시 들어오지 않는다 (모임 정보는 그대로 볼 수 있다)
+  if (mine && (await leftUsers([mine])).has(me.id)) redirect(`/tables/${id}?m=${encodeURIComponent("나간 단체방이에요")}`);
 
   const { data: room } = await db().from("chat_rooms").select("id").eq("table_id", id).maybeSingle();
   const { data: msgs } = room
-    ? await db().from("chat_messages").select("id,kind,body,sender_id,created_at").eq("room_id", room.id).order("created_at")
+    ? await db().from("chat_messages").select("id,kind,body,sender_id,created_at,meta").eq("room_id", room.id).order("created_at")
     : { data: [] };
   const names = new Map(mems.map((m) => [m.user_id, m.users.name]));
   const jobs = new Map(mems.map((m) => [m.user_id, m.users.profiles?.job ?? ""]));
@@ -47,7 +51,8 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
   const sameDay = fmtDay(n.toISOString()) === fmtDay(t.slots.starts_at);
   const timeOf = fmtClock;
   const ended = meetingEnded(t, n);
-  const chatOpen = Boolean(mine) && !ended;
+  // 모임이 끝나도 단체방은 닫지 않는다(성효님 결정 2026-10-21). 대신 끝난 뒤에는 나갈 수 있다
+  const chatOpen = Boolean(mine);
   const dayOf = (iso: string) => fmtDay(iso).replace(/\((.)\)$/, " $1요일");
   let lastDay = "";
   // 첫 안내(확정 공지: 장소·함께할 분·모인 이유·취소 규정)는 접지 않는다. 그 뒤 안내만 세 줄로 접는다
@@ -61,7 +66,7 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
         <span className="min-w-0 flex-1 text-[13px] leading-[1.45] text-ink2">
           <b className="text-ink">{fmtClock(t.slots.starts_at)}{t.venues ? ` · ${t.venues.name}` : ""}</b>
           <br />
-          {ended ? (mine?.attendance_status === "ATTENDED" ? "모임이 끝났어요. 오늘 저녁이 어땠는지 모임 정보에서 별점으로 남겨 주세요." : "모임이 끝났어요. 참석 확인과 별점은 모임 정보에서 볼 수 있어요.") : sameDay ? "오늘은 취소와 단체방 나가기가 안 돼요." : n >= refundCutoff(t.slots.starts_at) ? "환불 마감이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 전액 환불돼요."}
+          {ended ? (mine?.attendance_status === "ATTENDED" ? "모임이 끝났어요. 단체방은 그대로 남아 있어요. 원하면 아래에서 나갈 수 있어요." : "모임이 끝났어요. 참석 확인과 별점은 모임 정보에서 볼 수 있어요.") : sameDay ? "오늘은 취소와 단체방 나가기가 안 돼요." : n >= refundCutoff(t.slots.starts_at) ? "환불 마감이 지나 지금 취소하면 환불이 안 돼요." : "모임 주 화요일 밤 12시까지는 취소하면 전액 환불돼요."}
         </span>
         <span className="flex h-11 shrink-0 items-center text-[13px] font-bold text-accent">모임 정보</span>
       </Link>
@@ -97,6 +102,10 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
                         </div>
                       );
                     })()}
+                    {/* 모임이 끝나고 올라오는 '별점 남겨 주세요' 안내에는 바로 가는 버튼 */}
+                    {(m.meta as { type?: string } | null)?.type === "bye" && mine?.attendance_status === "ATTENDED" && (
+                      <div className="px-[14px] pb-1"><Link href={`/tables/${id}/feedback`} className="flex h-11 w-full items-center justify-center rounded-[12px] bg-accent text-[15px] font-bold text-accent-ink">별점 남기러 가기</Link></div>
+                    )}
                     <p className="px-[14px] pb-2 text-right text-[11px] text-muted">{timeOf(m.created_at)}</p>
                   </div>
                 </div>
@@ -120,12 +129,17 @@ export default async function ChatPage({ params, searchParams }: { params: Promi
             return sep ? [sep, node] : node;
           })}
         </div>
-        {!chatOpen && mine && <p className="mt-4 text-center text-[13px] text-muted">모임이 끝나 단체방이 닫혔어요.</p>}
 
         {mine && (
           <p className="mt-8 text-center text-[13px] text-muted">
             불편한 일이 있었나요? <Link href={`/tables/${id}/feedback#report`} className="inline-flex h-11 items-center font-bold text-accent underline underline-offset-4">신고하기</Link>
           </p>
+        )}
+        {mine && ended && (
+          <form action={leaveChat} className="mt-1 text-center">
+            <input type="hidden" name="table_id" value={id} />
+            <ConfirmSubmit label="단체방 나가기" question="나가면 이 단체방의 대화를 다시 볼 수 없고 새 메시지 알림도 오지 않아요. 다른 분들께는 '단체방을 나갔어요'만 보여요." confirmLabel="나가기" />
+          </form>
         )}
         {mine?.attendance_status === "SCHEDULED" && t.status !== "DONE" && (
           <p className="mt-1 text-center text-[13px]"><Link href={`/applications/${mine.id}`} className="inline-flex h-11 items-center text-muted underline underline-offset-4">참석 취소·환불 규정</Link></p>
