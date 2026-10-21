@@ -381,6 +381,11 @@ export async function tick() {
   if (ar.kept) done.push(`3일 무응답 이용권 보관 ${ar.kept}건`);
   if (ar.waitOver) done.push(`기다리기 마감 이용권 보관 ${ar.waitOver}건`);
 
+  // 이용권 기한 7일·3일·하루 전 알림 (신청 시각 기준 기한이라 기한 안에 신청하도록)
+  const { remindPassExpiry } = await import("./billing");
+  const pe = await remindPassExpiry(t).catch(() => 0);
+  if (pe) done.push(`이용권 기한 알림 ${pe}건`);
+
   // 환불 실패 자동 재시도: 10분 간격 3번까지, 세 번째 실패만 예외 큐 (D7)
   const { retryRefunds } = await import("./payments");
   const rf = await retryRefunds().catch(() => ({ retried: 0, done: 0 }));

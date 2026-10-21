@@ -320,7 +320,7 @@ export function ApplyFlow({
             {nudge && <p className="mx-6 mt-3 rounded-[14px] bg-accent-soft px-4 py-3 text-[14px] leading-relaxed text-accent-text">{nudge.note}</p>}
             <div className="flex flex-col gap-2 px-4 pt-[22px]" role="radiogroup" aria-label="이용권">
               {owned && (
-                <PassRow on={pass === "owned"} onClick={() => setPass("owned")} title="가지고 있는 이용권" sub={`${owned.label} ${owned.unlimited ? "기간 안 무제한" : `남은 ${owned.remaining}회`}${owned.until ? ` · ${owned.until}까지` : ""}`} price="0원" />
+                <PassRow on={pass === "owned"} onClick={() => setPass("owned")} title="가지고 있는 이용권" sub={`${owned.label} ${owned.unlimited ? "기간 안 무제한" : `남은 ${owned.remaining}회`}${owned.until ? ` · ${owned.until}까지 신청 가능` : ""}`} price="0원" />
               )}
               {passes.map((p) => (
                 <PassRow key={p.key} on={pass === p.key} onClick={() => setPass(p.key)} title={p.label} sub={p.desc} price={won(p.amount)} badge={nudge?.key === p.key ? "추천" : undefined} />

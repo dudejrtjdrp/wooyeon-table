@@ -1,6 +1,6 @@
 // 이용권과 환불. 1회권은 돈으로 돌려주고, 보유 이용권으로 신청한 건은 쓴 횟수를 돌려준다.
 // 멤버십은 기간 안에 횟수 제한이 없어 돌려줄 횟수가 없고, 매칭에 실패하면 기간을 늘려 준다.
-import { MEMBERSHIP_EXTEND_DAYS, isMembership } from "./constants";
+import { LEGACY_PASS_LABEL, MEMBERSHIP_EXTEND_DAYS, PASSES, isMembership } from "./constants";
 import { logStatus } from "./events";
 import { fmtDay } from "./format";
 import { notify } from "./notify";
@@ -73,4 +73,39 @@ export async function extendMembershipFor(appId: string, actor: string): Promise
   const ymd = fmtDay(next.toISOString());
   await notify({ userId: app.user_id, template: "membership_extended", title: `멤버십 기간을 ${MEMBERSHIP_EXTEND_DAYS}일 늘렸어요`, body: `${ymd}까지 쓸 수 있어요`, link: "/me", dedupeKey: `membership_extend:${appId}` });
   return true;
+}
+
+/**
+ * 이용권 기한이 다가오면 알린다: 7일 전·3일 전·하루 전 세 번 (성효님 결정 2026-10-21).
+ * 남은 횟수가 있는 1회권과 멤버십만. 탈퇴한 회원은 빼고, 같은 단계는 dedupe 키로 한 번만 보낸다. 보낸 건수를 돌려준다
+ */
+export async function remindPassExpiry(t: Date): Promise<number> {
+  const { expiryStage } = await import("./pass-expiry");
+  const { render, loadTemplates } = await import("./templates");
+  const { data } = await db()
+    .from("passes")
+    .select("id,user_id,pass_type,remaining,expires_at,users!inner(deleted_at)")
+    .gt("expires_at", t.toISOString())
+    .lte("expires_at", new Date(t.getTime() + 7 * 86400_000).toISOString())
+    .is("users.deleted_at", null);
+  const rows = (data ?? []) as unknown as { id: string; user_id: string; pass_type: string; remaining: number; expires_at: string }[];
+  const due = rows.flatMap((p) => {
+    if (!isMembership(p.pass_type) && p.remaining <= 0) return [];
+    const stage = expiryStage(p.expires_at, t);
+    return stage ? [{ p, stage, key: `pass_expiry:${p.id}:${stage.key}` }] : [];
+  });
+  if (!due.length) return 0;
+  const { data: had } = await db().from("notifications").select("dedupe_key").in("dedupe_key", due.map((d) => d.key));
+  const already = new Set((had ?? []).map((x) => x.dedupe_key));
+  let tpl: Awaited<ReturnType<typeof loadTemplates>> | null = null;
+  let sent = 0;
+  for (const { p, stage, key } of due) {
+    if (already.has(key)) continue;
+    tpl ??= await loadTemplates();
+    const label = PASSES[p.pass_type as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[p.pass_type] ?? "이용권";
+    const m = render("pass_expiry", { pass: label, left: stage.left, until: fmtDay(p.expires_at) }, tpl);
+    await notify({ userId: p.user_id, template: "pass_expiry", title: m.title, body: m.body, link: "/rounds", dedupeKey: key });
+    sent++;
+  }
+  return sent;
 }
