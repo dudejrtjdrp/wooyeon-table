@@ -168,3 +168,9 @@ body:has(.admin-theme) .term-tip { background: #17201b; font-family: "Gothic A1"
 /* 화면 이동 진행 막대(NavProgress): 맨 위 얇은 띠 */
 .nav-progress { background: var(--accent); }
 body:has(.admin-theme) .nav-progress { background: #1e5e45; }
+
+/* Tailwind v4는 버튼 커서를 기본 화살표로 둔다. 누를 수 있는 것은 손가락 커서로 (성효님 지적 2026-10-21) */
+@layer base {
+  button:not(:disabled), [role="button"], [role="switch"], summary, select, label:has(> input[type="checkbox"]), label:has(> input[type="radio"]), input[type="checkbox"], input[type="radio"] { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+}

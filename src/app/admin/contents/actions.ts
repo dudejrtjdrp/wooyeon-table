@@ -52,6 +52,8 @@ export async function toggleContent(form: FormData) {
   const { data } = await db().from("conversation_contents").update({ active, updated_at: new Date().toISOString() }).eq("id", id).select("kind").single();
   await logStatus({ entityType: "content", entityId: id, field: "active", to: String(active), actor: `admin:${admin.id}`, reason: active ? "다시 노출" : "노출 중지" });
   revalidatePath("/admin/contents");
+  // 스위치(SwitchForm)에서 부르면 화면을 옮기지 않는다. 스위치가 이미 바뀐 상태를 보여 준다
+  if (form.get("inline") === "1") return;
   back("m", active ? "다시 후보에 넣었어요. 다음 모임부터 뽑힐 수 있어요" : "멈췄어요. 이제 단체방에 올라가지 않아요", data?.kind, form);
 }
 

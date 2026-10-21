@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SwitchForm } from "@/components/switch-form";
 import { Plus } from "lucide-react";
 import { Badge, PageHeader, Panel, Term, btnInk, btnLight, ctl } from "@/components/admin-ui";
 import { TableMark } from "@/components/brand";
@@ -24,7 +25,10 @@ const KIND_NAME = { topic: "대화 주제", icebreaker: "아이스브레이킹" 
 
 const TIP_TAG = "참가자가 프로필에 고른 관심사예요. 주제에 같은 관심사를 붙여 두면, 그 관심사가 많이 겹친 테이블에 먼저 나가요. 예: #여행";
 const TIP_TYPE = "테이블 사람들을 보고 자동으로 붙는 성격이에요. 예: 처음 온 분이 많은 테이블, 4명 테이블, 20대 중심, 차분한 분이 많은 테이블";
-const TIP_PRIORITY = "보통 0이에요. 숫자가 클수록 다른 주제보다 먼저 뽑혀요. 예: +3이면 조금 먼저, -3이면 덜 나가요";
+const TIP_PRIORITY = "같은 조건이면 '더 자주'로 정한 주제가 먼저 뽑혀요. 보통은 그대로 두면 돼요";
+/** 뽑히는 빈도 (DB priority 값). 숫자 대신 세 가지로 고른다 */
+const FREQ = [{ v: -3, label: "덜 자주" }, { v: 0, label: "보통" }, { v: 3, label: "더 자주" }] as const;
+const freqLabel = (p: number) => (p > 0 ? "더 자주" : p < 0 ? "덜 자주" : "보통");
 const TIP_ICE = "처음 만난 사람끼리 어색함을 푸는 짧은 놀이예요. 예: 휴대폰 최근 사진 한 장으로 자기소개하기";
 
 /** 테이블 공통 관심사 전체 순서 (pipeline.ts pickContents와 같은 계산. 그쪽은 위 3개만 돌려줘서 여기서 다시 센다) */
@@ -71,6 +75,12 @@ function ContentFields({ c, kind, here, pq, rules }: { c?: C; kind: "topic" | "i
         )}
       </fieldset>
 
+      {/* 여기부터는 보통 안 건드려도 되는 설정이라 접어 둔다 (문장과 관심사만 적으면 끝) */}
+      <details className="group rounded-xl bg-field px-4 py-3" open={Boolean(c && ((c.table_types ?? []).length || c.priority))}>
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-[14px] font-bold">
+          더 정하기 <span className="text-[12px] font-normal text-muted group-open:hidden">보내는 테이블 좁히기 · 뽑히는 빈도 (보통은 안 해도 돼요)</span>
+        </summary>
+        <div className="mt-3 space-y-5">
       <fieldset>
         <legend className="text-[14px] font-bold">이런 테이블에만 보내기 <span className="font-normal text-muted">(보통은 비워 둬요)</span></legend>
         <p className="mt-0.5 text-[12px] text-muted">하나라도 고르면 그 성격의 테이블에만 나가요. 하나라도 맞으면 돼요.</p>
@@ -89,11 +99,20 @@ function ContentFields({ c, kind, here, pq, rules }: { c?: C; kind: "topic" | "i
         </div>
       </fieldset>
 
-      <label className="block">
-        <span className="text-[14px] font-bold"><Term tip={TIP_PRIORITY}>우선순위</Term></span>
-        <span className="mt-0.5 block text-[12px] text-muted">보통 0. 관심사가 맞으면 +{rules.interestWeight}점, 테이블 성격이 맞으면 +{rules.typeWeight}점이고, 여기 적은 숫자를 더해요. (-10~10)</span>
-        <input name="priority" type="number" min={-10} max={10} defaultValue={c?.priority ?? 0} className={`${ctl} mt-2 w-28`} />
-      </label>
+      <fieldset>
+        <legend className="text-[14px] font-bold"><Term tip={TIP_PRIORITY}>얼마나 자주 뽑을까요?</Term></legend>
+        <p className="mt-0.5 text-[12px] text-muted">관심사·테이블 성격이 맞는 주제가 먼저 뽑히고, 점수가 비슷하면 &lsquo;더 자주&rsquo;가 앞서요.</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {[...FREQ, ...(c && !FREQ.some((x) => x.v === c.priority) ? [{ v: c.priority, label: `지금 값 그대로 (${freqLabel(c.priority)})` }] : [])].map((x) => (
+            <label key={x.v} className="cursor-pointer">
+              <input type="radio" name="priority" value={x.v} defaultChecked={(c?.priority ?? 0) === x.v} className="peer sr-only" />
+              <span className={chip}>{x.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+        </div>
+      </details>
 
       <div className="flex justify-end gap-2 border-t border-line pt-4">
         <button className={btnInk}>{c ? "저장" : "추가하기"}</button>
@@ -367,7 +386,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                   <p className="mt-1.5 flex flex-wrap items-center gap-1">
                     {(c.tags ?? []).length ? c.tags.map((t) => <Badge key={t} v={[`#${t}`, "accent"]} />) : <Badge v={["모든 관심사", "muted"]} />}
                     {(c.table_types ?? []).length ? c.table_types.map((t) => <Badge key={t} v={[`${TYPE_NAME[t] ?? t}만`, "candle"]} />) : null}
-                    {c.priority ? <Badge v={[`우선순위 ${c.priority > 0 ? "+" : ""}${c.priority}`, "ink"]} /> : null}
+                    {c.priority ? <Badge v={[freqLabel(c.priority), "ink"]} /> : null}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
@@ -375,18 +394,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
                     <Badge v={c.active ? ["올리는 중", "leaf"] : ["멈춤", "muted"]} />
                   ) : (
                     <>
-                      <form action={toggleContent}>
-                        <input type="hidden" name="id" value={c.id} />
-                        <input type="hidden" name="active" value={String(!c.active)} />
-                        <input type="hidden" name="back" value={here} />
-                        <input type="hidden" name="pq" value={pq} />
-                        <button aria-pressed={c.active} aria-label={`${c.active ? "멈추기" : "다시 올리기"}: ${c.body.slice(0, 30)}`} title={c.active ? "누르면 더는 뽑히지 않아요" : "누르면 다시 후보가 돼요"} className="flex min-h-11 items-center gap-2 rounded-xl px-2 text-[13px] font-semibold text-muted hover:bg-field">
-                          <span aria-hidden="true" className={`relative h-6 w-10 rounded-full transition ${c.active ? "bg-accent" : "bg-line"}`}>
-                            <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${c.active ? "left-[18px]" : "left-0.5"}`} />
-                          </span>
-                          <span className={`w-14 text-left ${c.active ? "text-accent-text" : ""}`}>{c.active ? "올리는 중" : "멈춤"}</span>
-                        </button>
-                      </form>
+                      <SwitchForm action={toggleContent} fields={{ id: c.id, back: here, pq }} on={c.active} onLabel="올리는 중" offLabel="멈춤" label={`단체방에 올리기: ${c.body.slice(0, 30)}`} title={c.active ? "누르면 더는 뽑히지 않아요" : "누르면 다시 후보가 돼요"} />
                       <ContentDialog label="고치기" title={`${KIND_NAME[c.kind as "topic"] ?? "콘텐츠"} 고치기`} triggerLabel={`고치기: ${c.body.slice(0, 30)}`} triggerClass="min-h-11 rounded-xl px-3 text-[13px] font-semibold text-accent hover:bg-accent-soft/50">
                         <ContentFields c={c} kind={c.kind === "icebreaker" ? "icebreaker" : "topic"} here={here} pq={pq} rules={rules} />
                       </ContentDialog>
@@ -416,7 +424,7 @@ export default async function Contents({ searchParams }: { searchParams: Promise
             <ol className="list-decimal space-y-1.5 pl-4 text-[13px] leading-relaxed text-muted">
               <li>올리는 중인 것 중, 테이블 성격을 안 정했거나 성격이 맞는 것만 후보예요.</li>
               <li>테이블에서 많이 겹친 관심사가 붙어 있으면 +{rules.interestWeight}점(2순위 관심사는 조금 덜).</li>
-              <li>테이블 성격이 맞으면 하나당 +{rules.typeWeight}점, 그리고 우선순위를 더해요.</li>
+              <li>테이블 성격이 맞으면 하나당 +{rules.typeWeight}점, &lsquo;더 자주&rsquo;로 정한 주제는 조금 더 앞서요.</li>
               <li>점수 높은 순으로 고르되, 테이블 분위기에 맞는 주제 하나는 꼭 넣어요.</li>
               <li>점수가 같으면 테이블마다 다르게 섞어서, 같은 날 여러 테이블이 똑같은 주제를 받지 않아요.</li>
             </ol>

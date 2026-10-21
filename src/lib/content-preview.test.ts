@@ -29,7 +29,7 @@ describe("대화 콘텐츠 미리 보기", () => {
     const r = explainScore(DB[1], ["맛집 탐방", "여행"], ["first"], DEFAULT_RULES);
     expect(r).toEqual([
       { text: "#여행 · 테이블 관심사 2순위", points: DEFAULT_RULES.interestWeight * 0.85 },
-      { text: "우선순위", points: 2 },
+      { text: "더 자주 뽑기로 정함", points: 2 },
     ]);
     expect(explainScore(DB[2], [], ["first", "small"], DEFAULT_RULES)).toEqual([{ text: "처음 온 분이 많은 테이블", points: DEFAULT_RULES.typeWeight }]);
     expect(explainScore(DB[3], ["여행"], ["first"], DEFAULT_RULES)).toEqual([]);
