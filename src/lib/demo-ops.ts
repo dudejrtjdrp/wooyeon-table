@@ -1,12 +1,72 @@
-// 시연 패널과 심사 투어가 같이 쓰는 시연 동작. 서버 액션이 아니라서 화면에서 바로 부를 수 없다(부르는 쪽이 운영자 권한을 확인한다)
+// 시연 패널과 해커톤 심사 투어가 같이 쓰는 시연 동작. 서버 액션이 아니라서 화면에서 바로 부를 수 없다(부르는 쪽이 운영자 권한을 확인한다)
 import { now, realNowIso } from "./clock";
-import { OPEN_REGIONS } from "./constants";
+import { OPEN_REGIONS, PASSES } from "./constants";
+import { roundAccepting } from "./demo-panel";
 import { logStatus } from "./events";
 import { notify } from "./notify";
+import { passExpiresAt } from "./pass-expiry";
 import { tick } from "./pipeline";
-import { sidoOf } from "./regions";
+import { kstDay, sidoOf } from "./regions";
 import { db } from "./supabase";
 import { loadTemplates, render } from "./templates";
+import { busiestSlots } from "./tour";
+import { tourHuman } from "./tour-state";
+
+/**
+ * 투어 회차에 시연 사람 계정(휴대폰으로 로그인할 계정)을 결제 완료로 신청시킨다.
+ * 테스트 참가자가 가장 많이 고른 일정 2개를 골라 같은 테이블에 들기 쉽게. 이미 신청했으면 그대로 둔다.
+ * 멤버십이 남아 있으면 그걸 쓰고, 없으면 1회권(9,900원)으로 모의 결제한다
+ */
+export async function applyTourHuman(roundId: string): Promise<{ name: string; added: boolean } | null> {
+  const h = await tourHuman();
+  if (!h) return null;
+  const { data: mine } = await db().from("applications").select("id").eq("user_id", h.id).eq("round_id", roundId).neq("application_status", "CANCELED").limit(1);
+  if (mine?.length) return { name: h.name, added: false };
+  const { data: rd } = await db().from("rounds").select("status,apply_deadline").eq("id", roundId).maybeSingle();
+  if (!roundAccepting(rd, await now())) return null;
+  const { data: apps } = await db().from("applications").select("application_slots(slot_id)").eq("round_id", roundId).eq("payment_status", "PAID").neq("application_status", "CANCELED");
+  const ids = busiestSlots(((apps ?? []) as unknown as { application_slots: { slot_id: string }[] }[]).map((a) => ({ slots: a.application_slots.map((s) => s.slot_id) })));
+  if (!ids.length) return null;
+  const { data: slots } = await db().from("slots").select("id,region,starts_at").in("id", ids);
+  const chosen = slots ?? [];
+  if (!chosen.length) return null;
+  const t = await now();
+  const at = t.toISOString();
+  const { data: owned } = await db().from("passes").select("id,pass_type").eq("user_id", h.id).in("pass_type", ["m1", "m3", "m6"]).gt("expires_at", at).order("expires_at", { ascending: false }).limit(1).maybeSingle();
+  let pay: Record<string, unknown>;
+  if (owned) pay = { user_id: h.id, amount: 0, pass_type: owned.pass_type, pass_id: owned.id, status: "PAID", provider: "pass", paid_at: at };
+  else {
+    const d = PASSES.single;
+    const { data: np } = await db().from("passes").insert({ user_id: h.id, pass_type: "single", total_count: d.count, remaining: 0, expires_at: passExpiresAt(d.months, t).toISOString() }).select("id").single();
+    pay = { user_id: h.id, amount: d.amount, pass_type: "single", pass_id: np?.id ?? null, status: "PAID", paid_at: at };
+  }
+  const { data: p } = await db().from("payments").insert(pay).select("id").single();
+  if (!p) return null;
+  const { data: app } = await db()
+    .from("applications")
+    .insert({ user_id: h.id, round_id: roundId, payment_id: p.id, application_status: "SUBMITTED", payment_status: "PAID", match_status: "WAITING", submitted_at: at, areas: [...new Set(chosen.map((s) => s.region))], dates: [...new Set(chosen.map((s) => kstDay(s.starts_at)))], near_ok: true })
+    .select("id")
+    .single();
+  if (!app) return null;
+  await db().from("application_slots").insert(chosen.map((s) => ({ application_id: app.id, slot_id: s.id })));
+  await logStatus({ entityType: "application", entityId: app.id, field: "payment_status", from: null, to: "PAID", actor: "admin:demo", reason: "해커톤 심사 투어: 시연 참가자 모의 결제·신청" });
+  return { name: h.name, added: true };
+}
+
+/**
+ * 모임 끝 단계: 휴대폰에서 체크인하지 않은 시연 사람 계정을 참석으로 처리한다(다음 회차 다시 신청 대상이 되게).
+ * 후기는 남기지 않는다(휴대폰에서 직접 남겨 보게). 처리했으면 true
+ */
+export async function checkInTourHuman(roundId: string): Promise<boolean> {
+  const h = await tourHuman();
+  if (!h) return false;
+  const { data: a } = await db().from("applications").select("id,attendance_status").eq("user_id", h.id).eq("round_id", roundId).eq("match_status", "CONFIRMED").maybeSingle();
+  if (!a || a.attendance_status !== "SCHEDULED") return false;
+  await db().from("applications").update({ attendance_status: "ATTENDED", checked_in_at: (await now()).toISOString() }).eq("id", a.id);
+  await logStatus({ entityType: "application", entityId: a.id, field: "attendance_status", from: "SCHEDULED", to: "ATTENDED", actor: "admin:demo", reason: "해커톤 심사 투어: 휴대폰에서 체크인하지 않아 시연용으로 참석 처리" });
+  await db().from("exceptions").update({ status: "resolved", resolution: "시연용 체크인으로 참석 처리", resolved_at: realNowIso() }).eq("dedupe_key", `noshow:${a.id}`);
+  return true;
+}
 
 function rng(seed: number) {
   let s = seed >>> 0;
@@ -82,7 +142,7 @@ export function kstDatePlus(t: Date, days: number): string {
 }
 
 /**
- * 심사 투어용 회차를 만든다: 시연 시계 기준 하루 뒤 마감, 사흘·나흘 뒤 저녁 7시 30분 모임, 서울 4곳.
+ * 해커톤 심사 투어용 회차를 만든다: 시연 시계 기준 하루 뒤 마감, 사흘·나흘 뒤 저녁 7시 30분 모임, 서울 4곳.
  * 식당 재고는 일정마다 배정이 켜진 식당 2테이블씩. 지우는 데이터는 없다
  */
 export async function createTourRound(adminId: string, base?: Date, label = "심사 시연"): Promise<string | null> {
