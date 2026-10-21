@@ -427,6 +427,12 @@ export async function tick() {
       );
       const { data: up } = await db().from("dining_tables").update({ status: "IN_PROGRESS" }).eq("id", tb.id).in("status", ["CONFIRMED", "VENUE_ASSIGNED", "READY"]).select("id");
       if (up?.length) await logStatus({ entityType: "dining_table", entityId: tb.id, field: "status", from: tb.status, to: "IN_PROGRESS", actor: "system", reason: "모임 시작 시각" });
+      // 시작 알림: 누르면 모임 정보의 '지금 테이블에서'(대화 주제·아이스브레이킹)로 간다. 이미 끝난 모임엔 보내지 않는다
+      if (t < end) {
+        for (const m of (await members(tb.id)).filter((x) => ["SCHEDULED", "ATTENDED"].includes(x.attendance_status ?? ""))) {
+          await notify({ userId: m.user_id, template: "meeting_start", ...render("meeting_start", {}, tpl), link: `/tables/${tb.id}?now=1`, dedupeKey: `meeting-start:${m.id}` });
+        }
+      }
     }
 
     // 시작 20분이 지나도 체크인하지 않은 사람에게 한 번 알린다 (갔는데 체크인을 깜빡해 노쇼 후보가 되는 일을 줄인다)
@@ -441,7 +447,7 @@ export async function tick() {
       const { data: up } = await db().from("dining_tables").update({ status: "DONE" }).eq("id", tb.id).neq("status", "DONE").select("id");
       if (up?.length) {
         await logStatus({ entityType: "dining_table", entityId: tb.id, field: "status", from: "IN_PROGRESS", to: "DONE", actor: "system", reason: "모임 종료 시각" });
-        await systemMessage(roomId, "오늘 함께해 주셔서 고마워요. 후기를 남겨 주시면 다음 테이블이 더 좋아져요.", `bye:${tb.id}`, { type: "bye" });
+        await systemMessage(roomId, "오늘 함께해 주셔서 고마워요. 모임 정보에서 별점을 남겨 주시면 다음 테이블에 바로 반영할게요.", `bye:${tb.id}`, { type: "bye" });
         const ms = await members(tb.id);
         for (const m of ms) {
           if (m.attendance_status === "SCHEDULED") {

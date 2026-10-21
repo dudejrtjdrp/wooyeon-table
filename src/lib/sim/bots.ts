@@ -90,11 +90,6 @@ async function insert(roomId: string, rows: { userId: string; body: string; key:
   return data?.length ?? 0;
 }
 
-/** 대화 주제 메시지(content:<테이블>)에서 번호 붙은 주제만 꺼낸다 */
-export function parseTopics(body: string): string[] {
-  return body.split("\n").map((l) => l.match(/^\d+\.\s*(.+)$/)?.[1]).filter((x): x is string => Boolean(x));
-}
-
 /**
  * 모임 시각이 된 봇 체크인 (앱 체크인과 같은 상태값·기록). 한 테이블에서 한 명까지는 일부러 오지 않는다(노쇼 시연).
  * tick이 모임 종료 처리(노쇼 후보 올리기)보다 먼저 부른다.
@@ -159,7 +154,8 @@ export async function botReplies(tableId: string, opts: { live?: boolean } = {})
     const bots = repliers(tb, t.getTime());
     // 아직 확정 인사를 안 한 봇은 답하기 전에 인사부터 한다
     const hello = new Map(bots.map((p) => [p.userId, greetFirst(plan, posted, p.userId, t.getTime(), tb.start, tb.end)] as const).filter((x): x is [string, NonNullable<(typeof x)[1]>] => Boolean(x[1])));
-    const replies = planReplies(h.msg.id, h.text, bots, ctxOf(tb, h.author), used, new Set(hello.keys()));
+    // 모임이 시작되면 마주 앉아 있으니 현장 얘기(도착·자리·늦음)에만 짧게 답한다
+    const replies = planReplies(h.msg.id, h.text, bots, ctxOf(tb, h.author), used, new Set(hello.keys()), t.getTime() >= tb.start);
     for (const [k, r] of replies.entries()) {
       const key = msgKey(tb.id, r.userId, "reply", h.msg.id);
       const greet = hello.get(r.userId);
@@ -188,7 +184,6 @@ export async function botReplies(tableId: string, opts: { live?: boolean } = {})
 /** 이 테이블의 봇 대화 계획. 사람이 이미 물은 질문 주제는 봇이 다시 묻지 않는다 */
 function planFor(tb: Table, msgs: Msg[]) {
   const notice = msgs.find((m) => m.dedupe_key === `notice:${tb.id}`);
-  const content = msgs.find((m) => m.dedupe_key === `content:${tb.id}`);
   const humanIds = new Set(tb.members.filter((m) => !m.bot).map((m) => m.userId));
   const askedTopics = qaTopics(msgs.filter((m) => m.kind === "user" && m.sender_id && humanIds.has(m.sender_id)).map((m) => m.body));
   // 봇 질문은 대사 그대로 올라간다(말투를 입히지 않음)
@@ -200,7 +195,6 @@ function planFor(tb: Table, msgs: Msg[]) {
     startMs: tb.start,
     endMs: tb.end,
     noticeAt: notice ? Date.parse(notice.created_at) : null,
-    topics: content ? parseTopics(content.body) : null,
     noShow: noShowOf(tb),
     askedTopics,
     postedQuestion,

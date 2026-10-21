@@ -7,6 +7,8 @@ import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { fmtSlot } from "@/lib/format";
 import { headline } from "@/lib/status";
+import { nextStep } from "@/lib/next-step";
+import { NextStepBox } from "@/components/next-step";
 import { db } from "@/lib/supabase";
 import { cancelRule, wasReallocatedTo } from "@/lib/attendance";
 import { afterMeetingNote, canClaimAttended } from "@/lib/attendance-rules";
@@ -40,7 +42,7 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     attendance_status: string | null; resolution: string | null; match_reason: string | null; realloc_count: number; table_id: string | null; submitted_at: string | null;
     payments: { paid_at: string | null; amount: number; pass_type: string } | null;
     dining_tables: { slots: { starts_at: string; ends_at: string } } | null;
-    rounds: { id: string; title: string; match_at: string; apply_deadline: string };
+    rounds: { id: string; title: string; match_at: string; apply_deadline: string; status?: string };
     application_slots: { slots: Slot }[];
   } | null;
   if (!app || app.user_id !== me.id) redirect(`/?m=${encodeURIComponent("이 신청을 찾지 못했어요. 내 신청은 일정 탭에서 볼 수 있어요")}`);
@@ -64,9 +66,9 @@ export default async function ApplicationDetail({ params, searchParams }: { para
   const steps = [
     { label: "신청", done: true, when: app.submitted_at ? fmtSlot(app.submitted_at) : "", note: "신청이 완료됐어요." },
     { label: "결제", done: paid, when: app.payments?.paid_at ? fmtSlot(app.payments.paid_at) : "", note: paid ? "결제가 완료됐어요." : new Date(app.rounds.match_at) <= t ? "결제 전에 마감됐어요. 빠져나간 돈은 없어요." : "결제를 마쳐야 매칭에 들어가요." },
-    { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: matchDone ? "신청 인원을 모아 테이블을 꾸렸어요." : "신청 인원을 모아 테이블을 꾸려요." },
-    { label: "테이블 확정 · 안내", done: matched, when: "", note: matched ? "식당과 함께 앉을 분들을 알려 드렸어요." : "테이블이 정해지면 식당과 함께 앉을 분들을 알려 드려요." },
-    { label: "모임", done: app.attendance_status === "ATTENDED" || ended, when: "", note: app.attendance_status === "ATTENDED" ? "함께 저녁을 먹었어요." : ended ? "모임이 끝났어요." : "정해진 식당에서 저녁을 함께 먹어요." },
+    { label: `자동 매칭 · ${fmtSlot(app.rounds.match_at)}`, done: matchDone, when: "", note: matchDone ? "신청 인원을 모아 테이블을 꾸렸어요." : "이 시각에 신청한 분들을 한 번에 테이블로 나눠요. 인원이 먼저 찬다고 일찍 열리지 않아요." },
+    { label: "테이블 확정 · 안내", done: matched, when: "", note: matched ? "식당과 함께 앉을 분들을 알려 드렸어요." : "정해지는 순간 알림이 가고, 식당·함께 앉을 분들·단체방이 함께 열려요." },
+    { label: "모임", done: app.attendance_status === "ATTENDED" || ended, when: "", note: app.attendance_status === "ATTENDED" ? "함께 저녁을 먹었어요." : ended ? "모임이 끝났어요." : "하루 전에 한 번 더 알려 드리고, 시작되면 테이블에서 나눌 이야기가 열려요." },
   ];
   // 매칭 실패면 '테이블 확정' 단계가 아직 올 것처럼 보이지 않게, 그 자리에서 실패와 다음 할 일을 말한다
   if (app.match_status === "ALTERNATIVE_OFFERED") {
@@ -107,7 +109,8 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     if (ps === "REFUND_FAILED") return `${won(pay.amount)} 환불 다시 처리 중 · 따로 하실 일은 없어요`;
     return null;
   })();
-  const idle = !cta && paid && ["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status);
+  // 다음에 일어날 일과 그 시각, 지금 할 수 있는 일 (홈 카드와 같은 문장)
+  const step = ended ? null : nextStep({ ...app, matchAt: app.rounds.match_at, applyDeadline: app.rounds.apply_deadline, roundStatus: app.rounds.status, startsAt: app.dining_tables?.slots.starts_at, endsAt: app.dining_tables?.slots.ends_at }, t);
 
   return (
     <Screen title="내 신청" back="/rounds">
@@ -136,18 +139,11 @@ export default async function ApplicationDetail({ params, searchParams }: { para
               취소 이유 문의하기
             </a>
           )}
-          {["WAITING", "MATCHING", "REALLOCATING"].includes(app.match_status) && paid && app.application_status !== "CANCELED" && new Date(app.rounds.match_at) > t && (
-            <>
-              <p className="mt-4 max-w-[58%] text-[14px] leading-relaxed text-muted">{fmtSlot(app.rounds.match_at)}에 테이블을 꾸려요.</p>
-            </>
-          )}
+          {step && <NextStepBox s={step} className="mt-5" />}
           {app.application_status !== "CANCELED" && cta && (
             <Link href={cta[1]} className="mt-6 flex h-[56px] items-center justify-center gap-1 rounded-[14px] bg-accent text-[17px] font-extrabold text-white active:scale-[.985]">
               {cta[0]} <ChevronRight size={20} />
             </Link>
-          )}
-          {app.application_status !== "CANCELED" && idle && (
-            <p className="mt-5 rounded-[14px] bg-card px-4 py-3 text-[14px] leading-relaxed text-ink2">지금은 하실 일이 없어요. 결과가 나오면 알림과 홈 화면으로 바로 알려 드릴게요.</p>
           )}
         </div>
       </section>
@@ -195,15 +191,8 @@ export default async function ApplicationDetail({ params, searchParams }: { para
       {matched && app.attendance_status === "SCHEDULED" && app.dining_tables && (() => {
         const start = app.dining_tables.slots.starts_at;
         const rule = cancelRule(start, t);
-        const remind = new Date(new Date(start).getTime() - 24 * 3600_000);
         return (
           <>
-            {/* 하루 전 안내 시각이 지났으면 '다음 안내'를 보여 주지 않는다 */}
-            {remind > t && (
-              <p className="mt-3 rounded-[20px] bg-accent-soft px-4 py-3.5 text-[14px] text-accent">
-                다음 안내: {fmtSlot(remind.toISOString())}에 시간·장소·예약명을 한 번 더 보내드려요.
-              </p>
-            )}
             {rule.kind !== "blocked" && (
               <div className="mt-6 text-center">
                 <ConfirmSheet

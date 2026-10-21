@@ -163,7 +163,7 @@ export const NOTICE: Record<string, string> = {
   applied: "신청 접수", paid: "결제 완료", payment_pending: "결제 대기", waiting: "매칭 대기", confirmed: "테이블 확정",
   reallocating: "재배치 중", reallocated: "테이블 변경", alternative: "매칭 실패", alternative_remind: "매칭 실패 다시 알림",
   transferred: "일정 이동", kept: "이용권 보관", refunded: "환불 완료", refund_failed: "환불 실패", canceled: "신청 취소",
-  attendance_canceled: "참석 취소", reminder: "하루 전 안내", venue_changed: "식당 변경", seat_offer: "빈자리 제안",
+  attendance_canceled: "참석 취소", reminder: "하루 전 안내", meeting_start: "모임 시작", venue_changed: "식당 변경", seat_offer: "빈자리 제안",
   seat_offer_expired: "빈자리 제안 만료", feedback: "후기 요청", feedback_remind: "후기 리마인드", next_round: "다음 일정 추천",
   membership_extended: "멤버십 기한 연장", noshow_warn: "노쇼 경고", noshow_restrict: "노쇼 신청 제한", admin_removed: "운영자 제외",
   region_open: "동네 열림",
