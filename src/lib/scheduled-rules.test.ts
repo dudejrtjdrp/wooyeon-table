@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type AppState, type PendingRow, checkScheduledEdit, keyKind, planSync, remindAt, scheduledTarget, verdict } from "./scheduled-rules";
+import { type AppState, type PendingRow, EDITED_STALE, checkScheduledEdit, keyKind, planSync, remindAt, scheduledTarget, verdict } from "./scheduled-rules";
 
 const A = "11111111-1111-1111-1111-111111111111";
 const T1 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -50,6 +50,13 @@ describe("하루 전 안내", () => {
   it("운영자가 고친 예약은 보낼 시각을 건드리지 않는다", () => {
     const later = "2026-10-25T10:00:00Z";
     expect(verdict(remind({ edited: true }), app(), table({ starts_at: later }), ok, now)).toEqual({ action: "keep" });
+  });
+  it("운영자가 고친 예약인데 다른 테이블로 옮겼거나 식당이 바뀌면 거두고 새로 건다", () => {
+    expect(verdict(remind({ edited: true }), app({ table_id: T2 }), table({ id: T2 }), ok, now)).toEqual({ action: "cancel", why: EDITED_STALE });
+    expect(verdict(remind({ edited: true }), app(), table(), ok, now, { contentChanged: true })).toEqual({ action: "cancel", why: EDITED_STALE });
+    expect(planSync([remind({ edited: true })], app(), table(), ok, now, { contentChanged: true }).needRemind).toBe(true);
+    // 고치지 않은 예약은 식당이 바뀌어도 문구만 다시 쓴다
+    expect(verdict(remind(), app(), table(), ok, now, { contentChanged: true })).toEqual({ action: "keep" });
   });
   it("하루 안에 확정돼 보낼 시각이 이미 지났으면 시각은 그대로(곧 나간다)", () => {
     const soon = "2026-10-20T12:00:00Z";
@@ -125,8 +132,8 @@ describe("checkScheduledEdit", () => {
 });
 
 describe("scheduledTarget", () => {
-  it("하루 전 안내는 내 신청(일정 바꾸기·취소)으로", () => {
-    expect(scheduledTarget({ dedupe_key: `remind:${A}:${T1}`, link: `/tables/${T1}` })).toEqual({ href: `/applications/${A}`, cta: "일정 바꾸기·취소" });
+  it("하루 전 안내는 내 신청(신청 내용·취소 규정)으로", () => {
+    expect(scheduledTarget({ dedupe_key: `remind:${A}:${T1}`, link: `/tables/${T1}` })).toEqual({ href: `/applications/${A}`, cta: "신청 내용·취소 규정 보기" });
   });
   it("결제 안내는 결제 화면으로", () => {
     expect(scheduledTarget({ dedupe_key: `payment_pending:${A}:p`, link: `/pay/${A}` })?.href).toBe(`/pay/${A}`);

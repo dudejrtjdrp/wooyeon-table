@@ -74,7 +74,7 @@ export async function swapVenue(tableId: string, venueId: string, reason: string
   if (!moved?.length) return { ok: false, message: "그 사이 식당이나 테이블 상태가 바뀌었어요. 새로 고쳐 확인해 주세요" };
   const changeId = await logStatus({ entityType: "dining_table", entityId: tableId, field: "venue_id", from: fromName, to: pick.name, actor, reason: `[운영자 식당 변경] ${reason}` });
   // 예약해 둔 하루 전 안내 문구도 새 식당으로 (보내는 순간에도 다시 쓰지만, 예정된 안내 화면에 옛 식당이 보이지 않게)
-  await quietly(syncTable(tableId, actor, `식당 변경 ${fromName} → ${pick.name}`));
+  await quietly(syncTable(tableId, actor, `식당 변경 ${fromName} → ${pick.name}`, { contentChanged: true }));
 
   // 예약 기록 (테이블당 한 줄): 새 식당으로 고쳐 처음부터 다시 요청
   const { data: v } = await db().from("venues").select("name,address,booking_channel,booking_url").eq("id", pick.venueId).single();

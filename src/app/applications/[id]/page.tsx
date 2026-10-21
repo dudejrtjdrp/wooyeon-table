@@ -8,6 +8,8 @@ import { now } from "@/lib/clock";
 import { fmtSlot } from "@/lib/format";
 import { headline } from "@/lib/status";
 import { nextStep } from "@/lib/next-step";
+import { beforeMatchCutoff } from "@/lib/cancel-rules";
+import { autoKeepAt } from "@/lib/resolve";
 import { NextStepBox } from "@/components/next-step";
 import { db } from "@/lib/supabase";
 import { cancelRule, wasReallocatedTo } from "@/lib/attendance";
@@ -110,7 +112,9 @@ export default async function ApplicationDetail({ params, searchParams }: { para
     return null;
   })();
   // 다음에 일어날 일과 그 시각, 지금 할 수 있는 일 (홈 카드와 같은 문장)
-  const step = ended ? null : nextStep({ ...app, matchAt: app.rounds.match_at, applyDeadline: app.rounds.apply_deadline, roundStatus: app.rounds.status, startsAt: app.dining_tables?.slots.starts_at, endsAt: app.dining_tables?.slots.ends_at }, t);
+  const cancelBy = beforeMatchCutoff(app.rounds.match_at, slots.map((x) => x.starts_at));
+  const keepAt = app.match_status === "ALTERNATIVE_OFFERED" ? await autoKeepAt(app.id) : null;
+  const step = ended ? null : nextStep({ ...app, matchAt: app.rounds.match_at, applyDeadline: app.rounds.apply_deadline, roundStatus: app.rounds.status, startsAt: app.dining_tables?.slots.starts_at, endsAt: app.dining_tables?.slots.ends_at, starts: slots.map((x) => x.starts_at), membership: isMembership(app.payments?.pass_type), keepAt: keepAt?.toISOString() ?? null }, t);
 
   return (
     <Screen title="내 신청" back="/rounds">
@@ -223,17 +227,17 @@ export default async function ApplicationDetail({ params, searchParams }: { para
           </Row>
         ))}
       </List>
-      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
-        <p className="mt-2 px-1 text-[13px] leading-relaxed text-muted">동네나 날짜를 바꾸려면 아래에서 신청을 취소하고 다시 신청해 주세요. 매칭 시각 전이라 결제한 금액은 그대로 돌려드려요.</p>
+      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && cancelBy > t && (
+        <p className="mt-2 px-1 text-[13px] leading-relaxed text-muted">동네나 날짜를 바꾸려면 아래에서 신청을 취소하고 다시 신청해 주세요. {fmtSlot(cancelBy.toISOString())}까지는 결제한 금액을 그대로 돌려드려요.</p>
       )}
 
-      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && new Date(app.rounds.match_at) > t && (
+      {app.application_status !== "CANCELED" && app.match_status === "WAITING" && cancelBy > t && (
         <div className="mt-8 text-center">
           <ConfirmSheet
             trigger={<button className="inline-flex h-11 items-center px-4 text-[15px] font-semibold text-danger underline underline-offset-4">신청 취소하기</button>}
             title="신청을 취소할까요?"
             body={paid
-              ? <>매칭 시각({fmtSlot(app.rounds.match_at)}) 전이라 결제한 금액은 전액 돌려드려요. 이용권으로 신청했다면 1회를 다시 쓸 수 있고, 멤버십은 기간 안에 다른 일정을 바로 신청할 수 있어요.</>
+              ? <>지금 취소하면 결제한 금액은 전액 돌려드려요({fmtSlot(cancelBy.toISOString())}까지). 이용권으로 신청했다면 1회를 다시 쓸 수 있고, 멤버십은 기간 안에 다른 일정을 바로 신청할 수 있어요.</>
               : <>아직 결제 전이라 빠져나간 돈은 없어요. 취소하면 이 신청만 닫히고, 마감 전이면 같은 일정을 다시 신청할 수 있어요.</>}
             confirmLabel="신청 취소하기"
             action={cancelApplication}

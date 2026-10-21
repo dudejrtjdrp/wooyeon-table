@@ -15,7 +15,7 @@ import { checkIn } from "./tables/[id]/actions";
 import { getMe } from "@/lib/auth";
 import { usablePass } from "@/lib/billing";
 import { now } from "@/lib/clock";
-import { PASSES } from "@/lib/constants";
+import { PASSES, isMembership } from "@/lib/constants";
 import { dday, ddayLabel, fmtDay, fmtDayClock, fmtSlot } from "@/lib/format";
 import { areasLabel } from "@/lib/regions";
 import { maybeTick } from "@/lib/pipeline";
@@ -32,6 +32,8 @@ type ActiveRow = {
   id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; resolution: string | null;
   table_id: string | null; areas: string[] | null; dates: string[] | null;
   rounds: { title: string; match_at: string; status?: string; apply_deadline?: string | null };
+  payments?: { pass_type: string | null } | null;
+  application_slots?: { slots: { starts_at: string } | null }[];
   dining_tables: { status?: string; slots: { starts_at: string; ends_at: string; region: string } | null; venues: { name: string; photo_url: string | null; category: string | null } | null } | null;
 };
 
@@ -52,7 +54,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at,status,apply_deadline),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at,status,apply_deadline),payments(pass_type),application_slots(slots(starts_at)),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
     .eq("user_id", me.id)
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .limit(10);
@@ -325,7 +327,7 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
   const others = members.filter((_, i) => memberIds[i] !== meId);
   const canCheckIn = Boolean(confirmed) && a.attendance_status === "SCHEDULED" && checkInOpen(new Date(slot!.starts_at), new Date(slot!.ends_at), t);
   const checkedIn = Boolean(confirmed) && a.attendance_status === "ATTENDED";
-  const step = nextStep({ ...a, matchAt: a.rounds.match_at, applyDeadline: a.rounds.apply_deadline, roundStatus: a.rounds.status, startsAt: slot?.starts_at, endsAt: slot?.ends_at }, t);
+  const step = nextStep({ ...a, matchAt: a.rounds.match_at, applyDeadline: a.rounds.apply_deadline, roundStatus: a.rounds.status, startsAt: slot?.starts_at, endsAt: slot?.ends_at, starts: (a.application_slots ?? []).flatMap((x) => (x.slots ? [x.slots.starts_at] : [])), membership: isMembership(a.payments?.pass_type) }, t);
   return (
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
       <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 분위기 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>

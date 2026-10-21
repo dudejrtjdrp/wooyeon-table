@@ -62,4 +62,16 @@ describe("nextStep", () => {
     expect(nextStep({ ...base, payment_status: "REFUNDED" }, at("2026-11-09T09:00:00+09:00"))).toBeNull();
     expect(nextStep({ ...base, match_status: "TRANSFERRED" }, at("2026-11-09T09:00:00+09:00"))).toBeNull();
   });
+  it("매칭 전 취소 약속은 환불 마감(모임 주 화요일 밤 12시)과 매칭 시각 중 이른 쪽까지만", () => {
+    // 매칭은 목요일 밤인데 금요일 모임의 환불 마감은 화요일 밤 12시
+    const late = { ...base, matchAt: "2026-11-13T00:00:00+09:00", starts: ["2026-11-13T19:30:00+09:00"] };
+    expect(nextStep(late, at("2026-11-09T12:00:00+09:00"))?.can).toContain("11월 10일(화) 밤 12시까지");
+    expect(nextStep(late, at("2026-11-11T12:00:00+09:00"))?.can).toMatch(/취소할 수 없어요/);
+  });
+  it("멤버십 매칭 실패는 보관·환불이 아니라 기간 연장과 넘기기", () => {
+    const s = nextStep({ ...base, match_status: "ALTERNATIVE_OFFERED", membership: true, keepAt: "2026-11-14T22:00:00+09:00" }, at("2026-11-11T01:00:00+09:00"));
+    expect(s?.next?.text).toMatch(/7일/);
+    expect(s?.next?.text).toMatch(/넘긴 것/);
+    expect(`${s?.next?.text}${s?.can}`).not.toMatch(/보관|환불/);
+  });
 });

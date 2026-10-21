@@ -73,7 +73,9 @@ export function remindNeed(app: AppState | null, table: TableState, now: Date): 
  * - 다른 방법 고르기 알림: 아직 매칭 실패 안내 상태이고 고른 게 없을 때만
  * - 그 밖에 /tables/<id>로 가는 예약인데 그 사람이 더는 그 테이블에 없으면 지운다
  */
-export function verdict(row: PendingRow, app: AppState | null, table: TableState, user: UserState, now: Date): Verdict {
+export const EDITED_STALE = "운영자가 고친 안내인데 그 뒤 테이블·식당·시간이 바뀌었어요. 지금 내용으로 다시 걸어요";
+
+export function verdict(row: PendingRow, app: AppState | null, table: TableState, user: UserState, now: Date, o: { contentChanged?: boolean } = {}): Verdict {
   if (user.gone) return { action: "cancel", why: "탈퇴한 회원이에요" };
   const { kind } = keyKind(row.dedupe_key);
   if (kind !== "other" && (!app || app.user_id !== row.user_id)) return { action: "cancel", why: "신청이 없어졌어요" };
@@ -82,6 +84,8 @@ export function verdict(row: PendingRow, app: AppState | null, table: TableState
     if (!need.ok) return { action: "cancel", why: need.why };
     const patch: { scheduled_at?: string; link?: string } = {};
     const link = `/tables/${app!.table_id}`;
+    // 운영자가 고친 문구는 그 테이블·식당·시각을 전제로 쓴 것이라, 그게 바뀌면 고친 예약을 거두고 새 안내를 건다(덮어쓰지는 않는다)
+    if (row.edited && (o.contentChanged || (row.link && row.link !== link))) return { action: "cancel", why: EDITED_STALE };
     if (row.link !== link) patch.link = link;
     const at = remindAt(table!.starts_at);
     // 이미 시각이 지났으면(확정이 하루 안에 난 경우) 그대로 둔다: 다음 tick에 바로 나간다
@@ -118,7 +122,7 @@ export function planSync(
   table: TableState,
   user: UserState,
   now: Date,
-  o: { remindSent?: boolean } = {},
+  o: { remindSent?: boolean; contentChanged?: boolean } = {},
 ): { cancel: { id: string; why: string }[]; update: { id: string; patch: { scheduled_at?: string; link?: string } }[]; needRemind: boolean } {
   const cancel: { id: string; why: string }[] = [];
   const update: { id: string; patch: { scheduled_at?: string; link?: string } }[] = [];
@@ -126,7 +130,7 @@ export function planSync(
   // 최근에 예약한 것부터 본다 (id 순서는 의미가 없어 scheduled_at이 같으면 입력 순서)
   const sorted = [...rows].sort((a, b) => (b.edited ? 1 : 0) - (a.edited ? 1 : 0) || Date.parse(b.scheduled_at) - Date.parse(a.scheduled_at));
   for (const r of sorted) {
-    const v = verdict(r, app, table, user, now);
+    const v = verdict(r, app, table, user, now, { contentChanged: o.contentChanged });
     const { kind } = keyKind(r.dedupe_key);
     if (v.action === "cancel") {
       cancel.push({ id: r.id, why: v.why });
@@ -173,7 +177,7 @@ export function checkScheduledEdit(o: { title: string; body: string; at: string 
 /** 참가자 '예정된 안내'에서 누르면 갈 곳: 바꾸거나 취소할 수 있는 화면 */
 export function scheduledTarget(row: { dedupe_key: string | null; link: string | null }): { href: string; cta: string } | null {
   const { kind, appId } = keyKind(row.dedupe_key);
-  if (kind === "remind" && appId) return { href: `/applications/${appId}`, cta: "일정 바꾸기·취소" };
+  if (kind === "remind" && appId) return { href: `/applications/${appId}`, cta: "신청 내용·취소 규정 보기" };
   if (kind === "payment_pending" && appId) return { href: row.link ?? `/pay/${appId}`, cta: "결제하기" };
   if (kind === "feedback_remind") return row.link ? { href: row.link, cta: "별점 남기기" } : null;
   if (kind === "alt_remind" && appId) return { href: `/applications/${appId}/resolve`, cta: "다음 방법 고르기" };

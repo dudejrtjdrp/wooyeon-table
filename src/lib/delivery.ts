@@ -208,7 +208,7 @@ export async function resendNotification(id: string, adminId: string): Promise<{
   const { data: before } = await db().from("notifications").select("status,sent_at,dedupe_key").eq("id", id).maybeSingle();
   if (!before) return { ok: false };
   const check = await staleOrFresh(id, before.dedupe_key);
-  // 이유가 사라진 알림은 보내지 않는다 (상태값은 pending·sent·failed뿐이라 그대로 두고 까닭만 알린다)
+  // 이유가 사라진 알림은 보내지 않는다 (이미 실패한 알림이라 상태는 failed로 두고 까닭만 알린다. 예약 취소 canceled는 scheduled.ts가 맡는다)
   if (check.skip) return { ok: false, skipped: check.skip };
   const { error } = await db()
     .from("notifications")

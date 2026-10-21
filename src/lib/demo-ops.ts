@@ -5,6 +5,7 @@ import { roundAccepting } from "./demo-panel";
 import { logStatus } from "./events";
 import { notify } from "./notify";
 import { passExpiresAt } from "./pass-expiry";
+import { refundCutoff } from "./policy";
 import { tick } from "./pipeline";
 import { kstDay, sidoOf } from "./regions";
 import { db } from "./supabase";
@@ -147,8 +148,14 @@ export function kstDatePlus(t: Date, days: number): string {
  */
 export async function createTourRound(adminId: string, base?: Date, label = "심사 시연"): Promise<string | null> {
   const t = base ?? (await now());
-  const dates = [kstDatePlus(t, 3), kstDatePlus(t, 4)];
-  const deadline = new Date(t.getTime() + 24 * 3600_000).toISOString();
+  // 환불 마감(모임 주 화요일 밤 12시)이 매칭보다 먼저 오면 '매칭 전엔 전액 환불'이 거짓이 된다.
+  // 두 날짜 모두 환불 마감이 12시간 넘게 남는 가장 이른 날을 고르고, 매칭은 하루 뒤와 환불 마감 중 이른 쪽
+  const at730 = (d: string) => new Date(`${d}T19:30:00+09:00`);
+  let k = 3;
+  while (k < 10 && [k, k + 1].some((x) => refundCutoff(at730(kstDatePlus(t, x))).getTime() < t.getTime() + 12 * 3600_000)) k++;
+  const dates = [kstDatePlus(t, k), kstDatePlus(t, k + 1)];
+  const cutoff = Math.min(...dates.map((d) => refundCutoff(at730(d)).getTime()));
+  const deadline = new Date(Math.min(t.getTime() + 24 * 3600_000, cutoff)).toISOString();
   // 날짜는 화면이 회차 이름 옆에 붙여 보여 준다(roundLabel)
   const title = `${label} 회차`;
   const { data: round } = await db().from("rounds").insert({ title, apply_deadline: deadline, match_at: deadline }).select("id").single();

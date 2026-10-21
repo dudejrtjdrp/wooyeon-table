@@ -109,7 +109,7 @@ export const label = (map: Record<string, [string, Tone]>, v: string | null | un
 const COMMON_VALUE: Record<string, string> = {
   SENT: "성공", FAILED: "실패", SUBMITTED: "제출", OFFERED: "제안", ACCEPTED: "수락", DECLINED: "거절", EXPIRED: "기한 지남", VOID: "무효",
   JOINED: "합류", REQUESTED: "요청", CONFIRMED: "확정", CANCELED: "취소", updated: "수정", created: "등록", true: "켬", false: "끔",
-  pending: "보내는 중", sent: "보냄", failed: "실패", full: "전체 권한", viewer: "조회 전용", reset: "초기화", uploaded: "올림",
+  pending: "예약됨", sent: "보냄", failed: "실패", canceled: "예약 취소", full: "전체 권한", viewer: "조회 전용", reset: "초기화", uploaded: "올림",
   open: "열림", reviewed: "검토 끝", resolved: "처리됨",
   // 식당 지우기(venues/actions.ts deleteVenue)
   deleted: "지움", active: "배정함", inactive: "쉬는 중",

@@ -2,7 +2,7 @@
 // 취소는 status 'canceled'로 남긴다(마이그레이션 0013). 아직 운영 DB에 적용 전이면 지우고, 어느 쪽이든 status_events에 원래 제목·키·사유를 남긴다.
 import { now } from "./clock";
 import { logStatus } from "./events";
-import { type AppState, type PendingRow, type TableState, keyKind, planSync, remindAt, remindNeed, verdict } from "./scheduled-rules";
+import { EDITED_STALE, type AppState, type PendingRow, type TableState, keyKind, planSync, remindAt, remindNeed, verdict } from "./scheduled-rules";
 import { db } from "./supabase";
 import { loadTemplates, render, slotVars } from "./templates";
 
@@ -16,10 +16,20 @@ async function editedIds(ids: string[]): Promise<Set<string>> {
   return new Set((data ?? []).map((x) => String(x.entity_id)));
 }
 
-/** 이 신청의 하루 전 안내를 운영자가 직접 취소한 적이 있는지 */
-async function adminCanceledRemind(appId: string): Promise<boolean> {
-  const { data } = await db().from("status_events").select("id").eq("entity_type", "notification").eq("to_value", "canceled").like("actor", "admin:%").like("reason", `%(remind:${appId}%`).limit(1);
-  return Boolean(data?.length);
+/**
+ * 이 신청의 하루 전 안내를 운영자가 '예약 취소'로 직접 거둔 적이 있는지. 같은 테이블일 때만 막는다
+ * (다른 테이블로 옮기면 새 안내가 필요하다). 키에 테이블이 없던 첫 안내는 그 알림의 링크로 테이블을 본다
+ */
+async function adminCanceledRemind(appId: string, tableId: string): Promise<boolean> {
+  const { data } = await db().from("status_events").select("entity_id,reason").eq("entity_type", "notification").eq("to_value", "canceled").like("reason", `[운영자 취소]%(remind:${appId}%`);
+  for (const e of data ?? []) {
+    const m = new RegExp(`\\(remind:${appId}(?::([0-9a-f-]{36}))?\\)`).exec(String(e.reason));
+    if (!m) continue;
+    if (m[1]) { if (m[1] === tableId) return true; continue; }
+    const { data: n } = await db().from("notifications").select("link").eq("id", e.entity_id).maybeSingle();
+    if (!n || n.link === `/tables/${tableId}`) return true; // 행이 지워졌으면(0013 전) 알 수 없으니 다시 걸지 않는다
+  }
+  return false;
 }
 
 /** 예약 한 건 취소. 이미 나갔거나 취소됐으면 false */
@@ -62,14 +72,14 @@ const tableState = (t: { id: string; status: string; slots: { starts_at: string 
  * - 하루 전 안내가 있어야 하는데 없으면 새로 건다(빈자리 합류·대기자 수락처럼 확정 뒤 들어온 사람)
  * 실패해도 원래 작업을 막지 않도록 부르는 쪽에서 catch한다. 보내기 직전 tick이 한 번 더 같은 규칙으로 본다.
  */
-export async function syncScheduled(appIds: string[], actor: string, reason: string): Promise<{ canceled: number; updated: number; created: number }> {
+export async function syncScheduled(appIds: string[], actor: string, reason: string, o: { contentChanged?: boolean } = {}): Promise<{ canceled: number; updated: number; created: number }> {
   const ids = [...new Set(appIds.filter(Boolean))];
   const res = { canceled: 0, updated: 0, created: 0 };
   if (!ids.length) return res;
   // 회차 취소처럼 많을 때는 20건씩 (조회 주소가 너무 길어지지 않게)
   if (ids.length > 20) {
     for (let i = 0; i < ids.length; i += 20) {
-      const r = await syncScheduled(ids.slice(i, i + 20), actor, reason);
+      const r = await syncScheduled(ids.slice(i, i + 20), actor, reason, o);
       res.canceled += r.canceled;
       res.updated += r.updated;
       res.created += r.created;
@@ -102,7 +112,7 @@ export async function syncScheduled(appIds: string[], actor: string, reason: str
     const app = appMap.get(appId) ?? null;
     const tb = app?.table_id ? tableMap.get(app.table_id) : undefined;
     const mine = rows.filter((r) => keyKind(r.dedupe_key).appId === appId).map((r) => ({ ...r, edited: edited.has(r.id) }));
-    const plan = planSync(mine, app, tableState(tb), { gone: app ? gone.has(app.user_id) : false }, t, { remindSent: sentFor.has(appId) });
+    const plan = planSync(mine, app, tableState(tb), { gone: app ? gone.has(app.user_id) : false }, t, { remindSent: sentFor.has(appId), contentChanged: o.contentChanged });
     for (const c of plan.cancel) {
       const r = mine.find((x) => x.id === c.id)!;
       if (await cancelScheduled(r, actor, `${c.why} (${reason})`)) res.canceled++;
@@ -122,7 +132,7 @@ export async function syncScheduled(appIds: string[], actor: string, reason: str
       }
     }
     // 운영자가 직접 취소한 하루 전 안내는 다시 걸지 않는다 (취소하면 dedupe_key가 비어 중복 검사로는 못 막는다)
-    const adminCanceled = plan.needRemind && app ? await adminCanceledRemind(appId) : false;
+    const adminCanceled = plan.needRemind && app && tb ? await adminCanceledRemind(appId, tb.id) : false;
     if (plan.needRemind && app && tb && !adminCanceled) {
       tpl ??= await loadTemplates();
       const m = render("reminder", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "식당은 모임 정보에서", reservation: tb.reservation_name ?? "" }, tpl);
@@ -136,13 +146,13 @@ export async function syncScheduled(appIds: string[], actor: string, reason: str
 }
 
 /** 테이블 하나가 바뀌었을 때(식당·시간·해제): 지금 앉은 사람 + 이 테이블로 예약이 걸린 사람 모두 맞춘다 */
-export async function syncTable(tableId: string, actor: string, reason: string) {
+export async function syncTable(tableId: string, actor: string, reason: string, o: { contentChanged?: boolean } = {}) {
   const [{ data: sitting }, { data: linked }] = await Promise.all([
     db().from("applications").select("id").eq("table_id", tableId),
     db().from("notifications").select("dedupe_key").eq("status", "pending").like("link", `/tables/${tableId}%`),
   ]);
   const ids = [...(sitting ?? []).map((a) => a.id), ...(linked ?? []).map((n) => keyKind(n.dedupe_key).appId).filter(Boolean)] as string[];
-  return syncScheduled(ids, actor, reason);
+  return syncScheduled(ids, actor, reason, o);
 }
 
 /** 한 사람의 예약을 모두 맞춘다(탈퇴·계정 제한) */
@@ -173,9 +183,11 @@ export async function checkBeforeSend(n: { id: string; dedupe_key: string | null
   if (!row) return { skip: "알림을 찾지 못했어요" };
   const app = appMap.get(appId) ?? null;
   const tb = app?.table_id ? tableMap.get(app.table_id) : undefined;
-  const edited = (await editedIds([n.id])).has(n.id);
+  let edited = (await editedIds([n.id])).has(n.id);
   const v = verdict({ ...(row as Row), edited }, app, tableState(tb), { gone: app ? gone.has(app.user_id) : false }, t);
-  if (v.action === "cancel") return { skip: v.why };
+  // 운영자가 고친 문구가 옛 테이블 기준이면, 보내기 직전엔 거두는 대신 지금 내용으로 바꿔 보낸다(다시 걸 기회가 없으므로)
+  if (v.action === "cancel" && v.why === EDITED_STALE) edited = false;
+  else if (v.action === "cancel") return { skip: v.why };
   if (kind === "remind" && tb) {
     // 같은 신청에 하루 전 안내가 이미 나갔으면 다시 보내지 않는다
     const { data: dup } = await db().from("notifications").select("id").like("dedupe_key", `remind:${appId}%`).eq("status", "sent").neq("id", n.id).limit(1);

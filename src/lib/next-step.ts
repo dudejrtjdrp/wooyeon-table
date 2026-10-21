@@ -2,6 +2,7 @@
 // 홈 카드와 신청 상세가 같은 문장을 쓴다. DB 없이 계산만 한다 (next-step.test.ts)
 import { CHECKIN_OPEN_BEFORE } from "./attendance-rules";
 import { fmtSlot } from "./format";
+import { beforeMatchCutoff } from "./cancel-rules";
 import { refundCutoff } from "./policy";
 
 export type NextInput = {
@@ -18,6 +19,12 @@ export type NextInput = {
   /** 확정된 테이블의 모임 시각 */
   startsAt?: string | null;
   endsAt?: string | null;
+  /** 고른 일정들의 시작 시각 (매칭 전 취소 마감 = 매칭 시각과 환불 마감 중 이른 쪽) */
+  starts?: string[];
+  /** 멤버십으로 낸 신청. 매칭 실패 때 보관·환불 대신 기간 연장 */
+  membership?: boolean;
+  /** 매칭 실패 뒤 고르지 않으면 정리되는 시각 */
+  keepAt?: string | null;
 };
 
 export type NextStep = {
@@ -50,11 +57,16 @@ export function nextStep(a: NextInput, t: Date): NextStep | null {
     case "WAITING":
     case "MATCHING":
       if (a.roundStatus && a.roundStatus !== "open" && a.roundStatus !== "matching") return null;
-      if (matchAt > t)
+      if (matchAt > t) {
+        const cut = beforeMatchCutoff(a.matchAt, a.starts ?? []);
+        const refund = a.membership ? "횟수 차감 없이 취소돼요" : "전액 돌려드려요";
         return {
           next: { when: fmtSlot(a.matchAt), text: "에 신청한 분들을 한 번에 4~6명 테이블로 나눠요. 인원이 먼저 찬다고 일찍 열리지 않아요. 정해지면 바로 알림이 가고, 식당·주소와 단체방도 그때 함께 열려요." },
-          can: "그 전까지는 신청을 취소하면 전액 돌려드려요. 동네나 날짜를 바꾸려면 취소하고 다시 신청해 주세요.",
+          can: cut > t
+            ? `${fmtSlot(cut.toISOString())}까지는 신청을 취소하면 ${refund}. 동네나 날짜를 바꾸려면 취소하고 다시 신청해 주세요.`
+            : "환불 마감(모임 주 화요일 밤 12시)이 지나 이제는 신청을 취소할 수 없어요. 결과가 나오면 바로 알려 드려요.",
         };
+      }
       return {
         next: { when: null, text: "테이블을 다 꾸리면 바로 알림을 보내 드려요. 식당·주소와 단체방도 그때 함께 열려요." },
         can: IDLE,
@@ -65,13 +77,19 @@ export function nextStep(a: NextInput, t: Date): NextStep | null {
         can: IDLE,
       };
     case "ALTERNATIVE_OFFERED":
+      if (a.membership) {
+        const by = a.keepAt ? `${fmtSlot(a.keepAt)}까지` : "안내를 받은 뒤 3일 안에";
+        return a.resolution === "wait"
+          ? { next: { when: null, text: "고른 일정에 자리가 나면 알림으로 먼저 여쭤봐요. 끝내 자리가 없으면 이번 일정은 넘긴 것으로 할게요. 멤버십 기간은 7일 늘려 드렸어요." }, can: "기다리지 않고 빈자리에 앉거나 다른 일정으로 옮길 수 있어요." }
+          : { next: { when: null, text: `${by} 고르지 않으면 이번 일정은 넘긴 것으로 할게요. 멤버십 기간은 7일 늘려 드렸어요.` }, can: "빈자리에 앉거나 다른 일정으로 옮기거나, 이번은 넘기고 다음에 신청해 주세요." };
+      }
       if (a.resolution === "wait")
         return {
           next: { when: null, text: "고른 일정에 자리가 나면 알림으로 먼저 여쭤봐요. 끝내 자리가 없으면 이용권으로 보관해 드려요." },
           can: "기다리지 않고 다른 방법(일정 옮기기·보관·환불)으로 바꿀 수 있어요.",
         };
       return {
-        next: { when: null, text: "안내를 받은 뒤 3일 안에 고르지 않으면 이용권으로 보관해 드려요. 빠져나가는 돈은 없어요." },
+        next: { when: null, text: `${a.keepAt ? `${fmtSlot(a.keepAt)}까지` : "안내를 받은 뒤 3일 안에"} 고르지 않으면 이용권으로 보관해 드려요. 빠져나가는 돈은 없어요.` },
         can: "다른 일정으로 옮기기·이용권 보관·환불 중에 골라 주세요. 옮기면 다시 결제하지 않아요.",
       };
     case "CONFIRMED":

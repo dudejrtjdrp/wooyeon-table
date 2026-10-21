@@ -152,7 +152,7 @@ export async function runRound(roundId: string, actor = "system", opts: { resume
     }
 
     // 2. 대상 불러오기: 제출 + 결제 완료 + 매칭 대기
-    const { data: slotRows, error: slotErr } = await db().from("slots").select("id,region,sido,starts_at,max_tables").eq("round_id", roundId);
+    const { data: slotRows, error: slotErr } = await db().from("slots").select("id,region,sido,starts_at,max_tables").eq("round_id", roundId).order("starts_at").order("id"); // 같은 입력이면 같은 결과: 일정 순서를 고정한다
     if (slotErr) throw new Error(`일정 조회 실패: ${slotErr.message}`);
     const slots: Slot[] = (slotRows ?? []).map((s) => ({ id: s.id, region: s.region, startsAt: s.starts_at, maxTables: s.max_tables }));
     const slotMap = new Map(slots.map((s) => [s.id, s]));

@@ -43,9 +43,9 @@ async function origin() {
   return `${proto}://${host}`;
 }
 
-export default async function Tour({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
+export default async function Tour({ searchParams }: { searchParams: Promise<{ m?: string; e?: string; t?: string }> }) {
   const me = await requireAdmin();
-  const { m } = await searchParams;
+  const { m, e, t: nonce } = await searchParams;
   const [{ t, cur, next, paid, step }, h, base] = await Promise.all([tourSnapshot(), tourHuman(), origin()]);
   const idx = TOUR_ORDER.indexOf(step);
   const apps = cur?.apps ?? [];
@@ -97,7 +97,7 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
   const viewer = me.level === "viewer";
   const phoneUrl = `${base}/tour`;
   // 렌더마다 새로 붙는 키: 같은 단계라도 결과 메시지가 바뀌면 진행 모달을 닫는다
-  const runKey = `${step}:${m ?? ""}`;
+  const runKey = `${step}:${m ?? e ?? ""}:${nonce ?? ""}`;
 
   return (
     <div className="mx-auto max-w-[880px]">
@@ -146,6 +146,7 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
       <p className="mt-4 rounded-xl bg-field px-4 py-2.5 text-[13px] text-muted">지금 시각 {fmtDateTime(t.toISOString())} · 버튼이 시연용 가상 시계를 앞으로 옮겨요. 시계는 서비스 전체가 같이 쓰므로 다른 회차의 시간 일정도 함께 처리돼요. 회원 신청·결제를 지우지는 않아요.</p>
 
       {m && <p role="status" className="mt-4 rounded-xl bg-leaf-soft px-4 py-3 text-[15px] font-semibold text-leaf">{m}</p>}
+      {e && <p role="alert" className="mt-4 rounded-xl bg-danger/10 px-4 py-3 text-[15px] font-semibold text-danger">{e}</p>}
 
       <div className="mt-6 flex items-center gap-3" aria-label={`전체 ${steps.length}단계 중 ${Math.min(idx, steps.length)}단계 끝`}>
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-field"><div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(Math.min(idx, steps.length) / steps.length) * 100}%` }} /></div>
