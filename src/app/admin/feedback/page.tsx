@@ -71,7 +71,7 @@ export default async function Feedback({ searchParams }: { searchParams: Promise
             누가 누구를 골랐는지는 고른 사람과 운영자만 알아요. 상대 참가자 화면 어디에도 나오지 않아요.
             &lsquo;다시는 싫어요&rsquo;는 다음 매칭에서 같은 테이블에 앉지 않게 하고, &lsquo;또 만나고 싶어요&rsquo;는 점수를 조금 더해요.
           </p>
-          <Link href={`/admin/feedback/person${round ? `?r=${round.id}` : ""}`} className="mt-2 inline-flex min-h-11 items-center text-[14px] font-semibold text-accent hover:underline">사람별로 누가 누구를 골랐는지 보기</Link>
+          <Link href={`/admin/feedback/person${round ? `?r=${round.id}` : ""}`} className="mt-2 inline-flex min-h-11 items-center text-[14px] font-semibold text-accent hover:underline">한 사람씩 선호·차단·신고가 다음 매칭에 어떻게 쓰이는지 보기</Link>
         </Panel>
         <Panel title="남긴 한마디" action={<span className="text-[13px] text-muted">{comments.length}개</span>}>
           <ul className="space-y-2 text-[14px]">

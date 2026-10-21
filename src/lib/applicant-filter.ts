@@ -130,3 +130,12 @@ export function describeApplicantFilter(f: ApplicantFilter, roundTitle?: string)
   if (f.q) parts.push(`검색 '${f.q}'`);
   return parts.length ? parts.join(" · ") : "조건 없음(전체)";
 }
+
+/**
+ * 신청자 표 '다른 회차 참석·노쇼' 칸. 숫자에 단위를 붙이고 노쇼가 있으면 경고로 (예: 참석 3회 · 노쇼 1회).
+ * 둘 다 0이면 첫 신청
+ */
+export function pastAttendance(h: Pick<ApplicantHistory, "attended" | "noShows">): { first: boolean; attended: string; noShows: string | null; warn: boolean } {
+  if (!h.attended && !h.noShows) return { first: true, attended: "첫 신청", noShows: null, warn: false };
+  return { first: false, attended: `참석 ${h.attended}회`, noShows: h.noShows ? `노쇼 ${h.noShows}회` : null, warn: h.noShows > 0 };
+}

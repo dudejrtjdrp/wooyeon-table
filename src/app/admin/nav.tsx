@@ -27,7 +27,7 @@ const GROUPS: { name: string; items: Item[] }[] = [
     { href: "/admin/feedback", label: "피드백·안전", icon: ShieldCheck, hint: "만족도·후기, 안전 신고, 사람별 선호·차단을 탭으로 나눠 봐요", subs: [
       { href: "/admin/feedback", label: "만족도·후기" },
       { href: "/admin/feedback/reports", label: "안전 신고" },
-      { href: "/admin/feedback/person", label: "사람별 보기" },
+      { href: "/admin/feedback/person", label: "사람별 매칭 반영" },
     ] },
   ] },
   { name: "다음 회차 준비", items: [

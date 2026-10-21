@@ -41,8 +41,8 @@ export default async function PersonView({ searchParams }: { searchParams: Promi
       <FeedbackHeader
         current="/admin/feedback/person"
         r={r}
-        desc="한 사람이 고른 '또 만나고 싶어요'·'다시는 싫어요'와 이 사람을 고른 사람, 차단·신고를 한곳에서 봐요."
-        how={["이름이나 연락처 뒤 4자리로 찾기", "고른 사람과 이 사람을 고른 사람 보기", "신고 조치는 예외 처리함에서"]}
+        desc="한 사람의 선호·차단·신고가 다음 자동 매칭에서 누구와 떨어뜨리고 누구를 가깝게 두는지 확인하는 화면이에요."
+        how={["이름이나 연락처 뒤 4자리로 사람 찾기", "피하는 사이·만나고 싶은 사이와 매칭 반영 방식 보기", "잘못 닫은 신고는 다시 열기"]}
       />
       <form className="mt-6 flex flex-wrap gap-2" role="search" aria-label="사람 찾기">
         {r && <input type="hidden" name="r" value={r} />}
@@ -53,7 +53,7 @@ export default async function PersonView({ searchParams }: { searchParams: Promi
       {personId ? (
         person ? (
           <div className="mt-4">
-            <p className="mb-3 text-[15px]"><Link href={`/admin/members/${person.id}`} className="font-bold text-ink hover:text-accent">{person.name}님</Link><span className="text-muted">이 고르고 받은 것</span></p>
+            <p className="mb-3 text-[15px]"><Link href={`/admin/members/${person.id}`} className="font-bold text-ink hover:text-accent">{person.name}님</Link><span className="text-muted">의 관계가 다음 매칭에 쓰이는 방식</span></p>
             <PersonSafety userId={person.id} back={back} canWrite={me.level === "full"} />
           </div>
         ) : <p className="mt-3 text-[14px] text-muted">회원을 찾지 못했어요.</p>
@@ -69,7 +69,16 @@ export default async function PersonView({ searchParams }: { searchParams: Promi
           {!people.length && <li className="py-4 text-[14px] text-muted">맞는 회원이 없어요. 두 글자 이상이나 연락처 뒤 4자리로 찾아 주세요.</li>}
         </ul>
       ) : (
-        <p className="mt-3 text-[14px] text-muted">찾은 사람이 고르고 받은 &lsquo;또 만나고 싶어요&rsquo;·&lsquo;다시는 싫어요&rsquo;, 차단, 신고를 한 번에 봐요. 안전 신고 탭에서 이름을 눌러도 돼요.</p>
+        <div className="mt-3 rounded-[20px] bg-card p-5 text-[14px] text-ink2 shadow-card">
+          <p className="font-semibold text-ink">먼저 사람을 찾아 주세요</p>
+          <p className="mt-1 text-muted">고르면 이런 걸 바로 볼 수 있어요. 안전 신고 탭에서 이름을 눌러도 여기로 와요.</p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            <li className="rounded-xl bg-paper px-3 py-2"><span className="font-semibold text-ink">이 사람이 피하고 싶은 사람</span> · 다음 매칭에서 반드시 떨어뜨려요</li>
+            <li className="rounded-xl bg-paper px-3 py-2"><span className="font-semibold text-ink">이 사람을 피하고 싶은 사람</span> · 다음 매칭에서 반드시 떨어뜨려요</li>
+            <li className="rounded-xl bg-paper px-3 py-2"><span className="font-semibold text-ink">다시 만나고 싶은 사람</span> · 점수에만 조금 더해요</li>
+            <li className="rounded-xl bg-paper px-3 py-2"><span className="font-semibold text-ink">이미 같이 앉은 사람</span> · 되도록 떨어뜨려요</li>
+          </ul>
+        </div>
       )}
     </div>
   );

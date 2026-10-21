@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { type ApplicantLike, applicantDbFilter, applicantFiltered, applicantMatches, applicantSearch, describeApplicantFilter, parseApplicantFilter } from "./applicant-filter";
+import { type ApplicantLike, applicantDbFilter, applicantFiltered, applicantMatches, applicantSearch, describeApplicantFilter, parseApplicantFilter, pastAttendance } from "./applicant-filter";
+
+describe("다른 회차 참석·노쇼 칸 (pastAttendance)", () => {
+  it("숫자에 단위를 붙이고 노쇼가 있으면 경고", () => {
+    expect(pastAttendance({ attended: 3, noShows: 1 })).toEqual({ first: false, attended: "참석 3회", noShows: "노쇼 1회", warn: true });
+    expect(pastAttendance({ attended: 2, noShows: 0 })).toEqual({ first: false, attended: "참석 2회", noShows: null, warn: false });
+    expect(pastAttendance({ attended: 0, noShows: 2 })).toEqual({ first: false, attended: "참석 0회", noShows: "노쇼 2회", warn: true });
+  });
+  it("기록이 없으면 첫 신청", () => {
+    expect(pastAttendance({ attended: 0, noShows: 0 })).toMatchObject({ first: true, attended: "첫 신청", warn: false });
+  });
+});
 
 const R = "11111111-2222-4333-8444-555555555555";
 const base: ApplicantLike = {
