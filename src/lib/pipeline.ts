@@ -318,34 +318,18 @@ export async function tick() {
 
   // 2. 예약된 알림 발송 (INF-07, INF-08)
   const tpl = await loadTemplates();
-  const { data: pending } = await db().from("notifications").select("id,attempts,dedupe_key").eq("status", "pending").lte("scheduled_at", iso).limit(200);
+  const { data: pending } = await db().from("notifications").select("id,title,attempts,dedupe_key").eq("status", "pending").lte("scheduled_at", iso).limit(200);
   const sentNow: string[] = [];
   for (const n of pending ?? []) {
-    // 보낼 때가 됐어도 이유가 사라진 알림은 보내지 않는다 (이미 결제함, 이미 후기 남김)
-    const key = n.dedupe_key ?? "";
-    if (key.startsWith("payment_pending:")) {
-      const { data: a } = await db().from("applications").select("payment_status,application_status").eq("id", key.split(":")[1]).maybeSingle();
-      if (!a || a.application_status === "CANCELED" || !["PENDING", "FAILED"].includes(a.payment_status)) {
-        await db().from("notifications").delete().eq("id", n.id);
-        continue;
-      }
+    // 보낼 때가 됐어도 이유가 사라진 알림은 보내지 않는다(취소·해제·이미 결제·이미 후기). 하루 전 안내는 지금 식당·예약명·테이블로 다시 쓴다
+    // 판단은 lib/scheduled-rules.ts, 운영자가 고친 예약은 문구를 덮어쓰지 않는다
+    const { checkBeforeSend, cancelScheduled } = await import("./scheduled");
+    const chk = await checkBeforeSend(n, tpl).catch(() => ({}) as { skip?: string; patch?: Record<string, string> });
+    if (chk.skip) {
+      await cancelScheduled({ id: n.id, title: n.title, dedupe_key: n.dedupe_key }, "system", `보내기 직전 확인: ${chk.skip}`);
+      continue;
     }
-    // 하루 전 리마인드는 보내는 순간의 식당·예약명·테이블로 다시 쓴다 (식당이 나중에 정해지거나 테이블을 옮긴 경우)
-    let fresh: { title: string; body: string; link: string } | null = null;
-    if (key.startsWith("remind:")) {
-      fresh = await freshReminder(n.id, key, tpl);
-      if (!fresh) {
-        await db().from("notifications").delete().eq("id", n.id);
-        continue;
-      }
-    }
-    if (key.startsWith("feedback-remind:")) {
-      const { data: f } = await db().from("feedbacks").select("application_id").eq("application_id", key.split(":")[1]).maybeSingle();
-      if (f) {
-        await db().from("notifications").delete().eq("id", n.id);
-        continue;
-      }
-    }
+    const fresh = chk.patch ?? null;
     const { data: up, error } = await db().from("notifications").update({ status: "sent", sent_at: iso, ...(fresh ?? {}) }).eq("id", n.id).eq("status", "pending").select("id");
     if (up?.length) sentNow.push(n.id);
     if (error) {

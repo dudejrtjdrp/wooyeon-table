@@ -42,6 +42,7 @@ export default async function Messages({ searchParams }: { searchParams: Promise
   if (who) q = q.in("user_id", who.length ? who.map((x) => x.id) : ["00000000-0000-0000-0000-000000000000"]);
   if (f.tpl) q = q.eq("template", f.tpl);
   if (f.st === "pending") q = q.eq("status", "pending");
+  if (f.st === "canceled") q = q.eq("status", "canceled");
   if (f.st === "sent") q = q.eq("status", "sent").or('last_error.is.null,last_error.not.like."푸시 실패*"');
   if (f.st === "failed") q = q.or('status.eq.failed,and(status.eq.sent,last_error.like."푸시 실패*")');
   if (since) q = q.gte("scheduled_at", since);
@@ -53,6 +54,10 @@ export default async function Messages({ searchParams }: { searchParams: Promise
     head().eq("status", "pending"),
     head().or('status.eq.failed,and(status.eq.sent,last_error.like."푸시 실패*")'),
   ]);
+  // 취소된 예약: 상태값 적용 전 DB에선 행이 지워지므로 변경 이력(status_events)에서 함께 보여 준다
+  const { data: canceledLog } = f.st === "canceled"
+    ? await db().from("status_events").select("id,entity_id,actor,reason,created_at").eq("entity_type", "notification").eq("field", "status").eq("to_value", "canceled").order("created_at", { ascending: false }).limit(50)
+    : { data: null };
   const rows = (log ?? []) as unknown as { id: string; template: string; title: string; status: string; attempts: number; last_error: string | null; scheduled_at: string; sent_at: string | null; users: { name: string } | null }[];
   const pages = pageCount(total ?? 0);
   const filtered = Boolean(f.q || f.tpl || f.st || f.from || f.to);
@@ -64,11 +69,11 @@ export default async function Messages({ searchParams }: { searchParams: Promise
         current="/admin/messages"
         failed={nFailed ?? 0}
         desc="자동 안내가 언제 누구에게 나갔는지 봐요. 실패하면 세 번까지 다시 보내고, 그래도 안 되면 예외 처리함에 올라와요."
-        how={["'실패' 숫자를 눌러 안 나간 알림만 보기", "'다시 보내기'로 한 건씩 다시 보내기", "문구는 '문구 템플릿' 탭에서 고치기"]}
+        how={["'실패' 숫자를 눌러 안 나간 알림만 보기", "'다시 보내기'로 한 건씩 다시 보내기", "'예약됨'을 눌러 아직 안 나간 알림의 문구·시각 고치기, 취소하기", "문구는 '문구 템플릿' 탭에서 고치기"]}
       />
       <div className="mt-5 grid grid-cols-3 gap-3">
         <Stat label="보냄" value={nSent ?? 0} tone="leaf" />
-        <Stat label="예약됨" value={nPending ?? 0} />
+        <Link href="/admin/messages?st=pending#log" className="block"><Stat label="예약됨" value={nPending ?? 0} sub={nPending ? "눌러서 고치기·취소" : undefined} /></Link>
         <Link href="/admin/messages?st=failed#log" className="block"><Stat label="실패" value={nFailed ?? 0} tone={nFailed ? "danger" : undefined} sub={nFailed ? "눌러서 다시 보내기" : undefined} /></Link>
       </div>
 
@@ -108,10 +113,11 @@ export default async function Messages({ searchParams }: { searchParams: Promise
                   <td className={`${td} text-muted`}>{fmtDateTime(n.sent_at ?? n.scheduled_at)}</td>
                   <td className={td}>{n.users?.name ?? "-"}</td>
                   <td className={td}>{kindLabel(n.template)}</td>
-                  <td className={td}>{n.title}</td>
-                  <td className={td}><Badge v={failed ? [n.status === "failed" ? "실패" : "푸시 실패", "danger"] : n.status === "sent" ? ["보냄", "leaf"] : ["예약", "muted"]} /></td>
+                  <td className={td}>{n.status === "pending" || n.status === "canceled" ? <Link href={`/admin/messages/scheduled/${n.id}`} className="text-accent hover:underline">{n.title}</Link> : n.title}</td>
+                  <td className={td}><Badge v={failed ? [n.status === "failed" ? "실패" : "푸시 실패", "danger"] : n.status === "sent" ? ["보냄", "leaf"] : n.status === "canceled" ? ["예약 취소", "ink"] : ["예약", "muted"]} /></td>
                   <td className={`${td} text-muted`}>{n.attempts ? `${n.attempts}회${n.last_error ? `, ${n.last_error.slice(0, 30)}` : ""}` : "-"}</td>
                   <td className={td}>
+                    {n.status === "pending" && !ro && <Link href={`/admin/messages/scheduled/${n.id}`} className={`${btnLight} h-9 px-3 text-[13px]`}>고치기·취소</Link>}
                     {failed && !ro && (
                       <form action={resendNotice}>
                         <input type="hidden" name="id" value={n.id} />
@@ -139,6 +145,25 @@ export default async function Messages({ searchParams }: { searchParams: Promise
           </div>
         )}
       </TableScroll>
+      {canceledLog && (
+        <section className="shadow-card mt-4 rounded-[20px] bg-card p-5">
+          <h3 className="text-[15px] font-semibold text-ink">예약 취소 기록</h3>
+          <p className="mt-1 text-[13px] text-muted">운영자가 취소했거나, 참석 취소·테이블 해제·이동처럼 상황이 바뀌어 자동으로 거둔 예약이에요. 최근 50건.</p>
+          {canceledLog.length ? (
+            <ul className="mt-3 divide-y divide-line text-[14px]">
+              {canceledLog.map((e) => (
+                <li key={e.id} className="flex flex-wrap gap-x-3 gap-y-0.5 py-2.5">
+                  <span className="shrink-0 text-muted">{fmtDateTime(e.created_at)}</span>
+                  <span className="shrink-0">{e.actor.startsWith("admin:") ? "운영자" : e.actor === "system" ? "자동" : "참가자"}</span>
+                  <span className="min-w-0 flex-1 break-keep [overflow-wrap:anywhere]">{e.reason}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-[14px] text-muted">아직 취소된 예약이 없어요.</p>
+          )}
+        </section>
+      )}
 
     </div>
   );

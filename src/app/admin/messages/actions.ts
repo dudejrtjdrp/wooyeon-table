@@ -10,6 +10,10 @@ import { cleanNotice, isFailedNotice, noticeKey, noticeLink, noticeSendCheck, pa
 import { notify } from "@/lib/notify";
 import { db } from "@/lib/supabase";
 import { TEMPLATES, loadTemplates, render } from "@/lib/templates";
+import { now } from "@/lib/clock";
+import { fromKstInput } from "@/lib/round-rules";
+import { cancelScheduled } from "@/lib/scheduled";
+import { checkScheduledEdit } from "@/lib/scheduled-rules";
 import { loadNoticeTarget } from "./notice-data";
 
 export async function saveTemplate(form: FormData) {
@@ -100,4 +104,52 @@ export async function sendAnnouncement(form: FormData) {
     reason: `${target.label}에게 공지: ${text.title} · ${text.body}${skipped ? ` (이미 받은 ${skipped}명 뺌)` : ""}`,
   });
   return go(back, "m", `${target.label} ${todo.length}명에게 공지를 보냈어요${skipped ? `. 이미 받은 ${skipped}명은 뺐어요` : ""}`);
+}
+
+/** 예약된 알림(아직 안 나감) 고치기: 제목·본문·보낼 시각. 사유와 함께 status_events에 이전 값을 남긴다 */
+export async function editScheduled(form: FormData) {
+  const id = String(form.get("id") ?? "");
+  const back = `/admin/messages/scheduled/${id}`;
+  const admin = await requireAdminWrite(back);
+  const { data: n } = await db().from("notifications").select("id,title,body,scheduled_at,status,link,dedupe_key").eq("id", id).maybeSingle();
+  if (!n) return go("/admin/messages?st=pending#log", "e", "알림을 찾지 못했어요");
+  if (n.status !== "pending") return go(back, "e", "이미 나갔거나 취소된 알림이라 고칠 수 없어요");
+  const startsAt = await scheduledStartsAt(n.link);
+  const chk = checkScheduledEdit({ title: String(form.get("title") ?? ""), body: String(form.get("body") ?? ""), at: fromKstInput(String(form.get("at") ?? "")), reason: String(form.get("reason") ?? ""), now: await now(), startsAt });
+  if (!chk.ok) return go(back, "e", chk.message);
+  if (chk.title === n.title && chk.body === n.body && Math.abs(Date.parse(chk.at) - Date.parse(n.scheduled_at)) < 60_000) return go(back, "m", "바뀐 것이 없어요");
+  // 조건부: 그 사이 발송됐으면 고치지 않는다
+  const { data: up } = await db().from("notifications").update({ title: chk.title, body: chk.body, scheduled_at: chk.at }).eq("id", id).eq("status", "pending").select("id");
+  if (!up?.length) return go(back, "e", "그 사이 알림이 나갔어요. 고치지 못했어요");
+  await logStatus({
+    entityType: "notification", entityId: id, field: "scheduled_edit",
+    from: JSON.stringify({ title: n.title, body: n.body, scheduled_at: n.scheduled_at }),
+    to: JSON.stringify({ title: chk.title, body: chk.body, scheduled_at: chk.at }),
+    actor: `admin:${admin.id}`, reason: `[운영자 예약 수정] ${chk.reason}`,
+  });
+  return go(back, "m", "예약을 고쳤어요. 보낼 때 이 문구 그대로 나가요");
+}
+
+/** 예약된 알림 취소. 사유를 받고, 지우지 않고 '취소'로 남긴다(상태값 적용 전 DB면 기록만 남기고 지운다) */
+export async function cancelScheduledNotice(form: FormData) {
+  const id = String(form.get("id") ?? "");
+  const back = `/admin/messages/scheduled/${id}`;
+  const admin = await requireAdminWrite(back);
+  const reason = String(form.get("reason") ?? "").trim();
+  if (reason.length < 4) return go(back, "e", "취소 사유를 4자 이상 적어 주세요. 변경 이력에 그대로 남아요");
+  const { data: n } = await db().from("notifications").select("id,title,status,dedupe_key").eq("id", id).maybeSingle();
+  if (!n || n.status !== "pending") return go(back, "e", "이미 나갔거나 취소된 알림이에요");
+  const ok = await cancelScheduled(n, `admin:${admin.id}`, `[운영자 취소] ${reason}`);
+  if (!ok) return go(back, "e", "그 사이 알림이 나갔어요. 취소하지 못했어요");
+  // 상태값 적용 전 DB에선 행이 지워지니 목록으로 돌아간다
+  const { data: still } = await db().from("notifications").select("id").eq("id", id).maybeSingle();
+  return go(still ? back : "/admin/messages?st=pending#log", "m", `'${n.title}' 예약을 취소했어요. 보내지 않아요`);
+}
+
+/** 테이블로 가는 예약이면 그 모임 시작 시각 (보낼 시각은 모임 전이어야 한다) */
+async function scheduledStartsAt(link: string | null): Promise<string | null> {
+  const m = /^\/tables\/([0-9a-f-]{36})$/.exec(link ?? "");
+  if (!m) return null;
+  const { data } = await db().from("dining_tables").select("slots(starts_at)").eq("id", m[1]).maybeSingle();
+  return (data as unknown as { slots: { starts_at: string } | null } | null)?.slots?.starts_at ?? null;
 }
