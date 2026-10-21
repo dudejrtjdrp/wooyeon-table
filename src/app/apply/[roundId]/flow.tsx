@@ -285,7 +285,7 @@ export function ApplyFlow({
                           className={`relative flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-card font-extrabold text-ink ring-2 ring-inset ring-accent/50" : "font-medium text-muted/60"}`}
                         >
                           {d}
-                          {isClosed && <span aria-hidden="true" className="absolute -bottom-0.5 text-[10px] font-semibold text-muted">마감</span>}
+                          {isClosed && <span aria-hidden="true" className="absolute -top-1 text-[11px] font-semibold text-muted">마감</span>}
                           {/* 오늘은 동그라미가 아니라 아래 작은 점으로 (열린 날 표시와 헷갈리지 않게) */}
                           {today && <span aria-hidden="true" className={`absolute bottom-1 size-1 rounded-full ${on ? "bg-white" : "bg-ink"}`} />}
                         </button>

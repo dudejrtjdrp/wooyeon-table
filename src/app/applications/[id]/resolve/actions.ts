@@ -2,6 +2,7 @@
 
 import { euro } from "@/lib/korean";
 import { redirect } from "next/navigation";
+import { acceptsSlot } from "@/lib/policy";
 import { requireProfile } from "@/lib/auth";
 import { now } from "@/lib/clock";
 import { logStatus } from "@/lib/events";
@@ -44,6 +45,11 @@ export async function transfer(form: FormData) {
   const r = (slots![0] as unknown as { rounds: { status: string; apply_deadline: string; title: string; match_at: string } }).rounds;
   if (r.status !== "open" || new Date(r.apply_deadline) <= (await now())) {
     redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("이미 마감된 일정이에요")}`);
+  }
+  // 환불 마감이 지난 일정으로는 옮기지 않는다 (옮긴 뒤 결과 전 취소·환불이 안 되므로, policy.ts acceptsSlot)
+  const tNow = await now();
+  if ((slots ?? []).some((s) => !acceptsSlot(s.starts_at, tNow))) {
+    redirect(`/applications/${appId}/resolve?e=${encodeURIComponent("환불 마감(모임 주 화요일 밤 12시)이 지난 일정이라 옮길 수 없어요. 다른 일정을 골라 주세요")}`);
   }
   const { data: dup } = await db().from("applications").select("id").eq("user_id", me.id).eq("round_id", target).maybeSingle();
   if (dup) redirect(`/applications/${dup.id}`);

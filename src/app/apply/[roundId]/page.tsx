@@ -45,11 +45,25 @@ export default async function Apply({ params, searchParams }: { params: Promise<
     );
   }
 
+  // 모든 날이 환불 마감(모임 주 화요일 밤 12시)을 지났으면 신청 화면 대신 이유와 갈 곳을 보여 준다
+  if (!round.slots.some((s) => acceptsSlot(s.starts_at, t))) {
+    return (
+      <Screen title="신청" back="/rounds">
+        <div className="px-6 pt-10 text-center">
+          <p className="text-[20px] font-extrabold text-ink">이 일정은 신청이 끝났어요</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-muted">{round.title}의 모든 날이 환불 마감(모임 주 화요일 밤 12시)을 지났어요. 그 뒤에는 결과 전 취소도 환불도 안 돼서 신청을 받지 않아요.</p>
+          <LinkButton href="/rounds" className="mt-8">모집 중인 일정 보기</LinkButton>
+          <LinkButton href="/wish" tone="outline" className="mt-2.5">새 일정이 열리면 알림 받기</LinkButton>
+        </div>
+      </Screen>
+    );
+  }
+
   // 많이 고르는 묶음과 시·도를 앞에 둔다 (이번 회차 신청 기준)
   const { data: picks } = await db().from("applications").select("areas").eq("round_id", roundId).neq("application_status", "CANCELED");
   const count = new Map<string, number>();
   for (const a of picks ?? []) for (const x of (a.areas as string[] | null) ?? []) count.set(x, (count.get(x) ?? 0) + 1);
-  const open = new Set(round.slots.map((s) => s.region));
+  const open = new Set(round.slots.filter((s) => acceptsSlot(s.starts_at, t)).map((s) => s.region));
   const sidos = SIDOS.map((s, i) => ({
     name: s.name,
     order: i,

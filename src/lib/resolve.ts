@@ -252,7 +252,7 @@ export async function keepPassFor(appId: string, actor: string, why: "choice" | 
   // 멤버십은 횟수가 없어 돌려줄 것이 없다(실패 때 기간을 이미 늘려 줌)
   if (app.payments?.pass_id && !membership) {
     const { returnPassUse } = await import("./billing");
-    await returnPassUse(app.payments.pass_id, actor, "이용권 보관");
+    await returnPassUse(app.payments.pass_id, actor, { choice: "이용권 보관", no_answer: "3일 무응답 자동 보관", wait_over: "기다리기 마감 자동 보관" }[why]);
   }
   const reason = { choice: "이용권 보관", no_answer: "3일 동안 고르지 않아 이용권으로 자동 보관", wait_over: "기다리던 자리가 나지 않아 이용권으로 자동 보관" }[why];
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "NO_MATCH", actor, reason });

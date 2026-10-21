@@ -501,8 +501,11 @@ export async function maybeTick(gapSec = 120): Promise<string[] | null> {
 }
 
 async function recommendOpenRounds(t: Date, tpl: Awaited<ReturnType<typeof loadTemplates>>) {
-  const { data: rounds } = await db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t.toISOString());
-  if (!rounds?.length) return 0;
+  const { data: raw } = await db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t.toISOString());
+  // 환불 마감이 지난 일정은 신청을 받지 않으니 알리지 않는다 (policy.ts acceptsSlot)
+  const { acceptsSlot } = await import("./policy");
+  const rounds = (raw ?? []).map((r) => ({ ...r, slots: (r.slots ?? []).filter((s) => acceptsSlot(s.starts_at, t)) })).filter((r) => r.slots.length);
+  if (!rounds.length) return 0;
   const { data: past } = await db()
     .from("applications")
     .select("id,user_id,dining_tables(slots(region,starts_at)),users(profiles(marketing_opt_in))")
