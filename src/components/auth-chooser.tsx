@@ -97,8 +97,6 @@ export function AuthChooser({ next = "/", error, notice, upcoming }: { next?: st
             <Link href="/privacy" className="flex h-11 items-center px-2.5 underline underline-offset-2">개인정보 처리방침</Link>
             <span aria-hidden="true">·</span>
             <Link href="/guide" className="flex h-11 items-center px-2.5 underline underline-offset-2">심사위원 안내</Link>
-            {/* 투어 화면에서 앱을 설치하면 앱은 첫 화면(여기)부터 열린다. 휴대폰 따라보기로 바로 돌아가는 길 */}
-            <Link href="/tour" className="flex h-11 items-center px-2.5 underline underline-offset-2">심사 투어 따라보기</Link>
           </nav>
         </div>
       </div>

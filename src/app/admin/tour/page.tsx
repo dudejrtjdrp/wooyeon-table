@@ -95,7 +95,7 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
 
   const steps = TOUR_ORDER.filter((k): k is Exclude<TourStepKey, "done"> => k !== "done");
   const viewer = me.level === "viewer";
-  const phoneUrl = `${base}/tour`;
+  const phoneUrl = `${base}/`;
   // 렌더마다 새로 붙는 키: 같은 단계라도 결과 메시지가 바뀌면 진행 모달을 닫는다
   const runKey = `${step}:${m ?? e ?? ""}:${nonce ?? ""}`;
 
@@ -115,8 +115,8 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
         <details open={idx <= 1} className="group mt-5 rounded-[20px] bg-field p-5 [&_summary::-webkit-details-marker]:hidden">
           <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
             <span>
-              <span className="flex items-center gap-2 text-[17px] font-bold text-ink"><Smartphone size={18} aria-hidden="true" />같은 링크를 휴대폰에서도 열어 주세요</span>
-              <span className="mt-1 block text-[14px] leading-relaxed text-ink2">PC에서 버튼을 누르면 몇 초 안에 휴대폰에도 같은 단계와 결과가 떠요. 매칭 결과·하루 전 안내 알림도 그 휴대폰으로 가요.</span>
+              <span className="flex items-center gap-2 text-[17px] font-bold text-ink"><Smartphone size={18} aria-hidden="true" />휴대폰에서는 앱을 평소처럼 써 주세요</span>
+              <span className="mt-1 block text-[14px] leading-relaxed text-ink2">설명은 이 PC 화면에서만 해요. 휴대폰은 아래 계정으로 로그인해 두면, PC에서 버튼을 누를 때마다 앱 화면이 몇 초 안에 바뀌고 매칭 결과·하루 전 안내 알림이 그 휴대폰으로 가요.</span>
             </span>
             <span className="mt-1 shrink-0 text-[13px] font-semibold text-muted underline underline-offset-4 group-open:hidden">펼치기</span>
             <span className="mt-1 hidden shrink-0 text-[13px] font-semibold text-muted underline underline-offset-4 group-open:inline">접기</span>
@@ -125,21 +125,21 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
           <ol className="mt-4 grid gap-2.5 sm:grid-cols-3">
             <li className="rounded-[16px] bg-card p-4">
               <p className="flex items-center gap-1.5 text-[15px] font-bold text-ink"><Share size={16} aria-hidden="true" />1. 홈 화면에 추가</p>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-ink2"><b>아이폰 Safari</b>: 아래 공유 버튼 → 홈 화면에 추가</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-ink2"><b>아이폰 Safari</b>: 아래 공유 버튼 → 홈 화면에 추가 → &lsquo;웹 앱으로 열기&rsquo; 켜고 추가</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink2"><b>안드로이드 Chrome</b>: 오른쪽 위 메뉴(⋮) → 앱 설치 또는 홈 화면에 추가</p>
             </li>
             <li className="rounded-[16px] bg-card p-4">
               <p className="flex items-center gap-1.5 text-[15px] font-bold text-ink"><LogIn size={16} aria-hidden="true" />2. 시연 참가자로 로그인</p>
               <p className="mt-1.5 text-[13px] leading-relaxed text-ink2">아이디 <code className="font-semibold text-ink">{h.login_id}</code> · 비밀번호 <code className="font-semibold text-ink">demo1234</code></p>
-              <p className="mt-1 text-[13px] leading-relaxed text-ink2">휴대폰 화면의 &lsquo;{h.name}님으로 들어가기&rsquo; 버튼을 눌러도 돼요. 설치한 앱을 처음 열면 한 번 더 로그인해 주세요.</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-ink2">설치한 앱은 브라우저와 로그인이 따로라, 앱을 처음 열면 이 계정으로 로그인해 주세요.</p>
             </li>
             <li className="rounded-[16px] bg-card p-4">
               <p className="flex items-center gap-1.5 text-[15px] font-bold text-ink"><Bell size={16} aria-hidden="true" />3. 알림 허용</p>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-ink2">따라보기 화면에서 &lsquo;알림 받기&rsquo;를 켜 주세요. 아이폰은 홈 화면에 추가한 앱에서만 알림이 와요.</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-ink2">앱에 처음 들어가면 알림을 켤지 물어봐요. &lsquo;알림 켜기&rsquo; → &lsquo;허용&rsquo;을 눌러 주세요. 아이폰은 홈 화면에 추가한 앱에서만 알림이 와요.</p>
             </li>
           </ol>
           <p className="mt-3 text-[13px] leading-relaxed text-muted">② 참가자 모으기에서 {h.name}님도 테스트 참가자와 같은 일정에 결제 완료로 신청돼요. 아래 &lsquo;앱&rsquo; 버튼도 되도록 이 사람으로 열려요.</p>
-          <div className="mt-3"><AsUser a={human} to={() => "/tour"}>이 PC에서 따라보기 화면 열기</AsUser></div>
+          <div className="mt-3"><AsUser a={human} to={() => "/"}>이 PC에서 {h.name}님 앱 화면 열기</AsUser></div>
         </details>
       )}
 
