@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PrimaryButton } from "@/components/client";
 import { neighborsOf } from "@/lib/regions";
-import { refundCutoff } from "@/lib/policy";
 import { stepFromUrl, useStepHistory } from "@/lib/use-step-history";
 
 type Area = { name: string; open: boolean };
@@ -30,13 +29,15 @@ const Box = ({ on, round = false, size = 22 }: { on: boolean; round?: boolean; s
 );
 
 export function ApplyFlow({
-  action, round, sidos, hot, slots, passes, owned, refund, error, nudge = null, initialStep = 1,
+  action, round, sidos, hot, slots, closedDays = [], passes, owned, refund, error, nudge = null, initialStep = 1,
 }: {
   action: (f: FormData) => void | Promise<void>;
-  round: { id: string; title: string; deadline: string; today: string; /** 지금 시각(시연 시계). 환불 마감이 지난 날짜를 알린다 */ now?: string };
+  round: { id: string; title: string; deadline: string; today: string };
   sidos: { name: string; areas: Area[] }[];
   hot: string[];
   slots: Slot[];
+  /** 환불 마감(모임 주 화요일 밤 12시)이 지나 신청을 받지 않는 날 */
+  closedDays?: string[];
   passes: Pass[];
   owned: { label: string; remaining: number; unlimited: boolean; until: string | null } | null;
   refund: string[];
@@ -54,8 +55,6 @@ export function ApplyFlow({
   const [pass, setPass] = useState(owned ? "owned" : passes[0]?.key ?? "single");
   const [agree, setAgree] = useState(false);
   const [msg, setMsg] = useState<string | null>(error ?? null);
-  // 고른 날짜 중 환불 마감(모임 주 화요일 밤 12시)이 이미 지난 날: 결제하면 취소·환불이 안 된다
-  const lateDays = round.now ? days.filter((d) => slots.some((s) => s.day === d && refundCutoff(s.startsAt).getTime() <= Date.parse(round.now!))) : [];
 
   // 결제 화면이나 오류에서 뒤로 돌아와도 고른 동네·날짜·이용권과 단계를 이어 간다
   const storeKey = `apply:${round.id}`;
@@ -67,7 +66,8 @@ export function ApplyFlow({
       if (saved && (back || error)) {
         const s = JSON.parse(saved) as { picked: string[]; days: string[]; pass: string; near: boolean; step: number };
         setPicked(s.picked ?? []);
-        setDays(s.days ?? []);
+        // 그사이 환불 마감이 지나 닫힌 날은 되살리지 않는다
+        setDays((s.days ?? []).filter((d) => slots.some((x) => x.day === d)));
         if (s.pass) setPass(s.pass);
         setNear(s.near ?? true);
         if (error) setStep(Math.min(Math.max(s.step ?? 1, 1), 3));
@@ -271,6 +271,7 @@ export function ApplyFlow({
                   for (let d = 1; d <= last; d++) {
                     const key = `${month}-${String(d).padStart(2, "0")}`;
                     const isOpen = openDays.has(key);
+                    const isClosed = !isOpen && closedDays.includes(key);
                     const on = days.includes(key);
                     const today = key === round.today;
                     cells.push(
@@ -279,11 +280,12 @@ export function ApplyFlow({
                           type="button"
                           disabled={!isOpen}
                           aria-pressed={on}
-                          aria-label={`${m}월 ${d}일${isOpen ? "" : ", 열린 테이블 없음"}`}
+                          aria-label={`${m}월 ${d}일${isOpen ? "" : isClosed ? ", 환불 마감이 지나 신청 마감" : ", 열린 테이블 없음"}`}
                           onClick={() => { setMsg(null); setDays((cur) => (cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key])); }}
                           className={`relative flex size-11 items-center justify-center rounded-full text-[15px] ${on ? "bg-accent font-extrabold text-white" : isOpen ? "bg-card font-extrabold text-ink ring-2 ring-inset ring-accent/50" : "font-medium text-muted/60"}`}
                         >
                           {d}
+                          {isClosed && <span aria-hidden="true" className="absolute -top-1 text-[11px] font-semibold text-muted">마감</span>}
                           {/* 오늘은 동그라미가 아니라 아래 작은 점으로 (열린 날 표시와 헷갈리지 않게) */}
                           {today && <span aria-hidden="true" className={`absolute bottom-1 size-1 rounded-full ${on ? "bg-white" : "bg-ink"}`} />}
                         </button>
@@ -294,6 +296,9 @@ export function ApplyFlow({
                 })()}
               </div>
             </div>
+            {closedDays.length > 0 && (
+              <p className="px-6 pt-3 text-[13px] leading-relaxed text-muted">&lsquo;마감&rsquo;으로 표시된 날은 환불 마감(모임 주 화요일 밤 12시)이 지나 신청을 받지 않아요.</p>
+            )}
             {days.length > 0 && (
               <ul className="flex flex-col gap-2 px-6 pt-[18px]">
                 {[...days].sort().map((d) => (
@@ -315,7 +320,7 @@ export function ApplyFlow({
             {nudge && <p className="mx-6 mt-3 rounded-[14px] bg-accent-soft px-4 py-3 text-[14px] leading-relaxed text-accent-text">{nudge.note}</p>}
             <div className="flex flex-col gap-2 px-4 pt-[22px]" role="radiogroup" aria-label="이용권">
               {owned && (
-                <PassRow on={pass === "owned"} onClick={() => setPass("owned")} title="가지고 있는 이용권" sub={`${owned.label} ${owned.unlimited ? "기간 안 무제한" : `남은 ${owned.remaining}회`}${owned.until ? ` · ${owned.until}까지` : ""}`} price="0원" />
+                <PassRow on={pass === "owned"} onClick={() => setPass("owned")} title="가지고 있는 이용권" sub={`${owned.label} ${owned.unlimited ? "기간 안 무제한" : `남은 ${owned.remaining}회`}${owned.until ? ` · ${owned.until}까지 신청 가능` : ""}`} price="0원" />
               )}
               {passes.map((p) => (
                 <PassRow key={p.key} on={pass === p.key} onClick={() => setPass(p.key)} title={p.label} sub={p.desc} price={won(p.amount)} badge={nudge?.key === p.key ? "추천" : undefined} />
@@ -338,25 +343,15 @@ export function ApplyFlow({
             {/* 결제 전에는 환불 마감·당일 취소·노쇼 세 줄을 늘 보여 주고, 나머지만 접는다 (details 안의 summary 앞 내용은 접히면 안 보여서 밖에 둔다) */}
             <div className="mx-6 mt-3.5 rounded-[14px] bg-card px-4 pt-3.5 text-[13px] leading-[1.7] text-ink2">
               <p className="font-bold text-ink">환불 규정</p>
-              {/* 고른 날짜의 환불 마감이 지났으면 '전액 환불돼요' 줄 대신 지금 해당하는 말을 둔다 */}
-              {[0, 2, 3].map((i) => refund[i] && <p key={i}>{i === 0 && lateDays.length ? "고른 날짜는 이미 환불 마감이 지났어요. 다른 날짜는 모임 주 화요일 밤 12시까지 전액 환불돼요." : refund[i]}</p>)}
+              {[0, 2, 3].map((i) => refund[i] && <p key={i}>{refund[i]}</p>)}
             <details className="group/refund">
               <summary className="flex min-h-11 cursor-pointer list-none items-center text-[13px] font-semibold text-accent group-open/refund:hidden">나머지 규정 보기</summary>
               <div className="pb-4">{refund.filter((_, i) => ![0, 2, 3].includes(i)).map((r) => <p key={r}>{r}</p>)}</div>
             </details>
             </div>
-            {lateDays.length > 0 && (
-              <p role="alert" className="mx-6 mt-3 rounded-[14px] bg-danger/10 px-4 py-3 text-[14px] font-semibold leading-relaxed text-danger">
-                {amount
-                  ? "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 취소해도 환불받을 수 없어요."
-                  : pass === "owned" && owned?.unlimited
-                    ? "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 매칭 결과가 나오기 전에는 신청을 취소할 수 없어요."
-                    : "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 매칭 결과가 나오기 전에는 신청을 취소할 수 없고, 나중에 취소해도 쓴 이용권 1회는 돌려받지 못해요."}
-              </p>
-            )}
             <button type="button" role="checkbox" aria-checked={agree} onClick={() => setAgree(!agree)} className="mx-6 mt-2 flex min-h-[48px] items-center gap-2.5 text-left text-[15px] font-bold">
               <Box on={agree} />
-              {lateDays.length ? (amount ? "취소해도 환불받을 수 없는 것을 확인했어요" : "결과 전에는 취소할 수 없는 것을 확인했어요") : "환불 규정을 확인했어요"}
+              환불 규정을 확인했어요
             </button>
           </>
         )}
@@ -385,7 +380,7 @@ export function ApplyFlow({
               <PrimaryButton
                 type="submit"
                 pendingText="신청서 보내는 중"
-                onClick={(e) => { if (!agree) { e.preventDefault(); setMsg(lateDays.length ? "환불 마감이 지났다는 안내를 확인하고 체크해 주세요" : "환불 규정을 확인해 주세요"); } }}
+                onClick={(e) => { if (!agree) { e.preventDefault(); setMsg("환불 규정을 확인해 주세요"); } }}
               >
                 {amount ? `${won(amount)} 결제하기` : "이용권으로 신청하기"}
               </PrimaryButton>

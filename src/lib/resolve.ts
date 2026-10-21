@@ -3,6 +3,7 @@
 // 3) 자리 나면 알려 주기(마감 있음)  4) 이용권 보관  5) 환불
 // 아무것도 고르지 않으면 3일 뒤 이용권으로 보관하고, 하루 전에 한 번 더 알린다. 기다리기는 모임 2일 전에 끝난다.
 import { ACTIVE_TABLE, offerSeat, tableInfo, tableMembers, tableMembersOf, toCand } from "./attendance";
+import { acceptsSlot } from "./policy";
 import { quietly, syncScheduled } from "./scheduled";
 import { now } from "./clock";
 import { logStatus } from "./events";
@@ -133,7 +134,8 @@ export async function moveOptions(app: AppRow): Promise<MoveOption[]> {
   type S = { id: string; region: string; sido: string | null; starts_at: string; application_slots: { count: number }[] };
   return ((rounds ?? []) as unknown as { id: string; apply_deadline: string; slots: S[] }[])
     .filter((r) => !taken.has(r.id))
-    .flatMap((r) => r.slots.map((s) => ({ s, r })))
+    // 환불 마감이 지난 일정은 신청을 받지 않으니 옮길 곳으로도 권하지 않는다 (policy.ts acceptsSlot)
+    .flatMap((r) => r.slots.filter((s) => acceptsSlot(s.starts_at, t)).map((s) => ({ s, r })))
     .map(({ s, r }) => {
       const tag = moveTag(s.region, s.sido, liked);
       const demand = s.application_slots?.[0]?.count ?? 0;
@@ -249,8 +251,8 @@ export async function keepPassFor(appId: string, actor: string, why: "choice" | 
   if (!up?.length) return false;
   // 멤버십은 횟수가 없어 돌려줄 것이 없다(실패 때 기간을 이미 늘려 줌)
   if (app.payments?.pass_id && !membership) {
-    const { data: pass } = await db().from("passes").select("remaining").eq("id", app.payments.pass_id).single();
-    await db().from("passes").update({ remaining: (pass?.remaining ?? 0) + 1 }).eq("id", app.payments.pass_id);
+    const { returnPassUse } = await import("./billing");
+    await returnPassUse(app.payments.pass_id, actor, { choice: "이용권 보관", no_answer: "3일 무응답 자동 보관", wait_over: "기다리기 마감 자동 보관" }[why]);
   }
   const reason = { choice: "이용권 보관", no_answer: "3일 동안 고르지 않아 이용권으로 자동 보관", wait_over: "기다리던 자리가 나지 않아 이용권으로 자동 보관" }[why];
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "ALTERNATIVE_OFFERED", to: "NO_MATCH", actor, reason });

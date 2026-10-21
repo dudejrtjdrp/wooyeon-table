@@ -381,6 +381,15 @@ export async function tick() {
   if (ar.kept) done.push(`3일 무응답 이용권 보관 ${ar.kept}건`);
   if (ar.waitOver) done.push(`기다리기 마감 이용권 보관 ${ar.waitOver}건`);
 
+  // 이용권 기한 7일·3일·하루 전 알림 (신청 시각 기준 기한이라 기한 안에 신청하도록)
+  const { remindPassExpiry } = await import("./billing");
+  const pe = await remindPassExpiry(t).catch((e) => {
+    console.error("[tick] 이용권 기한 알림 실패", e);
+    done.push("이용권 기한 알림 실패 (다음 실행에서 다시)");
+    return 0;
+  });
+  if (pe) done.push(`이용권 기한 알림 ${pe}건`);
+
   // 환불 실패 자동 재시도: 10분 간격 3번까지, 세 번째 실패만 예외 큐 (D7)
   const { retryRefunds } = await import("./payments");
   const rf = await retryRefunds().catch(() => ({ retried: 0, done: 0 }));
@@ -492,8 +501,11 @@ export async function maybeTick(gapSec = 120): Promise<string[] | null> {
 }
 
 async function recommendOpenRounds(t: Date, tpl: Awaited<ReturnType<typeof loadTemplates>>) {
-  const { data: rounds } = await db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t.toISOString());
-  if (!rounds?.length) return 0;
+  const { data: raw } = await db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t.toISOString());
+  // 환불 마감이 지난 일정은 신청을 받지 않으니 알리지 않는다 (policy.ts acceptsSlot)
+  const { acceptsSlot } = await import("./policy");
+  const rounds = (raw ?? []).map((r) => ({ ...r, slots: (r.slots ?? []).filter((s) => acceptsSlot(s.starts_at, t)) })).filter((r) => r.slots.length);
+  if (!rounds.length) return 0;
   const { data: past } = await db()
     .from("applications")
     .select("id,user_id,dining_tables(slots(region,starts_at)),users(profiles(marketing_opt_in))")

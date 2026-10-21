@@ -1,4 +1,4 @@
-import { meetingEnded } from "@/lib/meeting-time";
+import { pastRowState, splitHistory } from "@/lib/history";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { RoundTable } from "@/components/brand";
@@ -34,11 +34,8 @@ export default async function MyTables() {
   const { data: fb } = await db().from("feedbacks").select("application_id").eq("user_id", me.id);
   const reviewed = new Set((fb ?? []).map((f) => f.application_id));
 
-  const tables = apps.filter((a) => a.match_status === "CONFIRMED" && a.dining_tables?.slots);
-  // 홈·모임 정보와 같은 기준(lib/meeting-time.ts): '모임 끝'이거나 끝나는 시각이 지났으면 지난 모임
-  const upcoming = tables.filter((a) => !meetingEnded(a.dining_tables, t) && !a.attendance_status?.match(/ATTENDED|NO_SHOW|CANCELED/));
-  const past = tables.filter((a) => !upcoming.includes(a));
-  const pending = apps.filter((a) => !tables.includes(a) && a.application_status !== "CANCELED" && !["TRANSFERRED", "NO_MATCH"].includes(a.match_status) && !a.attendance_status?.startsWith("CANCELED"));
+  // 나누는 규칙은 lib/history.ts (홈·모임 정보와 같은 '끝남' 기준)
+  const { upcoming, past, pending } = splitHistory(apps, t);
 
   const SUB = "다가오는 테이블의 단체방과 지난 만남이에요.";
   const RowItem = ({ href, title, sub, pill }: { href: string; title: string; sub: string; pill?: React.ReactNode }) => (
@@ -52,7 +49,7 @@ export default async function MyTables() {
     </Link>
   );
 
-  if (!tables.length && !pending.length) {
+  if (!upcoming.length && !past.length && !pending.length) {
     return (
       <TabScreen title="단체방" sub={SUB}>
         <EmptyState
@@ -109,8 +106,7 @@ export default async function MyTables() {
           <List>
             {past.map((a) => {
               const s = a.dining_tables!.slots!;
-              const attended = a.attendance_status === "ATTENDED";
-              const needReview = attended && !reviewed.has(a.id);
+              const { needReview, pill } = pastRowState(a, reviewed.has(a.id));
               // 끝난 모임인데 아직 '참석 예정'으로 남아 있으면(체크인 확인 전) '매칭 확정' 대신 '지난 모임'
               const label = a.attendance_status === "SCHEDULED" ? "지난 모임" : headline(a, t).label;
               return (
@@ -119,7 +115,7 @@ export default async function MyTables() {
                   href={needReview ? `/tables/${a.table_id}/feedback` : `/tables/${a.table_id}/chat`}
                   title={`${fmtDay(s.starts_at)} · ${s.region}`}
                   sub={a.dining_tables?.venues?.name ?? label}
-                  pill={needReview ? <Pill tone="accent">별점 남기기</Pill> : reviewed.has(a.id) ? <Pill tone="muted">별점 남김</Pill> : <Pill tone="muted">{label}</Pill>}
+                  pill={<Pill tone={needReview ? "accent" : "muted"}>{pill ?? label}</Pill>}
                 />
               );
             })}

@@ -37,6 +37,7 @@ export const TEMPLATES = {
   feedback_remind: { label: "후기 리마인드", when: "종료 24시간 뒤까지 후기가 없을 때 1회", channel: "푸시·알림함", title: "어제 저녁, 별점만 눌러 주세요", body: "또 앉고 싶은 분을 고르면 다음 테이블에 반영돼요", vars: [] },
   pass_granted: { label: "이용권 지급", when: "운영자가 회원 상세에서 이용권 횟수를 더했을 때 (보상·문의 처리)", channel: "푸시·알림함", title: "이용권 {count}회를 드렸어요", body: "{until}까지 다음 일정에 쓸 수 있어요", vars: ["count", "until"] },
   membership_granted: { label: "멤버십 기간 연장(운영자)", when: "운영자가 회원 상세에서 멤버십 기간을 늘렸을 때", channel: "푸시·알림함", title: "멤버십 기간을 {extra_days}일 늘렸어요", body: "{until}까지 쓸 수 있어요", vars: ["extra_days", "until"] },
+  pass_expiry: { label: "이용권 기한 임박", when: "이용권(남은 횟수가 있는 1회권·멤버십) 기한 7일 전·3일 전·하루 전, 세 번", channel: "푸시·알림함", title: "{pass} 기한이 {left} 남았어요", body: "{until}까지 신청에 쓸 수 있어요. 모임 날짜는 그보다 뒤여도 돼요", vars: ["pass", "left", "until"] },
   announcement: { label: "운영자 공지", when: "운영자가 자동 메시지 화면에서 회차 신청자·테이블·회원에게 공지를 보낼 때", channel: "푸시·알림함", title: "{headline}", body: "{message}", vars: ["headline", "message"] },
 } as const;
 export type TemplateKey = keyof typeof TEMPLATES;
@@ -53,6 +54,7 @@ export const QUIET_TEMPLATES = new Set<string>([
 
 /** 어드민 미리보기용 예시 값. 날짜·시각은 발송 때 fmtDay·fmtClock(fmtSlot과 같은 표기)으로 들어간다 */
 export const SAMPLE_VARS: Record<string, string> = {
+  pass: "1회권", left: "3일",
   date: "10월 23일(금)", time: "저녁 7:30", region: "홍대·합정·연남", venue: "홍대 둥근식탁", reservation: "우연한식탁 2032", amount: "9,900원",
   reason: "고른 일정에 4명이 모이지 않았어요.",
   round: "10월 넷째 주 저녁", areas: "홍대·합정·연남", days: "10월 23일(금)·10월 24일(토)", cutoff: "10월 20일(화) 밤 12시", deadline: "10월 20일(화) 밤 12시",

@@ -1,4 +1,5 @@
 import { now } from "./clock";
+import { acceptsSlot } from "./policy";
 import { type OpenRound, type Visit, pickNext } from "./recommend";
 import { db } from "./supabase";
 
@@ -7,14 +8,19 @@ import { db } from "./supabase";
  * 새 일정 알림과 같다: 참석 이력 전체의 동네·요일 횟수, 식당 점수가 낮았던 동네는 뒤로.
  */
 export async function nextPick(userId: string) {
-  const t = (await now()).toISOString();
+  const t0 = await now();
+  const t = t0.toISOString();
   const [{ data: rounds }, { data: mine }, { data: past }] = await Promise.all([
     db().from("rounds").select("id,title,apply_deadline,slots(region,starts_at)").eq("status", "open").gt("apply_deadline", t).order("apply_deadline").limit(8),
     db().from("applications").select("round_id").eq("user_id", userId).neq("application_status", "CANCELED"),
     db().from("applications").select("id,dining_tables(slots(region,starts_at))").eq("user_id", userId).eq("attendance_status", "ATTENDED"),
   ]);
   const applied = new Set((mine ?? []).map((a) => a.round_id));
-  const open = ((rounds ?? []) as OpenRound[]).filter((r) => !applied.has(r.id));
+  // 환불 마감이 지난 일정은 신청을 받지 않으니 추천에서도 뺀다 (policy.ts acceptsSlot)
+  const open = ((rounds ?? []) as OpenRound[])
+    .filter((r) => !applied.has(r.id))
+    .map((r) => ({ ...r, slots: (r.slots ?? []).filter((s) => acceptsSlot(s.starts_at, t0)) }))
+    .filter((r) => r.slots.length);
   const rows = ((past ?? []) as unknown as { id: string; dining_tables: { slots: { region: string; starts_at: string } } | null }[]).filter((p) => p.dining_tables?.slots);
   const { data: fbs } = rows.length ? await db().from("feedbacks").select("application_id,venue_score").in("application_id", rows.map((r) => r.id)) : { data: [] };
   const score = new Map((fbs ?? []).map((f) => [f.application_id, f.venue_score as number | null]));

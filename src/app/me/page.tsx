@@ -35,6 +35,8 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
   const live = (passes ?? []).filter((p) => !p.expires_at || new Date(p.expires_at) > t);
   const member = live.filter((p) => isMembership(p.pass_type)).sort((a, b) => (b.expires_at ?? "").localeCompare(a.expires_at ?? ""))[0];
   const left = live.filter((p) => !isMembership(p.pass_type)).reduce((n, p) => n + p.remaining, 0);
+  // 1회권도 기한을 보여 준다(신청 시각 기준). 남은 횟수가 있는 것 중 가장 빨리 끝나는 것
+  const soonest = live.filter((p) => !isMembership(p.pass_type) && p.remaining > 0 && p.expires_at).sort((a, b) => a.expires_at!.localeCompare(b.expires_at!))[0];
 
   return (
     <TabScreen title="내 정보">
@@ -66,6 +68,8 @@ export default async function Me({ searchParams }: { searchParams: Promise<{ don
           <Link href="/rounds" className="border-l border-line text-center">
             <p className="text-[14px] text-muted">{member ? "멤버십" : "남은 이용권"}</p>
             <p className="mt-1 text-[26px] font-bold text-accent">{member?.expires_at ? `${fmtDay(member.expires_at).replace(/\s*\(.\)$/, "")}까지` : `${left}회`}</p>
+            {member?.expires_at && <p className="mt-0.5 text-[13px] text-muted">이날까지 신청 가능</p>}
+            {!member && soonest?.expires_at && <p className="mt-0.5 text-[13px] text-muted">{fmtDay(soonest.expires_at).replace(/\s*\(.\)$/, "")}까지 신청 가능</p>}
             {member && left > 0 && <p className="mt-0.5 text-[13px] text-muted">이용권 {left}회도 있어요</p>}
           </Link>
         </div>

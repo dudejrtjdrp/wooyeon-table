@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { acceptsSlot } from "@/lib/policy";
 import { CalendarDays, ChevronRight } from "lucide-react";
 import { EmptyState, LinkButton, List, Pill, SectionTitle, TabScreen } from "@/components/ui";
 import { getMe } from "@/lib/auth";
@@ -16,12 +17,14 @@ export const dynamic = "force-dynamic";
 export default async function Rounds() {
   const me = await getMe();
   const t = await now();
-  const { data: rounds } = await db()
+  const { data: roundsRaw } = await db()
     .from("rounds")
     .select("id,title,apply_deadline,match_at,status,slots(id,region,sido,starts_at)")
     .eq("status", "open")
     .gt("apply_deadline", t.toISOString())
     .order("apply_deadline");
+  // 환불 마감(모임 주 화요일 밤 12시)이 지난 일정은 신청을 받지 않으니 보여 주지 않는다. 남은 일정이 없는 회차는 목록에서 뺀다
+  const rounds = (roundsRaw ?? []).map((r) => ({ ...r, slots: (r.slots ?? []).filter((s) => acceptsSlot(s.starts_at, t)) })).filter((r) => r.slots.length);
   // 안내 문구의 동네 수는 실제로 열린 일정에서 센다 (문구와 목록이 어긋나지 않게)
   const openRegions = new Set((rounds ?? []).flatMap((r) => (r.slots ?? []).map((s) => s.region)));
   const { data: mineRaw } = me
