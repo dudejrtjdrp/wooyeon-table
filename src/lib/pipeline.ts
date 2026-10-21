@@ -331,7 +331,7 @@ export async function tick() {
   let skipped = 0;
   for (const n of pending ?? []) {
     // 보낼 때가 됐어도 이유가 사라진 알림은 보내지 않는다(취소·해제·이미 결제·이미 후기). 하루 전 안내는 지금 식당·예약명·테이블로 다시 쓴다
-    // 판단은 lib/scheduled-rules.ts, 운영자가 고친 예약은 문구를 덮어쓰지 않는다
+    // 판단은 lib/scheduled-rules.ts. 운영자가 고친 예약은 고친 문구 그대로, 고친 뒤 테이블·식당·시각이 바뀌었으면 지금 내용으로 보낸다
     const { checkBeforeSend, cancelScheduled } = await import("./scheduled");
     const chk = await checkBeforeSend(n, tpl).catch(() => ({}) as { skip?: string; patch?: Record<string, string> });
     if (chk.skip) {

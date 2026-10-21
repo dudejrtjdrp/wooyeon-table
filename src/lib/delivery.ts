@@ -184,7 +184,7 @@ async function staleOrFresh(id: string, key: string | null): Promise<{ skip?: st
   if (!key) return {};
   const appId = key.split(":")[1];
   if (key.startsWith("remind:")) {
-    // 예약 알림과 같은 판단(lib/scheduled-rules.ts). 운영자가 고친 문구는 덮어쓰지 않는다
+    // 예약 알림과 같은 판단(lib/scheduled-rules.ts). 운영자가 고친 문구는 그대로, 고친 뒤 상황이 바뀌었으면 지금 내용으로
     const { checkBeforeSend } = await import("./scheduled");
     const { loadTemplates } = await import("./templates");
     const chk = await checkBeforeSend({ id, dedupe_key: key }, await loadTemplates());

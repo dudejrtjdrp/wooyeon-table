@@ -201,8 +201,10 @@ export async function checkBeforeSend(n: { id: string; dedupe_key: string | null
   let edited = ed.has(n.id);
   const v = verdict({ ...(row as Row), edited, editedStale: edited && staleEdit(ed.get(n.id), tb) }, app, tableState(tb), { gone: app ? gone.has(app.user_id) : false }, t);
   // 운영자가 고친 문구가 옛 테이블 기준이면, 보내기 직전엔 거두는 대신 지금 내용으로 바꿔 보낸다(다시 걸 기회가 없으므로)
-  if (v.action === "cancel" && v.why === EDITED_STALE) edited = false;
-  else if (v.action === "cancel") return { skip: v.why };
+  if (v.action === "cancel" && v.why === EDITED_STALE) {
+    edited = false;
+    await logStatus({ entityType: "notification", entityId: n.id, field: "scheduled_edit_overridden", from: "운영자 문구", to: "지금 식당·시각 문구", actor: "system", reason: EDITED_STALE }).catch(() => null);
+  } else if (v.action === "cancel") return { skip: v.why };
   if (kind === "remind" && tb) {
     // 같은 신청에 하루 전 안내가 이미 나갔으면 다시 보내지 않는다
     const { data: dup } = await db().from("notifications").select("id").like("dedupe_key", `remind:${appId}%`).eq("status", "sent").neq("id", n.id).limit(1);
