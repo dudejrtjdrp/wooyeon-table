@@ -111,12 +111,14 @@ export async function remindPassExpiry(t: Date): Promise<number> {
     return stage ? [{ p, stage, key: expiryKey(p.id, p.expires_at, stage.key) }] : [];
   });
   if (!due.length) return 0;
-  const { data: had } = await db().from("notifications").select("dedupe_key").in("dedupe_key", due.map((d) => d.key));
+  // 예전 키(pass_expiry:{이용권}:{단계}, 기한 없음)로 이미 보낸 단계도 보낸 것으로 친다(키를 바꾼 날 같은 알림이 두 번 가지 않게)
+  const legacy = (d: (typeof due)[number]) => `pass_expiry:${d.p.id}:${d.stage.key}`;
+  const { data: had } = await db().from("notifications").select("dedupe_key").in("dedupe_key", [...due.map((d) => d.key), ...due.map(legacy)]);
   const already = new Set((had ?? []).map((x) => x.dedupe_key));
   let tpl: Awaited<ReturnType<typeof loadTemplates>> | null = null;
   let sent = 0;
   for (const { p, stage, key } of due) {
-    if (already.has(key)) continue;
+    if (already.has(key) || already.has(`pass_expiry:${p.id}:${stage.key}`)) continue;
     tpl ??= await loadTemplates();
     const label = PASSES[p.pass_type as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[p.pass_type] ?? "이용권";
     const m = render("pass_expiry", { pass: label, left: stage.left, until: fmtDay(p.expires_at) }, tpl);

@@ -23,7 +23,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   const { e, step } = await searchParams;
   const { data: round } = await db()
     .from("rounds")
-    .select("id,title,apply_deadline,match_at,slots(id,region,sido,starts_at)")
+    .select("id,title,apply_deadline,match_at,status,slots(id,region,sido,starts_at)")
     .eq("id", roundId)
     .maybeSingle();
   if (!round) notFound();
@@ -46,12 +46,12 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   }
 
   // 모든 날이 환불 마감(모임 주 화요일 밤 12시)을 지났으면 신청 화면 대신 이유와 갈 곳을 보여 준다
-  if (!round.slots.some((s) => acceptsSlot(s.starts_at, t))) {
+  if (!round.slots.some((s) => acceptsSlot(s.starts_at, t)) || round.status !== "open" || new Date(round.apply_deadline) <= t) {
     return (
       <Screen title="신청" back="/rounds">
         <div className="px-6 pt-10 text-center">
           <p className="text-[20px] font-extrabold text-ink">이 일정은 신청이 끝났어요</p>
-          <p className="mt-2 text-[15px] leading-relaxed text-muted">{round.title}의 모든 날이 환불 마감(모임 주 화요일 밤 12시)을 지났어요. 그 뒤에는 결과 전 취소도 환불도 안 돼서 신청을 받지 않아요.</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-muted">{round.status !== "open" || new Date(round.apply_deadline) <= t ? `${round.title} 신청 마감(${fmtSlot(round.apply_deadline)})이 지났어요.` : `${round.title}의 모든 날이 환불 마감(모임 주 화요일 밤 12시)을 지났어요. 그 뒤에는 결과 전 취소도 환불도 안 돼서 신청을 받지 않아요.`}</p>
           <LinkButton href="/rounds" className="mt-8">모집 중인 일정 보기</LinkButton>
           <LinkButton href="/wish" tone="outline" className="mt-2.5">새 일정이 열리면 알림 받기</LinkButton>
         </div>
