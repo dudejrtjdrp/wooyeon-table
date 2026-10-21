@@ -59,7 +59,7 @@ export default async function Pay({ params, searchParams }: { params: Promise<{ 
 
         {noRefund && (
           <p role="alert" className="mt-3 rounded-[22px] bg-danger/10 p-5 text-[14px] font-semibold leading-relaxed text-danger">
-            이 일정은 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 신청을 취소하거나 환불받을 수 없어요.
+            이 일정은 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 취소해도 환불받을 수 없어요.
           </p>
         )}
 
