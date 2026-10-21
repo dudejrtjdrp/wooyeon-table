@@ -38,7 +38,7 @@ export function explainScore(c: Content, common: string[], types: string[], rule
   const tagHit = common.findIndex((t) => (c.tags ?? []).includes(t));
   if (tagHit !== -1) out.push({ text: `#${common[tagHit]} · 테이블 관심사 ${tagHit + 1}순위`, points: rules.interestWeight * (1 - tagHit * 0.15) });
   for (const t of c.table_types ?? []) if (types.includes(t)) out.push({ text: TYPE_NAME[t] ?? TYPE_LABEL[t] ?? t, points: rules.typeWeight });
-  if (c.priority) out.push({ text: "우선순위", points: c.priority });
+  if (c.priority) out.push({ text: c.priority > 0 ? "더 자주 뽑기로 정함" : "덜 자주 뽑기로 정함", points: c.priority });
   return out;
 }
 
