@@ -2,7 +2,7 @@ import Link from "next/link";
 import { afterMeetingNote, canClaimAttended } from "@/lib/attendance-rules";
 import { now } from "@/lib/clock";
 import { redirect } from "next/navigation";
-import { ChevronDown, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { ConfirmSubmit, CountedTextarea, ErrorText, Optional, PageTitle, PrimaryButton, Required, Screen, SectionCard, StarRating, inputCls } from "@/components/ui";
 import { requireMe } from "@/lib/auth";
 import { FEEDBACK_SCORES, parseMissing } from "@/lib/feedback-rules";
@@ -110,14 +110,14 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           <input type="hidden" name="table_id" value={id} />
           <div>
             <p className="text-[16px] font-bold text-ink">신고 대상<Required /></p>
-            <div className="relative mt-2.5">
-              <select name="target" defaultValue="" required className={`${inputCls} appearance-none pr-12`}>
-                <option value="" disabled>대상을 선택해 주세요.</option>
-                {others.map((o) => (
-                  <option key={o.user_id} value={o.user_id}>{o.users.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={20} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted" />
+            <p className="mt-1 text-[13px] text-muted">여러 명이면 모두 골라 주세요.</p>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              {others.map((o) => (
+                <label key={o.user_id} className="cursor-pointer">
+                  <input type="checkbox" name="target" value={o.user_id} className="peer sr-only" />
+                  <span className="flex min-h-12 items-center justify-center rounded-[14px] bg-row px-2 text-center text-[14px] text-ink transition peer-checked:bg-danger/10 peer-checked:font-extrabold peer-checked:text-danger peer-focus-visible:ring-2 peer-focus-visible:ring-danger">{o.users.name}</span>
+                </label>
+              ))}
             </div>
           </div>
           <div>
@@ -136,7 +136,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
             <div className="mt-2.5"><CountedTextarea name="detail" max={500} rows={3} placeholder="필요한 내용을 적어 주세요." className={ta} /></div>
           </div>
           {miss.size === 0 && <ErrorText msg={e} />}
-          <ConfirmSubmit label="신고하고 차단하기" question="신고하면 이 분과는 다시 같은 테이블에 앉지 않아요. 상대에게는 알리지 않고, 운영팀이 내용을 확인해요." confirmLabel="신고하기" />
+          <ConfirmSubmit label="신고하고 차단하기" question="신고하면 고른 분과는 다시 같은 테이블에 앉지 않아요. 상대에게는 알리지 않고, 운영팀이 내용을 확인해요." confirmLabel="신고하기" />
         </form>
       </section>
     </Screen>

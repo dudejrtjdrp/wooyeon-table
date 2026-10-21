@@ -50,27 +50,32 @@ export async function submitFeedback(form: FormData) {
   redirect(`/tables/${tableId}/feedback/done`);
 }
 
-/** 신고·차단 (SAF-01). 신고 내용은 상대에게 보이지 않는다 */
+/** 신고·차단 (SAF-01). 여러 명을 한 번에 고를 수 있다. 신고 내용은 상대에게 보이지 않는다 */
 export async function report(form: FormData) {
   const me = await requireMe();
   const tableId = String(form.get("table_id"));
-  const target = String(form.get("target"));
+  const targets = [...new Set(form.getAll("target").map(String).filter(Boolean))];
   const reason = String(form.get("reason") ?? "");
   const detail = String(form.get("detail") ?? "").trim();
-  if (!target || !reason) redirect(`/tables/${tableId}/feedback?e=${encodeURIComponent("신고할 사람과 이유를 골라 주세요")}#report`);
+  if (!targets.length || !reason) redirect(`/tables/${tableId}/feedback?e=${encodeURIComponent("신고할 사람과 이유를 골라 주세요")}#report`);
   // 신고자와 대상이 실제로 이 테이블에 함께 배정됐던 사이인지 확인한다 (아무나 골라 신고·차단하지 못하게)
-  const { data: seats } = await db().from("applications").select("user_id").eq("table_id", tableId).in("user_id", [me.id, target]);
+  const { data: seats } = await db().from("applications").select("user_id").eq("table_id", tableId).in("user_id", [me.id, ...targets]);
   const seated = new Set((seats ?? []).map((x) => x.user_id));
-  if (target === me.id || !seated.has(me.id) || !seated.has(target)) {
+  if (targets.includes(me.id) || !seated.has(me.id) || targets.some((x) => !seated.has(x))) {
     redirect(`/tables/${tableId}/feedback?e=${encodeURIComponent("이 테이블에서 함께한 분만 신고할 수 있어요")}#report`);
   }
+  for (const target of targets) await reportOne(me.id, target, tableId, reason, detail);
+  const msg = targets.length > 1 ? `신고가 접수됐어요. 앞으로 고른 ${targets.length}분과는 같은 테이블에 앉지 않아요` : "신고가 접수됐어요. 앞으로 이분과는 같은 테이블에 앉지 않아요";
+  redirect(`/tables/${tableId}?m=${encodeURIComponent(msg)}`);
+}
 
+async function reportOne(meId: string, target: string, tableId: string, reason: string, detail: string) {
   const { data: rep } = await db()
     .from("safety_reports")
-    .insert({ reporter_id: me.id, reported_id: target, table_id: tableId, reason, detail: detail || null })
+    .insert({ reporter_id: meId, reported_id: target, table_id: tableId, reason, detail: detail || null })
     .select("id")
     .single();
-  await db().from("blocks").upsert({ blocker_id: me.id, blocked_id: target });
+  await db().from("blocks").upsert({ blocker_id: meId, blocked_id: target });
   await db().from("exceptions").upsert(
     { kind: "safety", ref_type: "safety_report", ref_id: rep!.id, reason: `안전 신고: ${reason}`, dedupe_key: `safety:${rep!.id}` },
     { onConflict: "dedupe_key", ignoreDuplicates: true },
@@ -79,18 +84,17 @@ export async function report(form: FormData) {
   const { data: upcoming } = await db()
     .from("applications")
     .select("id,user_id,table_id,dining_tables!inner(status)")
-    .in("user_id", [me.id, target])
+    .in("user_id", [meId, target])
     .eq("match_status", "CONFIRMED")
     .eq("attendance_status", "SCHEDULED")
     .not("table_id", "is", null)
     .neq("table_id", tableId);
   const rows = (upcoming ?? []) as unknown as { id: string; user_id: string; table_id: string; dining_tables: { status: string } }[];
   for (const t of rows.filter((x) => x.user_id === target && x.dining_tables.status !== "DONE")) {
-    if (!rows.some((x) => x.user_id === me.id && x.table_id === t.table_id)) continue;
+    if (!rows.some((x) => x.user_id === meId && x.table_id === t.table_id)) continue;
     await db().from("exceptions").upsert(
-      { kind: "condition_conflict", ref_type: "application", ref_id: t.id, reason: "신고가 들어온 두 사람이 다음 모임에서 같은 테이블이에요. 한 분을 다른 테이블로 옮겨 주세요", dedupe_key: `conflict:${t.id}:${me.id}` },
+      { kind: "condition_conflict", ref_type: "application", ref_id: t.id, reason: "신고가 들어온 두 사람이 다음 모임에서 같은 테이블이에요. 한 분을 다른 테이블로 옮겨 주세요", dedupe_key: `conflict:${t.id}:${meId}` },
       { onConflict: "dedupe_key", ignoreDuplicates: true },
     );
   }
-  redirect(`/tables/${tableId}?m=${encodeURIComponent("신고가 접수됐어요. 앞으로 이분과는 같은 테이블에 앉지 않아요")}`);
 }

@@ -29,13 +29,18 @@ export async function sendMessage(form: FormData) {
   const tableId = String(form.get("table_id"));
   const body = String(form.get("body") ?? "").trim().slice(0, 500);
   if (!body) return;
-  if (!(await membership(tableId, me.id))) redirect("/");
+  const mem = await membership(tableId, me.id);
+  if (!mem) redirect("/");
+  const { leftUsers } = await import("@/lib/chat-leave");
+  if ((await leftUsers([{ id: mem.id, user_id: me.id }])).has(me.id)) redirect(`/tables/${tableId}?m=${encodeURIComponent("나간 단체방이에요")}`);
   const roomId = await ensureRoom(tableId);
   await db().from("chat_messages").insert({ room_id: roomId, sender_id: me.id, kind: "user", body });
   // 같은 테이블의 다른 사람들에게 푸시 (화면 응답 뒤에 보낸다)
   after(async () => {
-    const { data: others } = await db().from("applications").select("user_id").eq("table_id", tableId).eq("match_status", "CONFIRMED").neq("user_id", me.id);
-    await pushToUsers((others ?? []).map((o) => o.user_id), { title: `${me.name}님의 새 메시지`, body: body.slice(0, 80), url: `/tables/${tableId}/chat`, tag: `chat-${tableId}` }).catch(() => null);
+    const { data: others } = await db().from("applications").select("id,user_id").eq("table_id", tableId).eq("match_status", "CONFIRMED").neq("user_id", me.id);
+    const { leftUsers } = await import("@/lib/chat-leave");
+    const gone = await leftUsers(others ?? []);
+    await pushToUsers((others ?? []).filter((o) => !gone.has(o.user_id)).map((o) => o.user_id), { title: `${me.name}님의 새 메시지`, body: body.slice(0, 80), url: `/tables/${tableId}/chat`, tag: `chat-${tableId}` }).catch(() => null);
     // 시연 봇이 몇 초 뒤 한두 명 답한다. 봇이 쓴 말에는 답하지 않는다 (lib/sim/bots.ts)
     const { botReplies } = await import("@/lib/sim/bots");
     await botReplies(tableId, { live: true }).catch((e) => console.error("[bots] 답장 실패", e));
@@ -124,3 +129,24 @@ export async function claimAttended(form: FormData) {
   redirect(`/tables/${tableId}?m=${encodeURIComponent("알려 주셔서 고마워요. 운영팀이 확인하면 참석으로 바뀌고 별점을 남길 수 있어요")}`);
 }
 
+
+/** 단체방 나가기. 모임이 끝난 뒤에만. 다른 분들께는 '한 분이 단체방을 나갔어요'만 알린다 */
+export async function leaveChat(form: FormData) {
+  const me = await requireMe();
+  const tableId = String(form.get("table_id"));
+  const mem = await membership(tableId, me.id);
+  if (!mem) redirect("/");
+  const { data: t } = await db().from("dining_tables").select("status,slots(starts_at,ends_at)").eq("id", tableId).single();
+  const { meetingEnded } = await import("@/lib/meeting-time");
+  if (!meetingEnded(t as unknown as Parameters<typeof meetingEnded>[0], await now())) {
+    redirect(`/tables/${tableId}/chat?e=${encodeURIComponent("모임이 끝난 뒤에 나갈 수 있어요")}`);
+  }
+  const { leftUsers } = await import("@/lib/chat-leave");
+  if (!(await leftUsers([{ id: mem.id, user_id: me.id }])).has(me.id)) {
+    await logStatus({ entityType: "application", entityId: mem.id, field: "chat", from: "IN", to: "LEFT", actor: `user:${me.id}`, reason: "단체방 나가기" });
+    const roomId = await ensureRoom(tableId);
+    await postSystem(roomId, `${me.name}님이 단체방을 나갔어요.`);
+  }
+  revalidatePath(`/tables/${tableId}/chat`);
+  redirect(`/my-tables?m=${encodeURIComponent("단체방에서 나갔어요")}`);
+}
