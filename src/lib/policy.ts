@@ -15,6 +15,11 @@ export function refundCutoff(startsAt: string | Date): Date {
   return new Date(dayStart - back * DAY);
 }
 
+/** 이 모임에 아직 신청을 받는지: 환불 마감(모임 주 화요일 밤 12시) 전이어야 한다. 마감 뒤 신청은 결과 전 취소도 환불도 안 돼서 받지 않는다 */
+export function acceptsSlot(startsAt: string | Date, now: Date): boolean {
+  return refundCutoff(startsAt).getTime() > now.getTime();
+}
+
 /** 여러 일정 중 가장 이른 모임의 마감 (회차의 매칭 마감 기본값) */
 export function roundCutoff(starts: string[]): Date | null {
   if (!starts.length) return null;

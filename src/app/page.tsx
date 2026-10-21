@@ -17,6 +17,7 @@ import { usablePass } from "@/lib/billing";
 import { now } from "@/lib/clock";
 import { PASSES, isMembership } from "@/lib/constants";
 import { autoKeepAt } from "@/lib/resolve";
+import { acceptsSlot } from "@/lib/policy";
 import { dday, ddayLabel, fmtDay, fmtDayClock, fmtSlot } from "@/lib/format";
 import { areasLabel } from "@/lib/regions";
 import { maybeTick } from "@/lib/pipeline";
@@ -44,8 +45,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   const me = await getMe();
   if (!me) {
     // 처음 온 사람에게 가장 가까운 모임 시각을 보여 준다
-    const { data: soon } = await db().from("slots").select("starts_at,rounds!inner(status,apply_deadline)").eq("rounds.status", "open").gt("rounds.apply_deadline", (await now()).toISOString()).order("starts_at").limit(1);
-    return <AuthChooser upcoming={soon?.[0] ? fmtSlot(soon[0].starts_at) : null} />;
+    const t0 = await now();
+    const { data: soonRows } = await db().from("slots").select("starts_at,rounds!inner(status,apply_deadline)").eq("rounds.status", "open").gt("rounds.apply_deadline", t0.toISOString()).order("starts_at").limit(20);
+    const soon = (soonRows ?? []).find((x) => acceptsSlot(x.starts_at, t0));
+    return <AuthChooser upcoming={soon ? fmtSlot(soon.starts_at) : null} />;
   }
   const { m } = await searchParams;
   // 마감·리마인드·모임 시작 같은 시간 이벤트를 화면을 열 때도 처리한다 (크론 보조)
@@ -108,7 +111,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   // 일정(날짜·시간)별로 묶어 보여준다
   const slotRows = new Map<string, { roundId: string; startsAt: string; deadline: string; regions: string[] }>();
   for (const r of (open ?? []) as { id: string; apply_deadline: string; slots: { region: string; starts_at: string }[] | null }[]) {
-    for (const sl of r.slots ?? []) {
+    for (const sl of (r.slots ?? []).filter((x) => acceptsSlot(x.starts_at, t))) {
       const k = `${r.id}|${sl.starts_at}`;
       const cur = slotRows.get(k) ?? { roundId: r.id, startsAt: sl.starts_at, deadline: r.apply_deadline, regions: [] as string[] };
       if (!cur.regions.includes(sl.region)) cur.regions.push(sl.region);

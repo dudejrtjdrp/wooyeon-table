@@ -9,7 +9,7 @@ import { usablePass } from "@/lib/billing";
 import { fmtDay, fmtSlot } from "@/lib/format";
 import { logStatus } from "@/lib/events";
 import { notify } from "@/lib/notify";
-import { roundCutoff } from "@/lib/policy";
+import { acceptsSlot, roundCutoff } from "@/lib/policy";
 import { loadTemplates, render } from "@/lib/templates";
 import { areasLabel, sidoOf, slotsFor } from "@/lib/regions";
 import { db } from "@/lib/supabase";
@@ -36,7 +36,11 @@ export async function submitApplication(form: FormData) {
   if (!areas.length) back("동네를 하나 이상 골라주세요");
   if (!dates.length) back("갈 수 있는 날을 하나 이상 골라주세요");
   // 고른 동네 묶음 × 날짜에 열린 일정이 지원 대상이다. '가까운 동네'는 매칭 때 엔진이 따로 넓힌다
-  const chosen = slotsFor(areas, dates, round!.slots ?? []);
+  // 환불 마감(모임 주 화요일 밤 12시)이 지난 일정은 받지 않는다. 그 뒤 신청은 결과 전 취소도 환불도 안 된다
+  const t0 = await now();
+  const allChosen = slotsFor(areas, dates, round!.slots ?? []);
+  const chosen = allChosen.filter((id) => acceptsSlot((round!.slots ?? []).find((x) => x.id === id)!.starts_at, t0));
+  if (allChosen.length && !chosen.length) back("고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 지나 신청을 받지 않아요. 다른 날짜를 골라 주세요");
   if (chosen.length === 0) back("고른 동네와 날짜에 열린 테이블이 없어요. 다시 골라주세요");
   if (!(pass in PASSES)) back("이용권을 골라 주세요");
   if (form.get("agree_refund") !== "on") back("환불 규정을 확인해 주세요");

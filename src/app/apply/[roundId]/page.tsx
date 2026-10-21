@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { acceptsSlot } from "@/lib/policy";
 import { requireProfile } from "@/lib/auth";
 import { usablePass } from "@/lib/billing";
 import { now } from "@/lib/clock";
@@ -61,15 +62,18 @@ export default async function Apply({ params, searchParams }: { params: Promise<
   const { count: paidBefore } = await db().from("applications").select("id", { count: "exact", head: true }).eq("user_id", me.id).neq("round_id", roundId).not("payment_id", "is", null).eq("payment_status", "PAID"); // 환불만 받은 신청은 세지 않는다
   const nudge = membershipNudge(paidBefore ?? 0, Boolean(owned), PASSES.single.amount, PASSES.m1.amount);
 
-  const slots = round.slots.map((s) => ({ id: s.id, region: s.region, sido: s.sido ?? null, day: kstDay(s.starts_at), label: fmtSlot(s.starts_at), startsAt: s.starts_at }));
+  // 환불 마감이 지난 날은 신청을 받지 않는다(달력에서 '마감'으로 보인다)
+  const closedDays = [...new Set(round.slots.filter((s) => !acceptsSlot(s.starts_at, t)).map((s) => kstDay(s.starts_at)))];
+  const slots = round.slots.filter((s) => acceptsSlot(s.starts_at, t)).map((s) => ({ id: s.id, region: s.region, sido: s.sido ?? null, day: kstDay(s.starts_at), label: fmtSlot(s.starts_at), startsAt: s.starts_at }));
 
   return (
     <ApplyFlow
       action={submitApplication}
-      round={{ id: round.id, title: round.title, deadline: fmtSlot(round.apply_deadline), today: kstDay(t.toISOString()), now: t.toISOString() }}
+      round={{ id: round.id, title: round.title, deadline: fmtSlot(round.apply_deadline), today: kstDay(t.toISOString()) }}
       sidos={sidos.map(({ name, areas }) => ({ name, areas: areas.map(({ name: n, open: o }) => ({ name: n, open: o })) }))}
       hot={hot}
       slots={slots}
+      closedDays={closedDays}
       passes={Object.entries(PASSES).map(([k, p]) => ({ key: k, label: p.label, amount: p.amount, desc: p.desc }))}
       owned={owned ? { label: PASSES[owned.pass_type as keyof typeof PASSES]?.label ?? LEGACY_PASS_LABEL[owned.pass_type] ?? "이용권", remaining: owned.remaining, unlimited: isMembership(owned.pass_type), until: owned.expires_at ? fmtDay(owned.expires_at) : null } : null}
       refund={REFUND_POLICY}
