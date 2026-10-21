@@ -7,12 +7,12 @@ import { ADMIN_LEVEL_LABEL, adminLevelOf, getMe, isActiveAdmin } from "@/lib/aut
 import { now } from "@/lib/clock";
 import { fmtDateTime } from "@/lib/format";
 import { db } from "@/lib/supabase";
-import { logout } from "../login/actions";
+import { adminLogout } from "../login/actions";
 import { Flash } from "./flash";
 import { AdminNav } from "./nav";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const me = await getMe();
+  const me = await getMe("admin");
   if (!isActiveAdmin(me)) return <div className="admin-theme min-h-dvh bg-paper">{children}</div>;
   const [{ count }, { data: clock }, t, level] = await Promise.all([
     db().from("exceptions").select("id", { count: "exact", head: true }).eq("status", "open"),
@@ -38,7 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <p className="mt-0.5 tabular-nums">{fmtDateTime(t.toISOString())}</p>
           </div>
           <p className="px-3 text-[13px] text-muted">운영자 {me.name} · <span className={level === "viewer" ? "font-semibold text-warn" : ""}>{ADMIN_LEVEL_LABEL[level]}</span></p>
-          <form action={logout} className="px-3"><button className="flex items-center gap-2 text-[14px] text-muted hover:text-ink"><LogOut size={17} />로그아웃</button></form>
+          <form action={adminLogout} className="px-3"><button className="flex items-center gap-2 text-[14px] text-muted hover:text-ink"><LogOut size={17} />로그아웃</button></form>
           <Link href="/guide" className="block px-3 text-[12px] text-muted/70 hover:text-ink">심사위원 안내 보기</Link>
         </div>
       </aside>

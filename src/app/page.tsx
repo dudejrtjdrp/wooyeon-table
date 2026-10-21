@@ -127,7 +127,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
         </>
       ) : active ? (
         <>
-          <Greeting>{greetingFor(active, firstName)}</Greeting>
+          <Greeting>{greetingFor(active, firstName, t)}</Greeting>
           <StatusCard a={active} t={t} members={members.map((x) => x.users?.name ?? "")} meId={me.id} memberIds={members.map((x) => x.user_id)} />
           {/* 확정·하루 전 안내를 휴대폰으로 받으려면 알림을 켜야 해서, 진행 중인 신청이 있을 때 한 번 보여 준다 */}
           <div className="mt-3"><PushToggle variant="card" /></div>
@@ -291,7 +291,11 @@ function Hero({ children, right, photo }: { children: React.ReactNode; right?: R
   );
 }
 
-function greetingFor(a: ActiveRow, name: string) {
+function greetingFor(a: ActiveRow, name: string, t: Date) {
+  // 상태 이름은 status.ts headline과 맞춘다('확인 중'·'결과 정리 중')
+  const h = headline(a, t).label;
+  if (h === "확인 중") return <>{name}님, 이번 신청은<br />운영팀이 확인하고 있어요</>;
+  if (h === "결과 정리 중") return <>{name}님, 지금<br />테이블을 꾸리고 있어요</>;
   if (a.match_status === "CONFIRMED") return <>{name}님, 이번 식탁<br />자리가 정해졌어요</>;
   if (a.match_status === "ALTERNATIVE_OFFERED") return <>{name}님, 이번엔<br />다음 방법을 골라 주세요</>;
   if (["PENDING", "FAILED"].includes(a.payment_status)) return <>{name}님, 결제만 마치면<br />매칭에 들어가요</>;

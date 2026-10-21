@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, History, CalendarRange, ChartNoAxesColumn, ChefHat, MapPin, CreditCard, Gauge, LayoutDashboard, MessageSquareText, MessagesSquare, ShieldCheck, SlidersHorizontal, UserCheck, UserSearch, Users, UtensilsCrossed } from "lucide-react";
+import { Route, AlertTriangle, History, CalendarRange, ChartNoAxesColumn, ChefHat, MapPin, CreditCard, Gauge, LayoutDashboard, MessageSquareText, MessagesSquare, ShieldCheck, SlidersHorizontal, UserCheck, UserSearch, Users, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,6 +8,9 @@ import { usePathname } from "next/navigation";
 // hint는 마우스를 올리면 뜨는 한 줄 설명(처음 온 운영자용). subs: 화면 안의 탭(그 메뉴에 있을 때 아래에 펼쳐 보인다)
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; hint: string; subs?: { href: string; label: string }[] };
 const GROUPS: { name: string; items: Item[] }[] = [
+  { name: "심사", items: [
+    { href: "/admin/tour", label: "심사 투어", icon: Route, hint: "처음이면 여기부터. 버튼 하나씩 눌러 신청부터 다음 매칭까지 한 바퀴를 봐요" },
+  ] },
   { name: "매일", items: [
     { href: "/admin", label: "오늘 처리할 일", icon: LayoutDashboard, hint: "지금 처리할 일과 이번 회차 진행 상황을 한눈에 봐요" },
     { href: "/admin/exceptions", label: "예외 처리함", icon: AlertTriangle, hint: "자동으로 풀지 못한 일만 모았어요. 건마다 버튼 하나로 처리해요" },

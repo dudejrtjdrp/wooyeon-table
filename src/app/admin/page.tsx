@@ -132,6 +132,15 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           <button className={btnLight}>보기</button>
         </form>
       </div>
+      {me.level === "full" && (
+        <Link href="/admin/tour" className="relative mt-5 flex items-center justify-between gap-4 rounded-[18px] bg-ink px-5 py-4 text-white hover:brightness-110">
+          <span>
+            <span className="block text-[16px] font-bold">처음 보시나요? 심사 투어로 한 바퀴 돌아보기</span>
+            <span className="mt-0.5 block text-[13px] text-white/75">버튼 하나씩 눌러 신청부터 자동 매칭·모임·후기·다음 매칭까지 보고, 단계마다 어디서 확인하면 되는지 알려 줘요</span>
+          </span>
+          <ChevronRight size={22} aria-hidden="true" />
+        </Link>
+      )}
       <div className="relative lg:mr-[400px]">
         <HowTo steps={["처리할 일 숫자를 눌러 예외 처리함으로 가기", "건마다 적힌 '먼저 할 일'대로 버튼 누르기", <>위에서 <Term tip={TIP.회차}>회차</Term>를 골라 진행 단계·현황 보기</>]} />
       </div>
@@ -254,6 +263,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             <ChevronDown size={20} className="text-muted transition group-open:rotate-180" />
           </summary>
           <p className="mt-2 rounded-xl bg-card px-3 py-2 text-[14px] font-semibold text-ink">{demoHeaderLine(roundLabel(round.title, round.slots.map((s) => s.starts_at)), t, Number(clock?.offset_seconds ?? 0), (d) => fmtDateTime(d.toISOString()))}</p>
+          <p className="mt-2 rounded-xl bg-accent-soft px-3 py-2 text-[14px] font-semibold text-accent-text">처음이면 이 패널 대신 <Link href="/admin/tour" className="underline underline-offset-4">심사 투어</Link>를 쓰세요. 버튼 하나씩 순서대로 눌러 한 바퀴를 볼 수 있어요. 아래는 회차를 골라 단계를 따로 돌려 보는 고급 도구예요.</p>
           <p className="mt-1 text-[13px] text-muted">아래 버튼은 모두 이 회차에 적용돼요. 다른 회차에 쓰려면 위에서 회차를 고르세요. 마감 시각을 기다리지 않고 한 회차의 흐름을 처음부터 끝까지 돌려볼 수 있어요. 테스트 참가자만 만들고 바꿔요. 실제 운영에서는 숨기는 도구예요.</p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">

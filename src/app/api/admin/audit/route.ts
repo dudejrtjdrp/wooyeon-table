@@ -11,7 +11,7 @@ const MAX = 5000;
 
 // 변경 이력 CSV. 화면과 같은 거르기를 그대로 받고, 내려받은 사실도 이력에 남긴다 (PRD 16장 운영 및 추적)
 export async function GET(req: Request) {
-  const me = await getMe();
+  const me = await getMe("admin");
   if (!isActiveAdmin(me)) return NextResponse.json({ ok: false }, { status: 401 });
   const sp = Object.fromEntries(new URL(req.url).searchParams);
   const f = { ...parseAuditFilter(sp), page: 1 };

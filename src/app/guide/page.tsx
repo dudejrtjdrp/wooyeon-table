@@ -95,6 +95,18 @@ export default async function Guide() {
         참가자는 고르고 결제하고 와서 먹기만 해요. 그 사이는 시스템이 하고, 운영자는 <b className="text-ink">자동으로 끝내지 못한 예외만</b> 봐요.
       </p>
 
+      {A && (
+        <section className="mt-6 rounded-[20px] bg-ink p-5 text-white" aria-labelledby="start-title">
+          <h2 id="start-title" className="text-[18px] font-bold">처음이면 여기부터: 심사 투어</h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-white/80">운영자 화면에서 <b className="text-white">초록 버튼 하나씩</b>만 누르면 신청 → 자동 매칭 → 안내 → 모임 → 후기 → 다음 매칭까지 한 바퀴를 볼 수 있어요. 단계마다 운영자 화면과 참가자 앱에서 어디를 보면 되는지 버튼으로 알려 줘요. 비밀번호는 필요 없어요.</p>
+          <form action={demoLogin} className="mt-4">
+            <input type="hidden" name="login_id" value={A} />
+            <input type="hidden" name="to" value="/admin/tour" />
+            <button className="inline-flex min-h-12 items-center rounded-2xl bg-white px-6 text-[16px] font-bold text-ink">심사 투어 시작하기</button>
+          </form>
+        </section>
+      )}
+
       <section className="mt-8" aria-labelledby="flow-title">
         <h2 id="flow-title" className="text-[17px] font-bold">한눈에 보는 흐름</h2>
         <ol className="mt-4 grid gap-2.5 sm:grid-cols-2">
