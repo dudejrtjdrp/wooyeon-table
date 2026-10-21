@@ -1,6 +1,7 @@
 "use server";
 
 import { slotClashes } from "@/lib/round-copy";
+import { quietly, syncScheduled } from "@/lib/scheduled";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminWrite } from "@/lib/auth";
@@ -225,6 +226,8 @@ export async function cancelRound(form: FormData) {
     }
   }
   const ids = (apps ?? []).map((a) => a.id);
+  // 결제 안내 등 이 회차 신청에 걸린 예약 알림을 사유와 함께 거둔다
+  await quietly(syncScheduled(ids, actor, why));
   const { data: after } = ids.length ? await db().from("applications").select("payment_status").in("id", ids) : { data: [] as { payment_status: string }[] };
   const refunded = (after ?? []).filter((a) => a.payment_status === "REFUNDED").length;
   const failed = (after ?? []).filter((a) => a.payment_status === "REFUND_FAILED").length;

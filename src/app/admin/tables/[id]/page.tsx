@@ -223,8 +223,8 @@ export default async function TableDetail({ params, searchParams }: { params: Pr
             <ul className="divide-y divide-line text-[13px]">
               {(notes ?? []).map((n) => (
                 <li key={n.id} className="flex items-center justify-between gap-2 py-2">
-                  <span className="min-w-0 truncate">{nameOf.get(n.user_id)} · {n.title}</span>
-                  <Badge v={n.status === "sent" ? (n.read_at ? ["읽음", "leaf"] : ["보냄", "accent"]) : n.status === "pending" ? [`예약 ${fmtDateTime(n.scheduled_at)}`, "muted"] : [`실패 ${n.attempts}회`, "danger"]} />
+                  {n.status === "pending" ? <Link href={`/admin/messages/scheduled/${n.id}`} className="min-w-0 truncate text-accent hover:underline">{nameOf.get(n.user_id)} · {n.title}</Link> : <span className="min-w-0 truncate">{nameOf.get(n.user_id)} · {n.title}</span>}
+                  <Badge v={n.status === "sent" ? (n.read_at ? ["읽음", "leaf"] : ["보냄", "accent"]) : n.status === "pending" ? [`예약 ${fmtDateTime(n.scheduled_at)}`, "muted"] : n.status === "canceled" ? ["예약 취소", "ink"] : [`실패 ${n.attempts}회`, "danger"]} />
                 </li>
               ))}
               {!notes?.length && <li className="py-2 text-muted">보낸 안내가 없어요.</li>}

@@ -1,5 +1,6 @@
 // 확정 뒤 참가 취소와, 인원이 모자란 테이블의 자동 재배치 (PRD 15장 "확정 후 1명 취소")
 import { extendMembershipFor, releaseUse } from "./billing";
+import { quietly, syncScheduled } from "./scheduled";
 import { now } from "./clock";
 import { logStatus } from "./events";
 import { fmtClock, fmtSlot } from "./format";
@@ -89,8 +90,8 @@ export async function cancelConfirmed(
   const { data: up } = await db().from("applications").update({ attendance_status: to, table_id: null, match_reason: opts.byAdmin ? "운영팀이 참석을 취소했어요. 궁금한 점은 문의해 주세요." : null }).eq("id", appId).eq("attendance_status", "SCHEDULED").select("id");
   if (!up?.length) return { ok: false, message: "이미 처리된 신청이에요" };
   await logStatus({ entityType: "application", entityId: appId, field: "attendance_status", from: "SCHEDULED", to, actor, reason: `${opts.reason} (테이블 ${tableId.slice(0, 8)})` });
-  // 이 사람에게 예약해 둔 이 테이블 안내는 보내지 않는다
-  await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/tables/${tableId}`);
+  // 이 사람에게 예약해 둔 이 테이블 안내(하루 전 안내 등)는 사유와 함께 취소한다
+  await quietly(syncScheduled([appId], actor, opts.reason));
 
   let body: string;
   if (rule.kind === "early") body = await releaseUse(appId, actor, opts.byAdmin ? `${opts.reason}, 환불 마감 전` : "환불 마감 전 취소");
@@ -159,8 +160,9 @@ export async function reflowTable(tableId: string, actor: string) {
       const { data: cur } = await db().from("applications").select("realloc_count").eq("id", m.id).single();
       await db().from("applications").update({ realloc_count: (cur?.realloc_count ?? 0) + 1 }).eq("id", m.id);
       await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "CONFIRMED", actor, reason: `인원 부족으로 다른 테이블 재배치 (${tableId.slice(0, 8)} → ${target.id.slice(0, 8)})` });
-      // 예전 테이블 안내(하루 전 리마인드 등)는 보내는 순간 새 테이블로 다시 쓰이고, 남은 예전 링크 알림은 지운다
+      // 하루 전 안내는 새 테이블의 링크·시각(다른 날짜일 수 있다)·문구로 맞추고, 남은 예전 링크 알림은 지운다
       await db().from("notifications").delete().eq("user_id", m.user_id).eq("status", "pending").eq("link", `/tables/${tableId}`).not("dedupe_key", "like", "remind:%");
+      await quietly(syncScheduled([m.id], actor, `인원 부족 재배치 (${tableId.slice(0, 8)} → ${target.id.slice(0, 8)})`));
       const room = await ensureRoom(target.id);
       await postSystem(room, `새로운 분이 합류했어요. ${m.name}님 반가워요!`);
       const msg = render("reallocated", { ...slotVars(target.slots.starts_at), region: target.slots.region }, tpl);
@@ -171,6 +173,7 @@ export async function reflowTable(tableId: string, actor: string) {
       await db().from("applications").update({ table_id: null, match_status: "ALTERNATIVE_OFFERED", payment_status: "REFUND_AVAILABLE", match_reason: "함께하기로 한 분이 빠져 테이블 인원이 모자라요. 고르신 일정 안에서 조건에 맞는 다른 테이블도 없었어요." }).eq("id", m.id).eq("payment_status", "PAID");
       await logStatus({ entityType: "application", entityId: m.id, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: "확정 후 취소로 인원 부족, 옮길 테이블 없음" });
       await extendMembershipFor(m.id, actor);
+      await quietly(syncScheduled([m.id], actor, "인원 부족으로 테이블 해제"));
       await notify({ userId: m.user_id, template: "alternative", title: "이번 모임이 열리지 못하게 됐어요", body: "3일 안에 다음 방법을 골라 주세요", link: `/applications/${m.id}/resolve`, dedupeKey: `reflow-alt:${m.id}` });
       offered++;
     }
@@ -214,7 +217,7 @@ export async function declineReallocation(appId: string, userId: string): Promis
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "CONFIRMED", to: "ALTERNATIVE_OFFERED", actor, reason: `자동 재배치된 테이블(${tableId.slice(0, 8)}) 대신 다른 방법 고르기` });
   if (data.payment_status === "PAID") await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "PAID", to: "REFUND_AVAILABLE", actor, reason: "자동 재배치 거절로 환불 선택 가능" });
   await extendMembershipFor(appId, "system");
-  await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").like("dedupe_key", `remind:${appId}%`);
+  await quietly(syncScheduled([appId], actor, "자동 재배치된 테이블 대신 다른 방법 고르기"));
   const room = await ensureRoom(tableId);
   await postSystem(room, "한 분이 사정이 생겨 함께하지 못하게 됐어요.");
   // 빠진 자리는 대기자에게 먼저 묻고, 인원이 모자라지면 정리한다
@@ -386,6 +389,8 @@ export async function respondOffer(offerId: string, userId: string, accept: bool
   for (const x of (others ?? []) as OfferRow[]) await closeOffer(x, "void", "system");
   // 결제 독촉·대안 안내처럼 이제 필요 없는 예약 알림 정리
   await db().from("notifications").delete().eq("user_id", userId).eq("status", "pending").eq("link", `/applications/${o.application_id}/resolve`);
+  // 확정 뒤 들어온 사람도 하루 전 안내를 받게 건다 (같은 신청의 예전 예약은 정리)
+  await quietly(syncScheduled([o.application_id], actor, `빈자리 제안 수락 (테이블 ${o.table_id.slice(0, 8)})`));
   const room = await ensureRoom(o.table_id);
   await postSystem(room, `빈자리에 새로운 분이 합류했어요. ${me!.name}님 반가워요!`);
   await notify({

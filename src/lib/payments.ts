@@ -1,5 +1,6 @@
 // 결제 승인과 환불을 한곳에서 처리한다. 모의 결제와 토스페이먼츠 결제가 같은 길로 들어온다.
 import { PASSES, type PassType, won } from "./constants";
+import { quietly, syncScheduled } from "./scheduled";
 import { logStatus } from "./events";
 import { now, realNowIso } from "./clock";
 import { passExpiresAt } from "./pass-expiry";
@@ -166,6 +167,8 @@ export async function refundPayment(paymentId: string, appId: string, actor: str
   // 운영자에게 넘어가 있던 환불 실패 건이면 닫는다
   await db().from("exceptions").update({ status: "resolved", resolution: "환불 다시 시도 성공", resolved_at: realNowIso() }).eq("dedupe_key", `refund:${paymentId}`).eq("status", "open");
   if (notifyUser || app?.payment_status === "REFUND_FAILED") await tell("refunded", `refunded:${appId}`);
+  // 결제 안내처럼 이제 필요 없는 예약 알림 정리
+  await quietly(syncScheduled([appId], actor, `환불: ${reason}`));
   return { ok: true, message: `결제하신 수단으로 ${amount}을 전액 돌려드렸어요.` };
 }
 

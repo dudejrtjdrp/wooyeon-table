@@ -119,7 +119,8 @@ export async function submitApplication(form: FormData) {
     ...render("payment_pending", { deadline: fmtSlot(round!.apply_deadline) }, tpl),
     link: `/pay/${app!.id}`,
     dedupeKey: `payment_pending:${app!.id}:${payment!.id}`,
-    scheduledAt: new Date(Math.min(Date.now() + 3600_000, new Date(round!.apply_deadline).getTime() - 600_000)),
+    // 시연 시계 기준(다른 예약 알림과 같은 시계로 tick이 보낸다)
+    scheduledAt: new Date(Math.min((await now()).getTime() + 3600_000, new Date(round!.apply_deadline).getTime() - 600_000)),
   });
   redirect(`/pay/${app!.id}`);
 }

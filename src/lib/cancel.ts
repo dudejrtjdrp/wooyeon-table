@@ -5,6 +5,7 @@ import { type CancelPlan, type CancelTarget, beforeMatchCutoff, planCancel } fro
 import { now } from "./clock";
 import { logStatus } from "./events";
 import { notify } from "./notify";
+import { quietly, syncScheduled } from "./scheduled";
 import { db } from "./supabase";
 
 /** 운영자가 대신 취소한 신청의 참가자 화면 문구. 본인이 취소한 것처럼 보이지 않게 한다 */
@@ -42,7 +43,7 @@ export async function cancelBeforeMatch(appId: string, opts: { actor: string; re
   await logStatus({ entityType: "application", entityId: appId, field: "application_status", from: "SUBMITTED", to: "CANCELED", actor: opts.actor, reason: opts.reason });
   await logStatus({ entityType: "application", entityId: appId, field: "match_status", from: "WAITING", to: "NO_MATCH", actor: opts.actor, reason: opts.reason });
 
-  await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${appId}:%`);
+  await quietly(syncScheduled([appId], opts.actor, opts.reason));
   const money = await releaseUse(appId, opts.actor, opts.reason);
   await notify({
     userId: app.user_id,

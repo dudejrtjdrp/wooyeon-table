@@ -101,6 +101,10 @@ export async function retrySystemMessages(nowMs = Date.now()): Promise<number> {
       const fresh = await freshRoomReminder(key.slice("remind:".length));
       if (fresh.skip) continue;
       body = fresh.body ?? body;
+    } else if (key.startsWith("content:") || key.startsWith("notice:")) {
+      // 그사이 해제된 테이블에는 첫 공지·대화 주제를 다시 올리지 않는다
+      const { data: tb } = await db().from("dining_tables").select("status").eq("id", key.split(":")[1]).maybeSingle();
+      if (tb?.status === "DISSOLVED") continue;
     }
     await postSystem(f.roomId, body, { dedupeKey: key, meta: f.p.meta, retry: true });
     n++;
@@ -176,14 +180,16 @@ export async function retryPushes(nowMs = Date.now()): Promise<number> {
  * 성공하면 이 알림 때문에 열려 있던 발송 실패 예외도 닫는다
  */
 /** 다시 보낼 이유가 사라졌으면 그 까닭(사람 말). 하루 전 안내는 지금 식당·예약명으로 다시 쓴다 */
-async function staleOrFresh(id: string, key: string | null): Promise<{ skip?: string; patch?: { title: string; body: string; link: string } }> {
+async function staleOrFresh(id: string, key: string | null): Promise<{ skip?: string; patch?: { title?: string; body?: string; link?: string } }> {
   if (!key) return {};
   const appId = key.split(":")[1];
   if (key.startsWith("remind:")) {
-    const { freshReminder } = await import("./pipeline");
+    // 예약 알림과 같은 판단(lib/scheduled-rules.ts). 운영자가 고친 문구는 덮어쓰지 않는다
+    const { checkBeforeSend } = await import("./scheduled");
     const { loadTemplates } = await import("./templates");
-    const fresh = await freshReminder(id, key, await loadTemplates());
-    return fresh ? { patch: fresh } : { skip: "참석이 취소됐거나 테이블이 바뀌었거나 이미 안내가 나가, 다시 보내지 않았어요" };
+    const chk = await checkBeforeSend({ id, dedupe_key: key }, await loadTemplates());
+    if (chk.skip) return { skip: `${chk.skip}. 다시 보내지 않았어요` };
+    return chk.patch ? { patch: chk.patch } : {};
   }
   if (key.startsWith("payment_pending:")) {
     const { data: a } = await db().from("applications").select("application_status,payment_status").eq("id", appId).maybeSingle();

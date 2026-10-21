@@ -176,6 +176,7 @@ export async function TabScreen({ title, sub, right, children, backdrop, brand =
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", s.uid)
+      .eq("status", "sent")
       .is("read_at", null)
       .lte("scheduled_at", (await now()).toISOString());
     unread = count ?? 0;

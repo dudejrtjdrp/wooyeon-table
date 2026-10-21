@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { quietly, syncUser } from "@/lib/scheduled";
 import { requireMe } from "@/lib/auth";
 import { logStatus } from "@/lib/events";
 import { clearSession } from "@/lib/session";
@@ -32,6 +33,8 @@ export async function withdraw() {
     .update({ name: "탈퇴한 사용자", phone: null, email: null, avatar_url: null, password_hash: null, ci_hash: null, birth_date: null, login_id: `deleted:${me.id}`, deleted_at: new Date().toISOString() })
     .eq("id", me.id);
   await logStatus({ entityType: "user", entityId: me.id, field: "account_status", from: "active", to: "withdrawn", actor: `user:${me.id}`, reason: "회원 탈퇴" });
+  // 아직 안 나간 예약 알림(후기 다시 요청 등)은 보내지 않는다
+  await quietly(syncUser(me.id, `user:${me.id}`, "회원 탈퇴"));
   await clearSession("user");
   redirect("/login?m=" + encodeURIComponent("탈퇴했어요. 그동안 함께해 주셔서 고마워요"));
 }
