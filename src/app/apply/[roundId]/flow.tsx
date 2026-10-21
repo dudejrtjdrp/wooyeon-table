@@ -338,7 +338,8 @@ export function ApplyFlow({
             {/* 결제 전에는 환불 마감·당일 취소·노쇼 세 줄을 늘 보여 주고, 나머지만 접는다 (details 안의 summary 앞 내용은 접히면 안 보여서 밖에 둔다) */}
             <div className="mx-6 mt-3.5 rounded-[14px] bg-card px-4 pt-3.5 text-[13px] leading-[1.7] text-ink2">
               <p className="font-bold text-ink">환불 규정</p>
-              {[0, 2, 3].map((i) => refund[i] && <p key={i}>{refund[i]}</p>)}
+              {/* 고른 날짜의 환불 마감이 지났으면 '전액 환불돼요' 줄 대신 지금 해당하는 말을 둔다 */}
+              {[0, 2, 3].map((i) => refund[i] && <p key={i}>{i === 0 && lateDays.length ? "고른 날짜는 이미 환불 마감이 지났어요. 다른 날짜는 모임 주 화요일 밤 12시까지 전액 환불돼요." : refund[i]}</p>)}
             <details className="group/refund">
               <summary className="flex min-h-11 cursor-pointer list-none items-center text-[13px] font-semibold text-accent group-open/refund:hidden">나머지 규정 보기</summary>
               <div className="pb-4">{refund.filter((_, i) => ![0, 2, 3].includes(i)).map((r) => <p key={r}>{r}</p>)}</div>
@@ -346,12 +347,14 @@ export function ApplyFlow({
             </div>
             {lateDays.length > 0 && (
               <p role="alert" className="mx-6 mt-3 rounded-[14px] bg-danger/10 px-4 py-3 text-[14px] font-semibold leading-relaxed text-danger">
-                고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 신청을 취소하거나 환불받을 수 없어요.
+                {amount
+                  ? "고른 날짜는 환불 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 결제하면 신청을 취소하거나 환불받을 수 없어요."
+                  : "고른 날짜는 취소 마감(모임 주 화요일 밤 12시)이 이미 지났어요. 신청하면 취소할 수 없고, 쓴 이용권 1회도 돌려받지 못해요."}
               </p>
             )}
             <button type="button" role="checkbox" aria-checked={agree} onClick={() => setAgree(!agree)} className="mx-6 mt-2 flex min-h-[48px] items-center gap-2.5 text-left text-[15px] font-bold">
               <Box on={agree} />
-              {lateDays.length ? "취소·환불이 안 되는 것을 확인했어요" : "환불 규정을 확인했어요"}
+              {lateDays.length ? (amount ? "취소·환불이 안 되는 것을 확인했어요" : "취소할 수 없는 것을 확인했어요") : "환불 규정을 확인했어요"}
             </button>
           </>
         )}
@@ -380,7 +383,7 @@ export function ApplyFlow({
               <PrimaryButton
                 type="submit"
                 pendingText="신청서 보내는 중"
-                onClick={(e) => { if (!agree) { e.preventDefault(); setMsg("환불 규정을 확인해주세요"); } }}
+                onClick={(e) => { if (!agree) { e.preventDefault(); setMsg(lateDays.length ? "취소할 수 없다는 안내를 확인하고 체크해 주세요" : "환불 규정을 확인해 주세요"); } }}
               >
                 {amount ? `${won(amount)} 결제하기` : "이용권으로 신청하기"}
               </PrimaryButton>

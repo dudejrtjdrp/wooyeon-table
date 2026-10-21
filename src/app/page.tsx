@@ -324,7 +324,7 @@ function StatusCard({ a, t, keepAt, members, memberIds, meId }: { a: ActiveRow; 
   const failed = a.match_status === "ALTERNATIVE_OFFERED";
   const waiting = failed && a.resolution === "wait";
   const at = confirmed ? 4 : paid ? 3 : 2;
-  const dates = (a.dates ?? []).map((d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일`);
+  const dates = [...(a.dates ?? [])].sort().map((d) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8))}일`);
   const where = `${dates.length > 1 ? `${dates[0]} 또는 ${dates.slice(1).map((x) => x.replace(/^\d+월 /, "")).join(", ")}` : dates[0] ?? a.rounds.title} · ${areasLabel(a.areas ?? [])}`;
   const cta = confirmed ? ["모임 정보 보기", `/tables/${a.table_id}`] : failed ? [a.resolution === "wait" ? "다른 방법으로 바꾸기" : "다음 방법 고르기", `/applications/${a.id}/resolve`] : !paid ? ["결제 이어서 하기", `/pay/${a.id}`] : ["신청 내용 보기", `/applications/${a.id}`];
   const others = members.filter((_, i) => memberIds[i] !== meId);
