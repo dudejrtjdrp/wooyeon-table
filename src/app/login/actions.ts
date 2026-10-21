@@ -64,7 +64,8 @@ export async function signup(form: FormData) {
 }
 
 export async function logout() {
-  await clearSession();
+  // 참가자 로그아웃은 참가자 세션만 지운다 (같은 브라우저의 운영자 로그인은 그대로)
+  await clearSession("user");
   redirect("/");
 }
 

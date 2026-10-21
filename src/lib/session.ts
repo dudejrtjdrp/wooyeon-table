@@ -48,7 +48,7 @@ async function read(name: string): Promise<Session | null> {
 }
 
 /**
- * scope 'user'(기본): 참가자 세션, 없으면 운영자 세션.
+ * scope 'user'(기본): 참가자 세션만.
  * scope 'admin': 운영자 세션, 없으면 (예전에 만든) 참가자 쿠키에 든 운영자 세션.
  */
 export async function getSession(scope: SessionScope = "user"): Promise<Session | null> {
@@ -58,7 +58,9 @@ export async function getSession(scope: SessionScope = "user"): Promise<Session 
     const u = await read(COOKIE);
     return u?.role === "admin" ? u : null;
   }
-  return (await read(COOKIE)) ?? (await read(ADMIN_COOKIE));
+  // 참가자 화면은 참가자 세션만 본다(운영자 쿠키로 넘어가지 않게: 운영자 계정이 참가자 앱에 들어가거나 /login이 막히지 않게)
+  const u = await read(COOKIE);
+  return u?.role === "user" ? u : null;
 }
 
 /** scope를 주면 그쪽만, 없으면 둘 다 지운다 */
