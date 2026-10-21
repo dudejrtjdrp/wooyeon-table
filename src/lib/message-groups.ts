@@ -15,7 +15,7 @@ export type MessageGroupKey = (typeof MESSAGE_GROUPS)[number]["key"];
 const EXACT: Record<string, MessageGroupKey> = {
   applied: "apply",
   confirmed: "match", joined: "match", waiting: "match", transferred: "match", membership_extended: "match",
-  checkin_nudge: "meet",
+  checkin_nudge: "meet", meeting_start: "meet",
   canceled: "refund", attendance_canceled: "refund", round_canceled: "refund", kept: "refund",
   next_round: "after", region_open: "after",
   announcement: "ops", round_changed: "ops", pass_granted: "ops", membership_granted: "ops", noshow_warn: "ops", noshow_restrict: "ops", admin_removed: "ops",

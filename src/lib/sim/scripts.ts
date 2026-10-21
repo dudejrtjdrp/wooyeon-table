@@ -164,33 +164,6 @@ export const LATE_ARRIVE: Line[] = [
   { f: () => `도착했습니다. 어디 앉으셨어요?` },
 ];
 
-const TOPIC_HINT: [RegExp, (n: number) => string][] = [
-  [/여행/, (n) => `${n}번 보니까 작년에 갔던 여행 생각나네요. 다음 여행지 추천도 받고 싶어요`],
-  [/맛집|음식|먹/, () => `맛집 얘기는 자신 있어요. 오늘 끝나고 갈 만한 데도 알아요`],
-  [/영화|드라마|넷플/, () => `요즘 보는 드라마가 있는데 이따 추천할게요`],
-  [/운동|러닝|등산|요가|클라이밍/, () => `저 요즘 주말마다 뛰는데 같이 하실 분 있으면 좋겠어요`],
-  [/책|독서/, () => `요즘 읽는 책이 있는데 마침 얘기하고 싶었어요`],
-  [/일|커리어|직장|회사/, () => `일 얘기는 다들 할 말 많을 것 같아요`],
-  [/음악|공연|노래/, () => `요즘 자주 듣는 노래 있는데 이따 들려 드릴게요`],
-];
-
-/** 시스템이 올린 대화 주제(번호 목록) 가운데 하나에 답한다 */
-export function topicReply(p: Persona, topics: string[], key: string, used?: Set<string>): string | null {
-  if (!topics.length) return null;
-  const n = 1 + Math.floor(rand(p.seed, `topic:${key}`) * topics.length);
-  const hint = TOPIC_HINT.find(([re]) => re.test(topics[n - 1]))?.[1](n);
-  const pool: Line[] = [
-    ...(hint ? [{ f: () => hint }, { f: () => hint }] : []),
-    { f: (q) => (pickInterest(q) ? `${n}번 주제 좋네요. 저는 요즘 ${pickInterest(q)} 얘기면 끝도 없이 할 수 있어요` : null) },
-    { f: () => `저 ${n}번부터 얘기해 보고 싶어요. 다들 어떠세요?` },
-    { f: () => `아이스브레이킹 재밌겠네요. 제가 먼저 해 볼게요` },
-    { f: () => `${n}번 질문 보자마자 생각난 게 있어요. 이따 얘기할게요` },
-    { f: () => `오 ${n}번은 저 할 말 많아요` },
-    { f: () => `대화 주제가 있으니까 확실히 덜 어색하네요` },
-  ];
-  return pick(pool, p, { region: "", venue: null, category: null, startMs: 0, humans: [] }, `topic:${key}:topic`, used);
-}
-
 // ── (d) 끝난 뒤 ──
 export const BYE: Line[] = [
   { f: () => `오늘 정말 즐거웠어요! 다들 조심히 들어가세요` },

@@ -20,6 +20,8 @@ import { areasLabel } from "@/lib/regions";
 import { maybeTick } from "@/lib/pipeline";
 import { nextPick } from "@/lib/next-pick";
 import { headline } from "@/lib/status";
+import { nextStep } from "@/lib/next-step";
+import { NextStepBox } from "@/components/next-step";
 import { db } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +30,7 @@ export const maxDuration = 60;
 type ActiveRow = {
   id: string; application_status: string; payment_status: string; match_status: string; attendance_status: string | null; resolution: string | null;
   table_id: string | null; areas: string[] | null; dates: string[] | null;
-  rounds: { title: string; match_at: string };
+  rounds: { title: string; match_at: string; status?: string; apply_deadline?: string | null };
   dining_tables: { status?: string; slots: { starts_at: string; ends_at: string; region: string } | null; venues: { name: string; photo_url: string | null; category: string | null } | null } | null;
 };
 
@@ -49,7 +51,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
   const { data: apps } = await db()
     .from("applications")
-    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at,status),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
+    .select("id,application_status,payment_status,match_status,attendance_status,resolution,table_id,areas,dates,created_at,submitted_at,rounds(title,match_at,status,apply_deadline),dining_tables(status,slots(starts_at,ends_at,region),venues(name,photo_url,category))")
     .eq("user_id", me.id)
     .order("submitted_at", { ascending: false, nullsFirst: false })
     .limit(10);
@@ -223,8 +225,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
             <ol className="space-y-4">
               {[
                 ["동네와 날짜를 골라요", "여러 곳 고를수록 테이블이 잘 꾸려져요."],
-                ["마감 시각에 4~6명 테이블이 자동으로 정해져요", "나이대, 성비, 관심사, 성향을 같이 봐요."],
-                ["식당과 단체방 안내를 받고 만나요", "하루 전에 한 번 더 알려드려요."],
+                ["마감 시각에 4~6명 테이블이 한 번에 정해져요", "인원이 먼저 찬다고 일찍 열리지 않아요. 나이대, 성비, 관심사, 성향을 같이 봐요."],
+                ["정해지는 순간 식당·단체방·알림이 함께 열려요", "하루 전에 한 번 더 알려 드리고, 모임이 시작되면 테이블에서 나눌 이야기가 열려요."],
               ].map(([a, b], i) => (
                 <li key={a} className="flex gap-3.5">
                   <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13px] font-bold text-accent-text">{i + 1}</span>
@@ -242,23 +244,23 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
   );
 }
 
-/** 끝난 모임 안내: 후기 남기기 또는 체크인 못 한 걸 알리기 */
+/** 끝난 모임 안내: 별점 남기기(후기) 또는 체크인 못 한 걸 알리기 */
 function AfterMeetingCard({ a, kind }: { a: ActiveRow; kind: "review" | "claim" }) {
   const slot = a.dining_tables!.slots!;
   const where = a.dining_tables?.venues?.name ?? slot.region;
   return (
-    <section className="animate-rise mt-3 rounded-[20px] bg-card p-5" aria-label={kind === "review" ? "후기 남기기" : "참석 알리기"}>
+    <section className="animate-rise mt-3 rounded-[20px] bg-card p-5" aria-label={kind === "review" ? "오늘 저녁 어땠는지 알려 주기" : "참석 알리기"}>
       <p className="text-[13px] font-semibold text-muted">{fmtDay(slot.starts_at)} · {where}</p>
       {kind === "review" ? (
         <>
-          <h2 className="mt-1 text-[19px] font-bold leading-snug text-ink">함께한 저녁, 어떠셨어요?</h2>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-muted">별점 다섯 개면 끝나요. 남겨 주신 후기는 다음 테이블을 꾸릴 때 바로 반영돼요.</p>
-          <LinkButton href={`/tables/${a.table_id}/feedback`} className="mt-4">후기 남기기</LinkButton>
+          <h2 className="mt-1 text-[19px] font-bold leading-snug text-ink">함께한 저녁, 어땠어요?</h2>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-muted">별 다섯 개만 누르면 끝나요. 또 앉고 싶은 분을 고르면 다음 테이블을 꾸릴 때 바로 반영할게요.</p>
+          <LinkButton href={`/tables/${a.table_id}/feedback`} className="mt-4">별점 남기기</LinkButton>
         </>
       ) : (
         <>
           <h2 className="mt-1 text-[19px] font-bold leading-snug text-ink">체크인 기록이 없어요</h2>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-muted">참석했다면 모임 정보에서 알려 주세요. 운영팀이 확인하면 참석으로 바뀌고 후기를 남길 수 있어요.</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-muted">참석했다면 모임 정보에서 알려 주세요. 운영팀이 확인하면 참석으로 바뀌고 별점을 남길 수 있어요.</p>
           <LinkButton href={`/tables/${a.table_id}`} className="mt-4">모임 정보에서 알리기</LinkButton>
         </>
       )}
@@ -321,6 +323,7 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
   const others = members.filter((_, i) => memberIds[i] !== meId);
   const canCheckIn = Boolean(confirmed) && a.attendance_status === "SCHEDULED" && checkInOpen(new Date(slot!.starts_at), new Date(slot!.ends_at), t);
   const checkedIn = Boolean(confirmed) && a.attendance_status === "ATTENDED";
+  const step = nextStep({ ...a, matchAt: a.rounds.match_at, applyDeadline: a.rounds.apply_deadline, roundStatus: a.rounds.status, startsAt: slot?.starts_at, endsAt: slot?.ends_at }, t);
   return (
     <section className="animate-rise mt-4 overflow-hidden rounded-[20px] bg-card" aria-label="내 신청">
       <Hero photo={confirmed && a.dining_tables?.venues?.photo_url ? { src: a.dining_tables.venues.photo_url, alt: `${a.dining_tables.venues.name} 분위기 사진` } : null} right={<RoundTable size={128} filled={confirmed ? 6 : failed ? 3 : 1} label={confirmed ? "자리가 모두 찬 테이블" : failed ? "세 자리만 찬 테이블" : "나와 빈 다섯 자리"} />}>
@@ -350,7 +353,8 @@ function StatusCard({ a, t, members, memberIds, meId }: { a: ActiveRow; t: Date;
         <ol className="mt-2 flex text-[12px] text-faint">
           {STEPS.map((s, i) => <li key={s} aria-current={i + 1 === at ? "step" : undefined} className={`flex-1 ${i + 1 === at ? `font-bold ${waiting ? "text-warn" : failed ? "text-danger" : "text-accent"}` : ""}`}>{i + 1 === at ? h.label : s}</li>)}
         </ol>
-        {!confirmed && <p className="mt-3 text-[14px] leading-relaxed text-muted">{h.desc}</p>}
+        {/* 다음에 일어날 일과 그 시각, 지금 할 수 있는 일 (신청 상세와 같은 문장) */}
+        {step ? <NextStepBox s={step} className="mt-4" /> : !confirmed && <p className="mt-3 text-[14px] leading-relaxed text-muted">{h.desc}</p>}
         {canCheckIn ? (
           // 모임 1시간 전부터 끝날 때까지: 홈에서 바로 체크인 (모임 정보 화면과 같은 처리)
           <>

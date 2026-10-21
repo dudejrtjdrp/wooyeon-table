@@ -24,8 +24,8 @@ export default async function FeedbackDone({ params }: { params: Promise<{ id: s
   const next = await nextPick(me.id);
 
   return (
-    <Screen title="후기 보냄" back="/">
-      <PageTitle className="mt-4" title="후기 고마워요." accent="다음 테이블에 반영할게요" />
+    <Screen title="보냈어요" back="/">
+      <PageTitle className="mt-4" title="알려 줘서 고마워요." accent="다음 테이블에 반영할게요" />
       {next ? (
         <Card className="mt-7">
           <p className="text-[14px] text-muted">다음 일정 추천</p>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Content, DEFAULT_RULES, TABLE_TYPES, chooseContents } from "./contents";
-import { DEFAULT_CUSTOM, TYPE_GROUPS, contentMessage, customTypes, explainScore, parsePreview, previewBack, previewContents, previewQuery } from "./content-preview";
+import { DEFAULT_CUSTOM, TYPE_GROUPS, contentMessage, parseContentMessage, customTypes, explainScore, parsePreview, previewBack, previewContents, previewQuery } from "./content-preview";
 import { INTERESTS } from "./constants";
 
 const c = (id: string, kind: "topic" | "icebreaker", tags: string[] = [], types: string[] = [], priority = 0): Content => ({ id, kind, tags, table_types: types, priority, body: `${id} 이야기` });
@@ -45,8 +45,14 @@ describe("대화 콘텐츠 미리 보기", () => {
   });
 
   it("단체방 글은 모임 시작 메시지와 같은 모양이다", () => {
-    expect(contentMessage([{ body: "가" }, { body: "나" }], [{ body: "다" }])).toBe("모두 모이셨나요? 오늘의 대화 주제예요.\n1. 가\n2. 나\n\n아이스브레이킹\n· 다");
-    expect(contentMessage([{ body: "가" }], [])).toBe("모두 모이셨나요? 오늘의 대화 주제예요.\n1. 가\n");
+    const msg = contentMessage([{ body: "가" }, { body: "나" }], [{ body: "다" }]);
+    expect(msg).toContain("테이블에서 함께 나눠 보세요");
+    expect(msg).toContain("1. 가\n2. 나");
+    expect(msg).toContain("아이스브레이킹\n· 다");
+    expect(parseContentMessage(msg)).toEqual({ topics: ["가", "나"], icebreakers: ["다"] });
+    expect(parseContentMessage(contentMessage([{ body: "가" }], []))).toEqual({ topics: ["가"], icebreakers: [] });
+    // 예전 모양(주제 앞 한 줄)도 읽는다
+    expect(parseContentMessage("모두 모이셨나요? 오늘의 대화 주제예요.\n1. 여행\n2. 영화\n\n아이스브레이킹\n· 게임")).toEqual({ topics: ["여행", "영화"], icebreakers: ["게임"] });
   });
 
   it("미리 보기 조건을 주소에서 읽고 다시 만든다", () => {

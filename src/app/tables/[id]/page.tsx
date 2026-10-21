@@ -16,17 +16,19 @@ import { db } from "@/lib/supabase";
 import { checkIn, claimAttended } from "./actions";
 import { canClaimAttended, checkInOpen } from "@/lib/attendance-rules";
 import { after } from "next/server";
-import { maybeTick } from "@/lib/pipeline";
+import { maybeTick, pickContents } from "@/lib/pipeline";
+import { parseContentMessage } from "@/lib/content-preview";
+import { NowAtTable } from "./now-card";
 
 export const dynamic = "force-dynamic";
 
 /** E11 매칭 확정: 초록 헤더 + 흰 시트 */
-export default async function TablePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string; m?: string }> }) {
+export default async function TablePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ e?: string; m?: string; now?: string }> }) {
   const me = await requireMe();
   // 예약 실행(GitHub Actions)이 몇 시간씩 밀릴 때가 있어, 모임 화면을 열 때도 밀린 일(시작 콘텐츠·체크인 안내·리마인드)을 돌린다
   after(() => maybeTick().catch(() => null));
   const { id } = await params;
-  const { e, m: toast } = await searchParams;
+  const { e, m: toast, now: fromStart } = await searchParams;
 
   const { data: raw } = await db()
     .from("dining_tables")
@@ -64,6 +66,15 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   // 이미 후기를 남겼으면 버튼을 '남긴 후기 고치기'로 (후기 화면은 이전 값을 채워 연다)
   const { data: fbMine } = mine && mine.attendance_status === "ATTENDED" && done ? await db().from("feedbacks").select("application_id").eq("application_id", mine.id).maybeSingle() : { data: null };
   const reviewedMine = !!fbMine;
+  // 모임 중에만: 단체방에 올라간 오늘의 대화 주제를 그대로 보여 준다(아직 안 올라갔으면 같은 규칙으로 고른 것)
+  const live = n >= start && !done;
+  const talk = live ? await (async () => {
+    const { data: room } = await db().from("chat_rooms").select("id").eq("table_id", id).maybeSingle();
+    const { data: msg } = room ? await db().from("chat_messages").select("body").eq("room_id", room.id).eq("dedupe_key", `content:${id}`).maybeSingle() : { data: null };
+    if (msg?.body) return parseContentMessage(msg.body);
+    const c = await pickContents(id).catch(() => null);
+    return c ? { topics: c.topics.map((x) => x.body), icebreakers: c.icebreakers.map((x) => x.body) } : null;
+  })() : null;
   const claimed = missedCheckIn
     ? Boolean((await db().from("status_events").select("id").eq("entity_id", mine!.id).eq("field", "attendance_claim").limit(1)).data?.length)
     : false;
@@ -80,7 +91,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
   const myFood = mine?.users.profiles?.food_restrictions;
   const twoDays = n >= refundCutoff(t.slots.starts_at);
 
-  const status = done ? "지난 모임" : t.status === "IN_PROGRESS" ? "모임 중" : "매칭 확정";
+  const status = done ? "지난 모임" : t.status === "IN_PROGRESS" || n >= start ? "모임 중" : "매칭 확정";
   const others = mems.filter((m) => m.user_id !== me.id);
   const preview = others.slice(0, 2);
   const interestsOf = (m: (typeof mems)[number]) => (m.users.profiles?.interests ?? []).filter((x) => shared.includes(x)).slice(0, 2);
@@ -130,6 +141,8 @@ export default async function TablePage({ params, searchParams }: { params: Prom
             </div>
           ))}
         </section>
+
+        {talk && <NowAtTable tableId={id} topics={talk.topics} icebreakers={talk.icebreakers} autoOpen={mine?.attendance_status === "ATTENDED"} force={fromStart === "1" && !!mine} />}
 
         <section className="mt-8" aria-label="함께하는 사람">
           <div className="flex items-center justify-between">
@@ -222,13 +235,13 @@ export default async function TablePage({ params, searchParams }: { params: Prom
               <PrimaryButton pendingText="체크인하는 중">도착했어요, 체크인</PrimaryButton>
             </form>
           ) : mine?.attendance_status === "ATTENDED" && done ? (
-            <LinkButton href={`/tables/${id}/feedback`}>{reviewedMine ? "남긴 후기 고치기" : "모임 후기 남기기"}</LinkButton>
+            <LinkButton href={`/tables/${id}/feedback`}>{reviewedMine ? "남긴 별점 고치기" : "오늘 저녁 별점 남기기"}</LinkButton>
           ) : missedCheckIn ? (
             <>
               <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
                 {claimed
-                  ? "알려 주신 내용을 운영팀이 확인하고 있어요. 참석으로 바뀌면 후기를 남길 수 있어요."
-                  : "체크인 기록이 없어 지금은 노쇼 후보로 올라가 있어요. 참석했다면 알려 주세요. 운영팀이 확인하면 참석으로 바뀌고 후기를 남길 수 있어요."}
+                  ? "알려 주신 내용을 운영팀이 확인하고 있어요. 참석으로 바뀌면 별점을 남길 수 있어요."
+                  : "체크인 기록이 없어 지금은 노쇼 후보로 올라가 있어요. 참석했다면 알려 주세요. 운영팀이 확인하면 참석으로 바뀌고 별점을 남길 수 있어요."}
               </p>
               {claimed ? (
                 <LinkButton href={`/tables/${id}/chat`}>단체방 다시 보기</LinkButton>
@@ -245,7 +258,7 @@ export default async function TablePage({ params, searchParams }: { params: Prom
               {/* 체크인 기록 없이 알릴 수 있는 기한(48시간)도 지난 경우: 왜 후기를 못 남기는지와 물을 곳 */}
               {done && mine && mine.attendance_status !== "ATTENDED" && (
                 <p className="mb-3 text-center text-[13px] leading-relaxed text-muted">
-                  체크인 기록이 없어 후기를 남길 수 없어요. 참석했다면{" "}
+                  체크인 기록이 없어 별점을 남길 수 없어요. 참석했다면{" "}
                   <Link href="/help" className="-my-3 inline-block py-3 font-bold text-accent underline underline-offset-4">문의하기</Link>로 알려 주세요.
                 </p>
               )}

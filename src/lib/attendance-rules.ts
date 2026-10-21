@@ -29,9 +29,9 @@ export const isClaimed = (reason: string | null | undefined) => (reason ?? "").i
  * - 기한 지남: 후기는 못 남기고 문의하기로
  */
 export function afterMeetingNote(o: { attended: boolean; canClaim: boolean; claimed: boolean; status?: string | null }): { text: string; contact: boolean } {
-  if (o.attended) return { text: "모임이 끝났어요. 후기는 '모임 정보 보기'에서 남길 수 있어요.", contact: false };
+  if (o.attended) return { text: "모임이 끝났어요. 오늘 저녁이 어땠는지 '모임 정보 보기'에서 별점으로 남길 수 있어요.", contact: false };
   // 알렸어도 운영자가 이미 노쇼로 정했으면 '확인 중'이 아니다(참석 예정으로 남아 있을 때만 확인 중)
-  if (o.claimed && (o.status ?? "SCHEDULED") === "SCHEDULED") return { text: "참석했다고 알려 주셨어요. 운영팀이 확인하면 후기를 남길 수 있어요.", contact: false };
+  if (o.claimed && (o.status ?? "SCHEDULED") === "SCHEDULED") return { text: "참석했다고 알려 주셨어요. 운영팀이 확인하면 별점을 남길 수 있어요.", contact: false };
   if (o.canClaim) return { text: "체크인 기록이 없어요. 참석했다면 '모임 정보 보기'에서 '참석했는데 체크인을 못 했어요'를 눌러 주세요.", contact: false };
-  return { text: "체크인 기록이 없어 후기는 남길 수 없어요. 참석했다면 문의하기로 알려 주세요.", contact: true };
+  return { text: "체크인 기록이 없어 별점은 남길 수 없어요. 참석했다면 문의하기로 알려 주세요.", contact: true };
 }
