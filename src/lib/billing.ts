@@ -7,6 +7,22 @@ import { notify } from "./notify";
 import { refundPayment } from "./payments";
 import { db } from "./supabase";
 
+/**
+ * 이용권 1회를 돌려준다. 기한이 이미 지난 이용권이면 돌려받아도 쓸 수 없으니 기한을 지금부터 다시 늘린다(1회권 기본 60일).
+ * 늘렸으면 새 기한을 돌려준다
+ */
+export async function returnPassUse(passId: string, actor: string, reason: string): Promise<string | null> {
+  const { now } = await import("./clock");
+  const { passExpiresAt } = await import("./pass-expiry");
+  const t = await now();
+  const { data: pass } = await db().from("passes").select("remaining,expires_at").eq("id", passId).single();
+  const expired = Boolean(pass?.expires_at && new Date(pass.expires_at) <= t);
+  const until = expired ? passExpiresAt(null, t).toISOString() : null;
+  await db().from("passes").update({ remaining: (pass?.remaining ?? 0) + 1, ...(until ? { expires_at: until } : {}) }).eq("id", passId);
+  if (until) await logStatus({ entityType: "pass", entityId: passId, field: "expires_at", from: pass?.expires_at ?? null, to: until, actor, reason: `${reason}: 기한이 지난 이용권에 1회를 돌려줘 기한을 다시 늘림` });
+  return until;
+}
+
 type PayRow = { id: string; status: string; amount: number; pass_type: string | null; pass_id: string | null };
 
 /** 신청에 쓴 결제를 되돌린다. 무엇을 했는지 사람이 읽을 문장으로 돌려준다 */
@@ -30,10 +46,9 @@ export async function releaseUse(appId: string, actor: string, reason: string): 
     // 결제 상태를 먼저 조건부로 바꾸고, 이긴 쪽만 횟수를 돌려준다 (두 취소가 겹쳐도 1회만)
     const { data: claimed } = await db().from("applications").update({ payment_status: "REFUNDED" }).eq("id", appId).eq("payment_status", "PAID").select("id");
     if (!claimed?.length) return "이미 돌려드렸어요.";
-    const { data: pass } = await db().from("passes").select("remaining").eq("id", p.pass_id).single();
-    await db().from("passes").update({ remaining: (pass?.remaining ?? 0) + 1 }).eq("id", p.pass_id);
+    const until = await returnPassUse(p.pass_id, actor, reason);
     await logStatus({ entityType: "application", entityId: appId, field: "payment_status", from: "PAID", to: "REFUNDED", actor, reason: `${reason}: 이용권 1회 반환` });
-    return "쓴 이용권 1회를 돌려드렸어요. 다음 일정에 그대로 쓸 수 있어요.";
+    return until ? `쓴 이용권 1회를 돌려드렸어요. 기한이 지나 있어 ${fmtDay(until)}까지 신청에 쓸 수 있게 늘렸어요.` : "쓴 이용권 1회를 돌려드렸어요. 다음 일정에 그대로 쓸 수 있어요.";
   }
   // 1회권: 원결제수단으로 전액 환불 (토스 결제면 토스 취소 API)
   // 취소 안내(attendance_canceled)에 결과를 담으니 환불 접수·완료 알림은 따로 안 보낸다. 실패해 재시도로 끝나면 그때 알린다
@@ -80,7 +95,7 @@ export async function extendMembershipFor(appId: string, actor: string): Promise
  * 남은 횟수가 있는 1회권과 멤버십만. 탈퇴한 회원은 빼고, 같은 단계는 dedupe 키로 한 번만 보낸다. 보낸 건수를 돌려준다
  */
 export async function remindPassExpiry(t: Date): Promise<number> {
-  const { expiryStage } = await import("./pass-expiry");
+  const { expiryKey, expiryStage } = await import("./pass-expiry");
   const { render, loadTemplates } = await import("./templates");
   const { data } = await db()
     .from("passes")
@@ -92,7 +107,8 @@ export async function remindPassExpiry(t: Date): Promise<number> {
   const due = rows.flatMap((p) => {
     if (!isMembership(p.pass_type) && p.remaining <= 0) return [];
     const stage = expiryStage(p.expires_at, t);
-    return stage ? [{ p, stage, key: `pass_expiry:${p.id}:${stage.key}` }] : [];
+    // 기한이 늘어나면(멤버십 실패 연장·운영자 연장) 새 기한으로 다시 세 번 알리도록 키에 기한을 넣는다
+    return stage ? [{ p, stage, key: expiryKey(p.id, p.expires_at, stage.key) }] : [];
   });
   if (!due.length) return 0;
   const { data: had } = await db().from("notifications").select("dedupe_key").in("dedupe_key", due.map((d) => d.key));

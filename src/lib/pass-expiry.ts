@@ -21,3 +21,6 @@ export function expiryStage(expiresAt: string | Date, now: Date): ExpiryStage | 
   if (ms <= 3 * DAY) return { key: "d3", left: "3일" };
   return { key: "d7", left: "일주일" };
 }
+
+/** 기한 알림 중복 방지 키. 기한이 늘어나면 키가 달라져 새 기한으로 다시 세 번 알린다 */
+export const expiryKey = (passId: string, expiresAt: string, stage: ExpiryStage["key"]) => `pass_expiry:${passId}:${Date.parse(expiresAt)}:${stage}`;

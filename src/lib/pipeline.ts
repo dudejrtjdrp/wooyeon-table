@@ -383,7 +383,11 @@ export async function tick() {
 
   // 이용권 기한 7일·3일·하루 전 알림 (신청 시각 기준 기한이라 기한 안에 신청하도록)
   const { remindPassExpiry } = await import("./billing");
-  const pe = await remindPassExpiry(t).catch(() => 0);
+  const pe = await remindPassExpiry(t).catch((e) => {
+    console.error("[tick] 이용권 기한 알림 실패", e);
+    done.push("이용권 기한 알림 실패 (다음 실행에서 다시)");
+    return 0;
+  });
   if (pe) done.push(`이용권 기한 알림 ${pe}건`);
 
   // 환불 실패 자동 재시도: 10분 간격 3번까지, 세 번째 실패만 예외 큐 (D7)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expiryStage } from "./pass-expiry";
+import { expiryKey, expiryStage } from "./pass-expiry";
 
 describe("expiryStage: 이용권 기한 7일·3일·하루 전 세 번", () => {
   const exp = "2026-11-20T00:00:00+09:00";
@@ -12,5 +12,13 @@ describe("expiryStage: 이용권 기한 7일·3일·하루 전 세 번", () => {
     expect(expiryStage(exp, at("2026-11-13T00:00:00+09:00"))?.key).toBe("d7");
     expect(expiryStage(exp, at("2026-11-17T00:00:00+09:00"))?.key).toBe("d3");
     expect(expiryStage(exp, at("2026-11-19T12:00:00+09:00"))?.key).toBe("d1");
+  });
+});
+
+describe("expiryKey: 기한이 늘면 다시 알린다", () => {
+  it("같은 기한·단계면 같은 키, 기한이 바뀌면 다른 키", () => {
+    const a = expiryKey("p1", "2026-11-20T00:00:00+09:00", "d7");
+    expect(expiryKey("p1", "2026-11-20T00:00:00+09:00", "d7")).toBe(a);
+    expect(expiryKey("p1", "2026-11-27T00:00:00+09:00", "d7")).not.toBe(a);
   });
 });
