@@ -231,7 +231,7 @@ export default async function Guide() {
         </Step>
 
         <Step n={10} who="참가자" title="행사 뒤 참가자가 체크인과 만족도·사람별 선호를 남긴다"
-          actions={<>{ok && <As login={ok.users.login_id} to={`/tables/${ok.table_id}/feedback`}>확정된 참가자로 · 후기 남기기</As>}{panel}</>}>
+          actions={<>{ok && <As login={ok.users.login_id} to={`/tables/${ok.table_id}/feedback`}>확정된 참가자로 · 별점 남기기</As>}{panel}</>}>
           <p>시연 패널 <b>② 모임 끝난 뒤</b>를 누른 다음, 확정된 참가자로 <b>오늘 저녁 별점 남기기</b>(후기 화면)에서 체크인·만족도·사람별 선호(다시 만나고 싶어요/다시는 싫어요)를 남겨요.</p>
           <p>나머지 테스트 참가자는 시연 패널 <b>③ 체크인·후기 채우기 → 채우기</b>로 한 번에 채워요.</p>
         </Step>

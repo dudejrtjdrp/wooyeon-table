@@ -55,7 +55,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
         </>
       ) : (
       <>
-      <PageTitle className="mt-4" title="함께한 저녁," accent="어땠어요?" sub="별 다섯 개만 누르면 끝나요. 고른 점수와 사람은 다음 테이블을 꾸릴 때 바로 반영할게요." />
+      <PageTitle className="mt-4" title="함께한 저녁," accent="어땠어요?" sub="별 다섯 개만 누르면 끝나요. 같이 앉은 분에 대한 선택은 다음 테이블을 꾸릴 때 반영하고, 식당 점수는 다음 일정 추천에 써요." />
       <p className="mt-5 flex items-center gap-2.5 rounded-[14px] bg-field px-4 py-3.5 text-[14px] text-ink2"><Lock size={17} className="shrink-0 text-accent" />다른 참가자에게는 보이지 않아요.</p>
 
       <form action={submitFeedback} className="mt-5 space-y-3">
@@ -71,7 +71,7 @@ export default async function Feedback({ params, searchParams }: { params: Promi
           </SectionCard>
         </div>
 
-        <SectionCard title="또 같이 앉고 싶은 분" optional hint="고르면 다음 테이블을 꾸릴 때 참고해요. '다시는 싫어요'를 고르면 앞으로 같은 테이블에 앉지 않아요.">
+        <SectionCard title="같이 앉은 분들은 어땠어요?" optional hint="고르면 다음 테이블을 꾸릴 때 참고해요. '다시는 싫어요'를 고르면 앞으로 같은 테이블에 앉지 않아요.">
           <ul className="divide-y divide-line">
             {others.map((o, i) => (
               <li key={o.user_id} className="py-4 first:pt-0 last:pb-0">

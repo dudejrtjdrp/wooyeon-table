@@ -56,7 +56,7 @@ async function openTodo(key: string, row: { kind: string; ref_type: string; ref_
  * 운영자가 테이블 식당을 바꾼다. 모임 시작 전, 같은 동네·일정에서 자리가 남은 식당으로만.
  * 1) 테이블 식당을 조건부로 바꾸고(두 번 눌러도 한 번) 이력  2) 예약 기록을 새 식당으로 고쳐 다시 요청
  * 3) 첫 공지가 나간 테이블이면 단체방과 참가자에게 바뀐 식당 안내  4) 자동 예약 채널이면 바로 예약 시도
- * 하루 전 안내는 보내는 순간의 식당으로 다시 쓰이므로(pipeline.ts freshReminder) 따로 고치지 않는다.
+ * 하루 전 안내는 보내는 순간의 식당으로 다시 쓰이므로(scheduled.ts checkBeforeSend) 따로 고치지 않는다.
  */
 export async function swapVenue(tableId: string, venueId: string, reason: string, adminId: string): Promise<Result> {
   const actor = `admin:${adminId}`;

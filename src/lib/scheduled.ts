@@ -16,12 +16,18 @@ async function editedIds(ids: string[]): Promise<Set<string>> {
   return new Set((data ?? []).map((x) => String(x.entity_id)));
 }
 
+/** 이 신청의 하루 전 안내를 운영자가 직접 취소한 적이 있는지 */
+async function adminCanceledRemind(appId: string): Promise<boolean> {
+  const { data } = await db().from("status_events").select("id").eq("entity_type", "notification").eq("to_value", "canceled").like("actor", "admin:%").like("reason", `%(remind:${appId}%`).limit(1);
+  return Boolean(data?.length);
+}
+
 /** 예약 한 건 취소. 이미 나갔거나 취소됐으면 false */
 export async function cancelScheduled(row: { id: string; title: string; dedupe_key: string | null }, actor: string, why: string): Promise<boolean> {
   const { data: up, error } = await db().from("notifications").update({ status: "canceled", dedupe_key: null, last_error: `취소: ${why}`.slice(0, 200) }).eq("id", row.id).eq("status", "pending").select("id");
   let ok = Boolean(up?.length);
-  if (error) {
-    // 상태값 'canceled'가 아직 없는 DB(마이그레이션 0013 전)면 지운다. 기록은 아래 status_events에 남는다
+  if (error && error.code === "23514") {
+    // 상태값 'canceled'가 아직 없는 DB(마이그레이션 0013 전, check 제약 위반)면 지운다. 기록은 아래 status_events에 남는다
     const { data: del } = await db().from("notifications").delete().eq("id", row.id).eq("status", "pending").select("id");
     ok = Boolean(del?.length);
   }
@@ -115,7 +121,9 @@ export async function syncScheduled(appIds: string[], actor: string, reason: str
         await logStatus({ entityType: "notification", entityId: r.id, field: "scheduled", from: `${r.scheduled_at} ${r.link ?? ""}`.trim(), to: `${u.patch.scheduled_at ?? r.scheduled_at} ${u.patch.link ?? r.link ?? ""}`.trim(), actor, reason: `예약 맞춤: ${reason}` }).catch(() => null);
       }
     }
-    if (plan.needRemind && app && tb) {
+    // 운영자가 직접 취소한 하루 전 안내는 다시 걸지 않는다 (취소하면 dedupe_key가 비어 중복 검사로는 못 막는다)
+    const adminCanceled = plan.needRemind && app ? await adminCanceledRemind(appId) : false;
+    if (plan.needRemind && app && tb && !adminCanceled) {
       tpl ??= await loadTemplates();
       const m = render("reminder", { ...slotVars(tb.slots.starts_at), region: tb.slots.region, venue: tb.venues?.name ?? "식당은 모임 정보에서", reservation: tb.reservation_name ?? "" }, tpl);
       const at = remindAt(tb.slots.starts_at);

@@ -54,7 +54,7 @@
 | 환불 | 결제사 환불이 실패하면 10분 간격 3번까지 다시 시도(같은 멱등 키). 참가자에게 '다시 시도하는 중' 알림 | 세 번째 실패 (`refund`) | `lib/payments.ts retryRefunds` |
 | 멈춘 매칭 | 실패했거나 10분 넘게 '실행 중'인 매칭을 찾아, 테이블이 하나도 안 만들어졌으면 신청을 대기로 돌리고 한 번 다시 돌린다 | 테이블이 일부 만들어졌거나 다시 돌려도 실패 (`data_missing`, 참조 `match_run`) | `lib/pipeline.ts recoverMatchRuns` |
 | 확정 뒤 안내 | 테이블별로 따로 처리해 하나가 실패해도 나머지는 계속. 첫 공지가 없는 확정 테이블은 다음 실행에서 식당·단체방·공지·리마인드를 다시 한다 | 다시 해도 실패 (`notification`) | `lib/matching/runner.ts`, `lib/pipeline.ts resumeAfterConfirm` |
-| 하루 전 리마인드 | 확정 때 자리만 잡아 두고, 보내는 순간의 식당·예약명·테이블로 문구를 다시 쓴다. 취소했거나 테이블이 해제됐으면 안 보낸다 | - | `lib/pipeline.ts freshReminder` |
+| 하루 전 리마인드 | 확정 때 자리만 잡아 두고, 보내는 순간의 식당·예약명·테이블로 문구를 다시 쓴다. 취소했거나 테이블이 해제됐으면 안 보낸다 | - | `lib/scheduled.ts checkBeforeSend`, 규칙 `lib/scheduled-rules.ts` |
 | 후기 요청 | 끝난 지 7일 안 된 모임에서 참석했는데 후기도 요청도 없는 사람(늦게 체크인 처리된 경우 등)에게 다시 보낸다 | - | `lib/pipeline.ts feedbackSafetyNet` |
 
 ## 운영자 수동 환불과 회차 취소 (2026-10-19)

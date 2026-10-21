@@ -16,7 +16,7 @@ export function keyKind(key: string | null | undefined): { kind: ScheduledKind; 
 /** 예약 종류 이름 (운영자 화면) */
 export const SCHEDULED_LABEL: Record<ScheduledKind, string> = {
   remind: "하루 전 안내",
-  feedback_remind: "후기 다시 요청",
+  feedback_remind: "별점 다시 요청",
   payment_pending: "결제 안내",
   alt_remind: "다른 방법 고르기 알림",
   other: "예약 알림",
@@ -175,7 +175,7 @@ export function scheduledTarget(row: { dedupe_key: string | null; link: string |
   const { kind, appId } = keyKind(row.dedupe_key);
   if (kind === "remind" && appId) return { href: `/applications/${appId}`, cta: "일정 바꾸기·취소" };
   if (kind === "payment_pending" && appId) return { href: row.link ?? `/pay/${appId}`, cta: "결제하기" };
-  if (kind === "feedback_remind") return row.link ? { href: row.link, cta: "후기 남기기" } : null;
+  if (kind === "feedback_remind") return row.link ? { href: row.link, cta: "별점 남기기" } : null;
   if (kind === "alt_remind" && appId) return { href: `/applications/${appId}/resolve`, cta: "다음 방법 고르기" };
   return row.link ? { href: row.link, cta: "자세히" } : null;
 }

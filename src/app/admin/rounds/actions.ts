@@ -217,7 +217,6 @@ export async function cancelRound(form: FormData) {
       await logStatus({ entityType: "application", entityId: a.id, field: "application_status", from: a.application_status, to: "CANCELED", actor, reason: why });
       if (a.match_status !== "NO_MATCH") await logStatus({ entityType: "application", entityId: a.id, field: "match_status", from: a.match_status, to: "NO_MATCH", actor, reason: why });
     }
-    await db().from("notifications").delete().eq("status", "pending").like("dedupe_key", `payment_pending:${a.id}:%`);
     // 1회권은 refundPayment로 원결제수단 환불. 결제사에서 안 되면 10분 간격 재시도 → 세 번째 실패에 예외 처리함으로 (lib/payments.ts)
     await releaseUse(a.id, actor, why);
     if (a.application_status === "SUBMITTED" || ok.resume) {

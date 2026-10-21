@@ -88,7 +88,7 @@ export default async function Tour({ searchParams }: { searchParams: Promise<{ m
     deadline: <><AdminLink href={`/admin/matching${rq}`}>자동 매칭 모니터</AdminLink><AdminLink href="/admin/exceptions">예외 처리함</AdminLink><AsUser a={okOne} to={(a) => `/tables/${a.table_id}`}>앱 · 확정된 테이블</AsUser><AsUser a={failOne} to={(a) => `/applications/${a.id}/resolve`}>앱 · 못 든 사람 화면</AsUser></>,
     dayBefore: <><AdminLink href="/admin/messages">자동 메시지 발송 이력</AdminLink><AsUser a={okOne} to={(a) => `/tables/${a.table_id}/chat`}>앱 · 단체방</AsUser></>,
     start_meet: <><AdminLink href={`/admin/tables${rq}`}>테이블·단체방</AdminLink><AsUser a={okOne} to={(a) => `/tables/${a.table_id}/chat`}>앱 · 대화 주제</AsUser><AsUser a={okOne} to={() => "/"}>앱 · 홈 체크인</AsUser></>,
-    end: <><AdminLink href="/admin/feedback">피드백·안전</AdminLink><AdminLink href={`/admin/attendance${rq}`}>참석·노쇼</AdminLink><AsUser a={okOne} to={(a) => `/tables/${a.table_id}/feedback`}>앱 · 후기 남기기</AsUser></>,
+    end: <><AdminLink href="/admin/feedback">피드백·안전</AdminLink><AdminLink href={`/admin/attendance${rq}`}>참석·노쇼</AdminLink><AsUser a={okOne} to={(a) => `/tables/${a.table_id}/feedback`}>앱 · 별점 남기기</AsUser></>,
     reapply: <><AdminLink href={`/admin/applicants${nq}`}>다음 회차 신청자</AdminLink><AsUser a={next ? pick(next.apps, () => true) : undefined} to={() => "/"}>앱 · 홈 신청 상태</AsUser></>,
     rematch: <><AdminLink href={`/admin/matching${nq}`}>다음 회차 매칭 모니터</AdminLink><AsUser a={nextOk} to={(a) => `/tables/${a.table_id}`}>앱 · 새 테이블</AsUser></>,
   };

@@ -78,7 +78,7 @@ export const TOUR_TEXT: Record<Exclude<TourStepKey, "done">, { title: string; wh
     title: "모임 끝 → 체크인·후기",
     who: "참가자",
     does: "테스트 참가자들이 체크인하고 후기(만족도·다시 만나고 싶어요/다시는 싫어요)를 남긴 뒤, 시계를 모임 끝으로 옮겨요. 체크인 안 한 사람은 노쇼 후보로 운영자 예외함에 올라가요(예외함에는 다른 회차 건도 함께 보여요).",
-    button: "모임 끝내고 후기 남기기",
+    button: "모임 끝내고 별점 남기기",
     after: "피드백 화면에서 만족도와 사람별 선호를, 참석·노쇼 화면에서 이번 회차 체크인을 볼 수 있어요.",
   },
   reapply: {
@@ -181,7 +181,7 @@ export function tourPhoneView(step: TourStepKey, cur: HumanApp | null, next: Hum
         : { line: "모임이 시작됐어요. 홈에서 체크인을 눌러 보세요", href: "/", label: "홈에서 체크인하기" };
     case "reapply":
       return table
-        ? { line: "모임이 끝났어요. 만족도와 같이 앉은 사람에 대한 선호를 남겨 보세요", href: `/tables/${table}/feedback`, label: "후기 남기기" }
+        ? { line: "모임이 끝났어요. 만족도와 같이 앉은 사람에 대한 선호를 남겨 보세요", href: `/tables/${table}/feedback`, label: "별점 남기기" }
         : { line: "모임이 끝났어요", href: "/", label: "홈 열기" };
     case "rematch":
       return next
