@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 // 참가자 목록과 테이블 결과 CSV (PRD 16장). 신청자 목록 화면의 거르기를 그대로 받아 같은 사람만 내보낸다
 export async function GET(req: Request) {
-  const me = await getMe();
+  const me = await getMe("admin");
   if (!isActiveAdmin(me)) return NextResponse.json({ ok: false }, { status: 401 });
   const f = parseApplicantFilter(Object.fromEntries(new URL(req.url).searchParams));
   if (!f.r) return NextResponse.json({ ok: false, error: "회차를 골라 주세요" }, { status: 400 });

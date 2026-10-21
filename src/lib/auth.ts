@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./supabase";
-import { getSession } from "./session";
+import { type SessionScope, getSession } from "./session";
 
 export interface Me {
   id: string;
@@ -15,8 +15,8 @@ export interface Me {
   avatar_url: string | null;
 }
 
-export async function getMe(): Promise<Me | null> {
-  const s = await getSession();
+export async function getMe(scope: SessionScope = "user"): Promise<Me | null> {
+  const s = await getSession(scope);
   if (!s) return null;
   const { data } = await db()
     .from("users")
@@ -95,7 +95,7 @@ export async function adminLevelOf(userId: string): Promise<AdminLevel> {
 }
 
 export async function requireAdmin(): Promise<AdminMe> {
-  const me = await getMe();
+  const me = await getMe("admin");
   if (!me || me.role !== "admin") redirect("/admin/login");
   // 꺼진 운영자 계정(account_status=banned)은 로그인해 둔 세션이 남아 있어도 들어오지 못한다
   if (me.account_status === "banned") redirect(`/admin/login?e=${encodeURIComponent(ADMIN_OFF_MESSAGE)}`);

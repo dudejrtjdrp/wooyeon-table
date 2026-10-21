@@ -4,10 +4,9 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminWrite } from "@/lib/auth";
-import { now, realNowIso } from "@/lib/clock";
+import { now } from "@/lib/clock";
 import { INTERESTS, MBTIS, OPEN_REGIONS, PASSES, PRICE_RANGES, TRAITS, isMembership } from "@/lib/constants";
 import { logStatus } from "@/lib/events";
-import { notify } from "@/lib/notify";
 import { tick } from "@/lib/pipeline";
 import { adminBackUrl, fillNeeds, isDemoHuman, roundAccepting } from "@/lib/demo-panel";
 import { passExpiresAt } from "@/lib/pass-expiry";
@@ -15,8 +14,8 @@ import { loadRelations } from "@/lib/matching/runner";
 import { pairKey } from "@/lib/matching/types";
 import { kstDay } from "@/lib/regions";
 import { AGE_NEAR } from "@/lib/sim/join";
-import { loadTemplates, render } from "@/lib/templates";
 import { db } from "@/lib/supabase";
+import { fillAttendance, moveClockTo } from "@/lib/demo-ops";
 
 const FAMILY = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황"];
 const GIVEN = ["민준", "서연", "도윤", "지우", "하준", "서윤", "시우", "하은", "지호", "수아", "준서", "지민", "현우", "예린", "건우", "채원", "우진", "다인", "선우", "소율"];
@@ -46,6 +45,11 @@ function passRow(userId: string, type: Pass, t: Date) {
 /** 패널 동작 뒤 대시보드로. 보던 회차(r)와 패널 펼침을 지킨다. 폼에 r이 없으면 round_id를 쓴다 */
 function back(msg: string, form?: FormData | null): never {
   revalidatePath("/admin");
+  // 심사 투어에서 누른 버튼이면 투어 화면으로 돌아간다
+  if (form?.get("back") === "tour") {
+    revalidatePath("/admin/tour");
+    redirect(`/admin/tour?m=${encodeURIComponent(msg)}`);
+  }
   const r = form ? String(form.get("r") ?? form.get("round_id") ?? "") : "";
   redirect(adminBackUrl(msg, { r: r || null, demo: true }));
 }
@@ -143,66 +147,18 @@ export async function seedParticipants(form: FormData) {
   back(`테스트 참가자 ${created}명을 결제 완료 상태로 신청시켰어요 (멤버십 ${members}명, 1회권 ${created - members}명)`, form);
 }
 
-/** 시연용 가상 시각 이동. 이동 뒤 바로 시간 이벤트를 처리한다 */
+/** 시연용 가상 시각 이동. 이동 뒤 바로 시간 이벤트를 처리한다 (lib/demo-ops.ts moveClockTo) */
 export async function moveClock(form: FormData) {
   await requireAdminWrite();
-  const to = String(form.get("to"));
-  const roundId = String(form.get("round_id") ?? "");
-  let target: Date | null = null;
-
-  if (to === "reset") target = new Date();
-  else {
-    const { data: round } = await db().from("rounds").select("match_at,slots(starts_at,ends_at)").eq("id", roundId).single();
-    const slots = ((round as unknown as { slots: { starts_at: string; ends_at: string }[] })?.slots ?? []).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    if (to === "deadline") target = new Date(new Date(round!.match_at).getTime() + 60_000);
-    if (to === "dayBefore" && slots[0]) target = new Date(new Date(slots[0].starts_at).getTime() - 23 * 3600_000);
-    if (to === "start" && slots[0]) target = new Date(new Date(slots[0].starts_at).getTime() + 5 * 60_000);
-    if (to === "end") target = new Date(Math.max(...slots.map((s) => new Date(s.ends_at).getTime())) + 60_000);
-  }
-  if (!target) back("이동할 시각을 찾지 못했어요", form);
-  const offset = Math.round((target!.getTime() - Date.now()) / 1000);
-  await db().from("app_clock").update({ offset_seconds: to === "reset" ? 0 : offset }).eq("id", 1);
-  const done = await tick();
-  back(done.length ? `시각을 옮기고 처리했어요: ${done.join(", ")}` : "시각을 옮겼어요", form);
+  const r = await moveClockTo(String(form.get("to")), String(form.get("round_id") ?? ""));
+  if (!r) back("이동할 시각을 찾지 못했어요", form);
+  back(r!.length ? `시각을 옮기고 처리했어요: ${r!.join(", ")}` : "시각을 옮겼어요", form);
 }
 
-/** 테스트 참가자 체크인과 후기를 자동으로 채운다. 일부는 서로 '다시는 싫어요'를 고른다 */
+/** 테스트 참가자 체크인과 후기를 자동으로 채운다. 일부는 서로 '다시는 싫어요'를 고른다 (lib/demo-ops.ts fillAttendance) */
 export async function autoAttend(form: FormData) {
   await requireAdminWrite();
-  const roundId = String(form.get("round_id"));
-  const { data: apps } = await db()
-    .from("applications")
-    .select("id,user_id,table_id,attendance_status,users(login_id)")
-    .eq("round_id", roundId)
-    .eq("match_status", "CONFIRMED");
-  const list = (apps ?? []) as unknown as { id: string; user_id: string; table_id: string; attendance_status: string; users: { login_id: string } }[];
-  const r = rng(42);
-  const tpl = await loadTemplates();
-  const at = (await now()).toISOString(); // 앱 체크인과 같은 시연용 시계
-  let n = 0;
-  for (const a of list) {
-    if (!a.users.login_id.startsWith("test-")) continue; // 실제 사람 계정은 건드리지 않는다
-    if (a.attendance_status === "SCHEDULED") {
-      await db().from("applications").update({ attendance_status: "ATTENDED", checked_in_at: at }).eq("id", a.id);
-      await logStatus({ entityType: "application", entityId: a.id, field: "attendance_status", from: "SCHEDULED", to: "ATTENDED", actor: "admin:demo", reason: "시연용 자동 체크인" });
-      // 모임이 이미 끝나 노쇼 후보로 올라갔다면 함께 정리한다
-      await db().from("exceptions").update({ status: "resolved", resolution: "시연용 체크인으로 참석 처리", resolved_at: realNowIso() }).eq("dedupe_key", `noshow:${a.id}`);
-    }
-    await db().from("feedbacks").upsert({
-      application_id: a.id, user_id: a.user_id, table_id: a.table_id,
-      mood_score: 3 + Math.floor(r() * 3), talk_score: 3 + Math.floor(r() * 3), venue_score: 3 + Math.floor(r() * 3),
-      rejoin_intent: 3 + Math.floor(r() * 3), recommend_intent: 3 + Math.floor(r() * 3),
-    });
-    // 실제 참가자(김우연 등)는 직접 남기도록 후기 요청 알림만 간다
-    await notify({ userId: a.user_id, template: "feedback", ...render("feedback", {}, tpl), link: `/tables/${a.table_id}/feedback`, dedupeKey: `feedback:${a.id}` });
-    const mates = list.filter((m) => m.table_id === a.table_id && m.user_id !== a.user_id);
-    if (mates.length && r() < 0.25) {
-      await db().from("person_prefs").upsert({ from_user: a.user_id, to_user: mates[0].user_id, table_id: a.table_id, pref: "avoid" });
-    } else if (mates.length && r() < 0.3) {
-      await db().from("person_prefs").upsert({ from_user: a.user_id, to_user: mates[0].user_id, table_id: a.table_id, pref: "again" });
-    }
-    n++;
-  }
+  const n = await fillAttendance(String(form.get("round_id")));
   back(`테스트 참가자 ${n}명의 체크인과 후기를 채웠어요`, form);
 }
 

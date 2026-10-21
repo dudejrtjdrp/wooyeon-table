@@ -16,7 +16,7 @@ const MAX = 5000;
 // 결제·환불 CSV. 화면과 같은 거르기를 그대로 받고, 내려받은 사실도 이력에 남긴다 (PRD 11장 결제·환불, 16장 운영 및 추적)
 // 개인정보는 이름만 넣는다. 연락처·영수증 주소는 넣지 않는다.
 export async function GET(req: Request) {
-  const me = await getMe();
+  const me = await getMe("admin");
   if (!isActiveAdmin(me)) return NextResponse.json({ ok: false }, { status: 401 });
   const f = { ...parsePaymentFilter(Object.fromEntries(new URL(req.url).searchParams)), page: 1 };
   const [rows, { data: round }] = await Promise.all([
